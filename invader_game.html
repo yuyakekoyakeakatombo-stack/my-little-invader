@@ -2153,7 +2153,7 @@
   let settingsSel = 0;
   let confirmReset = false;   // ALL RESETの確認ダイアログ表示中
   // 項目はキーで管理（表示ラベルは言語辞書、値は各キーで分岐）
-  const SETTINGS_KEYS = ['sound','language','bodycolor','location','debug','reset'];
+  const SETTINGS_KEYS = ['sound','language','bodycolor','location','reset'];
 
   function applyBodyColor() {
     const bg = BODY_COLORS[bodyColorIdx];
@@ -2207,7 +2207,7 @@
         fN++;
         return;   // リスト描画をスキップ（tickMenu内のこの分岐のみ）
       }
-      // 6項目を1画面に収める（y=19起点・間隔8で最下段y=59まで＝画面高65内）
+      // 項目を1画面に収める（y=19起点・間隔8。画面高65内）
       const ITEM_H = 8;
       SETTINGS_KEYS.forEach((key,i)=>{
         const y = 19 + i * ITEM_H;
