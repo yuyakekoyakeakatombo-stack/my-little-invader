@@ -203,6 +203,7 @@
     try{
       if(localStorage.getItem('myvader_sound')==='off') return;   // 本体のSOUND設定を尊重
       if(!ac) ac=new (window.AudioContext||window.webkitAudioContext)();
+      if(ac.state==='suspended'){ ac.resume().catch(function(){}); }   // iOSの割り込み後の無音化対策
       const o=ac.createOscillator(), g=ac.createGain();
       o.connect(g); g.connect(ac.destination);
       o.type=type||'square'; o.frequency.setValueAtTime(freq,ac.currentTime);
@@ -211,6 +212,10 @@
       o.start(); o.stop(ac.currentTime+(dur||0.06));
     }catch(e){}
   }
+  ['touchend','pointerdown','click'].forEach(function(ev){
+    document.addEventListener(ev, function(){ if(ac && ac.state==='suspended') ac.resume().catch(function(){}); }, {passive:true});
+  });
+  document.addEventListener('visibilitychange', function(){ if(!document.hidden && ac && ac.state==='suspended') ac.resume().catch(function(){}); });
 
   // ── 状態 ──
   const STATE={TITLE:0,PLAY:2,GAMEOVER:4,HELP:5};

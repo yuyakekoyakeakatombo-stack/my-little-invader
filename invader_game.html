@@ -315,6 +315,7 @@
       status:'STATUS', story:'STORY', settings:'SETTINGS', play:'PLAY',
       sound:'SOUND', bodycolor:'BODY COLOR', location:'LOCATION', language:'LANGUAGE', debug:'DEBUG', reset:'ALL RESET',
       on:'ON', off:'OFF', exec:'EXEC', sure:'SURE?', yesno:'A:YES  B:NO',
+      locn1:'USE LOCATION', locn2:'ONLY TO SHOW', locn3:'IN-GAME WEATHER', locok:'A:OK  B:CANCEL',
       hungry:'HUNGRY', mood:'MOOD', body:'BODY', stage:'STAGE', ptype:'TYPE',
       good:'GOOD', sick:'SICK', weak:'WEAK', dead:'DEAD',
       newborn:'NEWBORN', baby:'BABY', child:'CHILD', adult:'ADULT', finalst:'FINAL',
@@ -326,6 +327,7 @@
       status:'ステータス', story:'ストーリー', settings:'せってい', play:'あそぶ',
       sound:'サウンド', bodycolor:'カラー', location:'ロケーション', language:'げんご', debug:'デバッグ', reset:'リセット',
       on:'オン', off:'オフ', exec:'じっこう', sure:'ほんとうに？', yesno:'A:はい B:いいえ',
+      locn1:'いちじょうほうは', locn2:'ゲームの天気に', locn3:'のみつかいます', locok:'A:OK  B:キャンセル',
       hungry:'おなか', mood:'きげん', body:'からだ', stage:'せいちょう', ptype:'タイプ',
       good:'げんき', sick:'びょうき', weak:'よわり', dead:'おばけ',
       newborn:'うまれたて', baby:'あかちゃん', child:'こども', adult:'おとな', finalst:'さいしゅう',
@@ -366,13 +368,26 @@
     document.getElementById('view-'+id).classList.add('active');
     scene = id;
     if(id==='story'){ storyScrollY=H*S; storyDone=false; }
+    if(window.__placeLed) window.__placeLed();   // 表示中LCDの上に電源LEDを合わせ直す
   }
 
   // ── 音 ──
   let ac = null;
+  // iOSではバックグラウンド復帰・電話などの割り込み後にAudioContextがsuspendedになり無音化する。
+  // 生成直後にsuspendedで始まることもあるため、必ずresumeを試みてから鳴らす。
+  function ensureAudio(){
+    if(!ac){ try{ ac = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){ return; } }
+    if(ac.state === 'suspended'){ ac.resume().catch(()=>{}); }
+  }
+  // 何らかの操作・前面復帰のたびにresumeして復帰させる（保険）
+  ['touchend','pointerdown','click'].forEach(function(ev){
+    document.addEventListener(ev, function(){ if(ac && ac.state==='suspended') ac.resume().catch(()=>{}); }, {passive:true});
+  });
+  document.addEventListener('visibilitychange', function(){ if(!document.hidden && ac && ac.state==='suspended') ac.resume().catch(()=>{}); });
   function playClick(freq=1200) {
     if(!soundOn) return;   // SOUND=OFFならミュート
-    if(!ac) ac = new (window.AudioContext||window.webkitAudioContext)();
+    ensureAudio();
+    if(!ac) return;
     const osc=ac.createOscillator(), g=ac.createGain();
     osc.connect(g); g.connect(ac.destination);
     osc.type='square';
@@ -641,6 +656,8 @@
   processGameResult();
   // ミニゲームからの復帰：オープニングを飛ばして育成画面へ直行
   if(returnedFromGame && pet.name) showView('main');
+  // 育成中（命名済みで生存）は、アプリを再起動してもオープニングを出さず育成画面から再開
+  else if(pet.name && !pet.dead) showView('main');
 
   // ── ミニゲームを同一ページ内のフルスクリーンiframeで開く ──
   // ホーム画面アプリで別ファイルへ遷移するとSafariのUI付き表示に抜け出してしまうため、
@@ -2104,7 +2121,7 @@
   function btnAnim(el,ty=1,sc=0.95){ el.style.transform=`translateY(${ty}px) scale(${sc})`; el.style.filter='brightness(0.7)'; setTimeout(()=>{el.style.transform='';el.style.filter='';},120); }
   function dpadAnim(el){ el.style.transform='translateY(2px) scale(0.88)'; el.style.filter='brightness(2.5)'; setTimeout(()=>{el.style.transform='';el.style.filter='';},120); }
 
-  onPress(document.getElementById('mmenu'),()=>{ playClick(); btnAnim(document.getElementById('mmenu'),1,0.93); menuSel=0; menuScroll=0; inSettings=false; inPlay=false; inStatus=false; confirmReset=false; playSel=0; showView('menu'); });
+  onPress(document.getElementById('mmenu'),()=>{ playClick(); btnAnim(document.getElementById('mmenu'),1,0.93); menuSel=0; menuScroll=0; inSettings=false; inPlay=false; inStatus=false; confirmReset=false; locPrime=false; playSel=0; showView('menu'); });
   onPress(document.getElementById('mb'),()=>{ playClick(); btnAnim(document.getElementById('mb')); nameSelActive=false; });
   // お世話アクションはMENU内のアイコングリッドへ移動
   // 未命名時：十字上で「NAME:????」を選択（黒塗り反転）→ Aで命名画面へ。下/Bで選択解除
@@ -2152,6 +2169,7 @@
   let inStatus = false;
   let settingsSel = 0;
   let confirmReset = false;   // ALL RESETの確認ダイアログ表示中
+  let locPrime = false;       // LOCATION ON前に用途（天気のみ）を説明する画面を表示中
   // 項目はキーで管理（表示ラベルは言語辞書、値は各キーで分岐）
   const SETTINGS_KEYS = ['sound','language','bodycolor','location','reset'];
 
@@ -2206,6 +2224,18 @@
         if((fN%14)<9) ctxN.fillText(T('yesno'),(W*S)/2, 48*S);
         fN++;
         return;   // リスト描画をスキップ（tickMenu内のこの分岐のみ）
+      }
+
+      if(locPrime){
+        // ── LOCATION 用途説明（OSの許可ダイアログの前に、天気反映のみに使う旨を表示）──
+        ctxN.font=uiFont(6); ctxN.fillStyle=ON; ctxN.textAlign='center'; ctxN.textBaseline='top';
+        ctxN.fillText(T('locn1'),(W*S)/2, 26*S);
+        ctxN.fillText(T('locn2'),(W*S)/2, 34*S);
+        ctxN.fillText(T('locn3'),(W*S)/2, 42*S);
+        ctxN.font=uiFont(5); ctxN.fillStyle=DIM;
+        if((fN%14)<9) ctxN.fillText(T('locok'),(W*S)/2, 54*S);
+        fN++;
+        return;
       }
       // 項目を1画面に収める（y=19起点・間隔8。画面高65内）
       const ITEM_H = 8;
@@ -2319,16 +2349,17 @@
     onPress(el,()=>{
       playClick(900); dpadAnim(el);
       if(inSettings){
-        if(confirmReset) return;   // 確認ダイアログ中は移動不可（A/Bのみ）
+        if(confirmReset || locPrime) return;   // ダイアログ/説明中は移動不可（A/Bのみ）
         if(el.classList.contains('up'))   settingsSel=Math.max(0, settingsSel-1);
         if(el.classList.contains('down')) settingsSel=Math.min(SETTINGS_KEYS.length-1, settingsSel+1);
         // 左右で値変更
-        if(el.classList.contains('left')||el.classList.contains('right')){
+        if(locPrime){ /* 用途説明中は左右無効 */ }
+        else if(el.classList.contains('left')||el.classList.contains('right')){
           const key = SETTINGS_KEYS[settingsSel], right = el.classList.contains('right');
           if(key==='sound')     setSound(!soundOn);
           if(key==='language')  toggleLang();
           if(key==='bodycolor'){ bodyColorIdx=(right?bodyColorIdx+1:bodyColorIdx-1+BODY_COLORS.length)%BODY_COLORS.length; applyBodyColor(); }
-          if(key==='location')  setLocation(!locationOn);
+          if(key==='location'){ if(locationOn) setLocation(false); else locPrime=true; }   // ONにする前に用途を説明
         }
       } else if(inStatus){
         // STATUSに選択項目なし
@@ -2359,11 +2390,12 @@
   onPress(document.getElementById('na'),()=>{
     playClick(900); btnAnim(document.getElementById('na'));
     if(inSettings){
+      if(locPrime){ locPrime=false; setLocation(true); return; }   // 用途説明のあと、A で許可要求
       const key = SETTINGS_KEYS[settingsSel];
       if(key==='sound') setSound(!soundOn);
       if(key==='language') toggleLang();
       if(key==='bodycolor'){ bodyColorIdx=(bodyColorIdx+1)%BODY_COLORS.length; applyBodyColor(); }
-      if(key==='location') setLocation(!locationOn);
+      if(key==='location'){ if(locationOn) setLocation(false); else locPrime=true; }   // ONにする前に用途を説明
       if(key==='debug'){
         debugMode=!debugMode;
         if(debugMode){
@@ -2378,7 +2410,7 @@
           confirmReset = true;             // まず確認ダイアログを表示
         } else {
           // 確認中のA = 実行
-          confirmReset = false;
+          confirmReset = false; locPrime = false;
           menuSel=0; menuScroll=0; settingsSel=0; inSettings=false; inPlay=false; inStatus=false; bodyColorIdx=1; setSound(true);  // カラーはデフォルトのONYX（黒）
           weatherFetched=false; weather='clear'; debugMode=false;
           setLocation(false);
@@ -2429,7 +2461,8 @@
   onPress(document.getElementById('nb'),()=>{
     playClick(); btnAnim(document.getElementById('nb'));
     if(inSettings){
-      if(confirmReset){ confirmReset=false; }   // 確認ダイアログをキャンセル
+      if(locPrime){ locPrime=false; }           // 用途説明をキャンセル（ONにしない）
+      else if(confirmReset){ confirmReset=false; }   // 確認ダイアログをキャンセル
       else inSettings=false;
     }
     else if(inStatus){ inStatus=false; }
@@ -2438,7 +2471,7 @@
   });
   onPress(document.getElementById('nmenu'),()=>{
     playClick(); btnAnim(document.getElementById('nmenu'),1,0.93);
-    inSettings=false; inPlay=false; inStatus=false; confirmReset=false; showView('main');
+    inSettings=false; inPlay=false; inStatus=false; confirmReset=false; locPrime=false; showView('main');
   });
 
   // ════════════════════════════════════════
@@ -2514,16 +2547,27 @@
     var s=Math.min(window.innerWidth*0.995/w, window.innerHeight*0.995/h);
     el.style.transformOrigin="center center";
     el.style.transform="scale("+s+")";
-    // ステータスバー領域まで描画を広げているので、電源LEDだけセーフエリア分だけ下げて重なりを避ける
-    var led=document.querySelector(".power-led");
-    if(led && document.body.classList.contains("device")){
-      var p=document.createElement("div");
-      p.style.cssText="position:fixed;top:0;left:0;width:1px;height:env(safe-area-inset-top);";
-      document.body.appendChild(p);
-      var sat=p.getBoundingClientRect().height; p.remove();
-      led.style.top=(12+sat/s)+"px";
-    }
+    placeLed(s);
   }
+  // 電源LEDを、現在表示中のLCDパネルの上端すぐ上（機種のセーフエリアに依存しない位置）へ置く。
+  // 以前はステータスバー分を一律で足しており、Dynamic Island機種などLCDに被ることがあった。
+  function placeLed(s){
+    var led=document.querySelector(".power-led"); if(!led) return;
+    var host=document.querySelector(".iphone");
+    var parent=led.offsetParent || document.querySelector(".app");
+    var active=document.querySelector(".view.active");
+    var lcd=active && active.querySelector(".lcd-wrap");
+    if(!host || !parent || !lcd) return;
+    if(typeof s!=="number" || !s){ s=host.getBoundingClientRect().width/(host.offsetWidth||1); }
+    var lr=lcd.getBoundingClientRect(), pr=parent.getBoundingClientRect();
+    var ledH=led.offsetHeight||5;
+    // LCD上端の3px上に置く（親要素ローカル座標＝transform適用前）。
+    // これはLCDに被らない最も低い位置＝ステータスバー(画面上端)からも最も遠い位置になる。
+    var top=(lr.top-pr.top)/s - ledH - 3;
+    if(top<2) top=2;
+    led.style.top=top+"px";
+  }
+  window.__placeLed=placeLed;      // ビュー切替時に本体スクリプトから呼ぶ
   window.addEventListener("resize",fit);
   window.addEventListener("orientationchange",function(){setTimeout(fit,300);});
   window.addEventListener("load",fit);
