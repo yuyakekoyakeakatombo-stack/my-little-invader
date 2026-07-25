@@ -2561,9 +2561,10 @@
     if(typeof s!=="number" || !s){ s=host.getBoundingClientRect().width/(host.offsetWidth||1); }
     var lr=lcd.getBoundingClientRect(), pr=parent.getBoundingClientRect();
     var ledH=led.offsetHeight||5;
-    // LCD上端の3px上に置く（親要素ローカル座標＝transform適用前）。
-    // これはLCDに被らない最も低い位置＝ステータスバー(画面上端)からも最も遠い位置になる。
-    var top=(lr.top-pr.top)/s - ledH - 3;
+    // .lcd-wrap の外周ベゼルは box-shadow(0 0 0 7px) で描かれ、getBoundingClientRect には含まれない。
+    // そのぶん上に張り出しているので、ベゼル分を差し引いた位置に置かないと実機で被る。
+    var BEZEL=7, GAP=3;
+    var top=(lr.top-pr.top)/s - ledH - BEZEL - GAP;
     if(top<2) top=2;
     led.style.top=top+"px";
   }

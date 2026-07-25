@@ -589,14 +589,14 @@
     var s=Math.min(window.innerWidth*0.995/w, window.innerHeight*0.995/h);
     el.style.transformOrigin="center center";
     el.style.transform="scale("+s+")";
-    // ステータスバー領域まで描画を広げているので、電源LEDだけセーフエリア分だけ下げて重なりを避ける
-    var led=document.querySelector(".power-led");
-    if(led && document.body.classList.contains("device")){
-      var p=document.createElement("div");
-      p.style.cssText="position:fixed;top:0;left:0;width:1px;height:env(safe-area-inset-top);";
-      document.body.appendChild(p);
-      var sat=p.getBoundingClientRect().height; p.remove();
-      led.style.top=(12+sat/s)+"px";
+    // 電源LEDをLCDパネル上端の少し上へ（機種のセーフエリアに依存させない）。
+    // .lcd-wrap の外周ベゼルは box-shadow(0 0 0 7px) で描かれ getBoundingClientRect に含まれないため、その分を差し引く。
+    var led=document.querySelector(".power-led"), lcd=document.querySelector(".lcd-wrap"), parent=(led&&led.offsetParent)||document.querySelector(".app");
+    if(led && lcd && parent){
+      var lr=lcd.getBoundingClientRect(), pr=parent.getBoundingClientRect(), ledH=led.offsetHeight||5, BEZEL=7, GAP=3;
+      var top=(lr.top-pr.top)/s - ledH - BEZEL - GAP;
+      if(top<2) top=2;
+      led.style.top=top+"px";
     }
   }
   window.addEventListener("resize",fit);
