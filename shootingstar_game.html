@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="My Little Invader">
+<meta name="theme-color" content="#111111">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<title>SHOOTING STAR — my Vader</title>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  body{background:#111;display:flex;justify-content:center;align-items:center;min-height:100vh}
+  /* ── iPhoneシェル（invader_game.html と同一デザイン） ── */
+  .iphone{width:280px;background:#2a2a2a;border-radius:44px;padding:14px;border:1px solid #444;
+    box-shadow:0 0 0 1px #111,inset 0 1px 0 #555,0 40px 80px rgba(0,0,0,0.8);position:relative}
+  .btn-l{position:absolute;left:-5px;top:100px;width:4px;height:28px;background:#1e1e1e;border-radius:2px 0 0 2px;border:1px solid #111}
+  .btn-l2{position:absolute;left:-5px;top:136px;width:4px;height:50px;background:#1e1e1e;border-radius:2px 0 0 2px;border:1px solid #111}
+  .btn-r{position:absolute;right:-5px;top:120px;width:4px;height:60px;background:#1e1e1e;border-radius:0 2px 2px 0;border:1px solid #111}
+  .iphone-inner{background:#000;border-radius:34px;overflow:hidden}
+  .island{position:absolute;top:10px;left:50%;transform:translateX(-50%);width:88px;height:26px;background:#000;border-radius:20px;z-index:10}
+  .screen-area{width:252px;height:545px;background:var(--body-bg,#e8e3d8);overflow:hidden;position:relative;display:flex;flex-direction:column;align-items:center}
+  .home-bar{position:absolute;bottom:6px;left:50%;transform:translateX(-50%);width:80px;height:4px;background:rgba(0,0,0,0.18);border-radius:4px}
+  .app{width:100%;height:100%;background:var(--body-bg,#e8e3d8);position:relative;display:flex;flex-direction:column;align-items:center}
+  .power-led{position:absolute;top:12px;right:14px;width:5px;height:5px;border-radius:50%;background:#1fd45e;
+    box-shadow:0 0 4px #1fd45e,0 0 10px rgba(31,212,94,0.55);z-index:20}
+  .speaker-grille{position:absolute;bottom:26px;left:50%;transform:translateX(-50%);width:64px;height:5px;
+    background-image:radial-gradient(circle at 2px 2.5px,rgba(0,0,0,0.28) 1.5px,transparent 0);background-size:5px 5px;pointer-events:none}
+  .lcd-wrap{background:#b8c890;border-radius:4px;position:relative;overflow:hidden;flex-shrink:0;margin-top:48px;width:216px;height:260px;
+    box-shadow:0 0 0 2px #18160e,0 0 0 5px #2e2c1e,0 0 0 7px #131108,inset 0 2px 6px rgba(0,0,0,0.24),inset 2px 0 4px rgba(0,0,0,0.1),0 5px 9px rgba(0,0,0,0.40)}
+  .lcd-wrap::after{content:'';position:absolute;inset:0;
+    background:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,0,0,0.04) 3px,rgba(0,0,0,0.04) 4px);pointer-events:none;z-index:2}
+  canvas{display:block;image-rendering:pixelated;width:216px;height:260px}
+  .controller-wrap{display:flex;flex-direction:column;align-items:center;gap:8px;width:216px;margin-top:42px}
+  .controller-row{width:216px;display:flex;justify-content:space-between;align-items:center}
+  .dpad{position:relative;width:72px;height:72px;flex-shrink:0}
+  .dpad-h,.dpad-v{position:absolute;background:linear-gradient(180deg,#3c3c3c 0%,#252525 55%,#1c1c1c 100%);
+    border-radius:5px;border:1px solid rgba(0,0,0,0.55);
+    box-shadow:0 4px 4px var(--shadow-hard,rgba(0,0,0,0.32)),0 6px 12px var(--shadow-soft,rgba(0,0,0,0.22)),inset 0 1px 0 rgba(255,255,255,0.1),inset 0 -2px 4px rgba(0,0,0,0.42)}
+  .dpad-h{width:72px;height:24px;top:24px;left:0}
+  .dpad-v{width:24px;height:72px;top:0;left:24px}
+  .dpad-center{position:absolute;width:24px;height:24px;top:24px;left:24px;background:#252525;z-index:1}
+  .dpad-center::before{content:'';position:absolute;inset:0;
+    background:linear-gradient(rgba(255,255,255,0.07) 0,rgba(255,255,255,0.07) 1px,transparent 1px) 50% 50%/12px 100% no-repeat,
+    linear-gradient(90deg,rgba(255,255,255,0.07) 0,rgba(255,255,255,0.07) 1px,transparent 1px) 50% 50%/100% 12px no-repeat}
+  .dpad-arrow{position:absolute;display:flex;align-items:center;justify-content:center;font-size:6px;color:rgba(255,255,255,0.14);
+    z-index:2;width:24px;height:24px;user-select:none;transition:transform 0.06s,filter 0.06s}
+  .dpad-arrow.up{top:0;left:24px}.dpad-arrow.down{bottom:0;left:24px}
+  .dpad-arrow.left{top:24px;left:0}.dpad-arrow.right{top:24px;right:0}
+  .btns{display:flex;gap:8px;align-items:center}
+  .btn-row{display:flex;gap:12px;align-items:flex-start}
+  .btns-wrap{display:flex;flex-direction:column;align-items:center;gap:3px}
+  .btns-wrap.btn-b{transform:translateY(8px)}
+  .action-btn{width:34px;height:34px;min-width:34px;min-height:34px;max-width:34px;max-height:34px;border-radius:50%;
+    background:linear-gradient(145deg,#363636 0%,#232323 55%,#1a1a1a 100%);border:none;
+    box-shadow:0 4px 4px var(--shadow-hard,rgba(0,0,0,0.32)),0 6px 12px var(--shadow-soft,rgba(0,0,0,0.22)),inset 0 1px 2px rgba(255,255,255,0.13),inset 0 -2px 4px rgba(0,0,0,0.45);
+    display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;transition:transform 0.06s,filter 0.06s}
+  .btn-lbl{font-family:'Press Start 2P',monospace;font-size:9px;color:rgba(255,255,255,0.3);user-select:none;
+    text-shadow:0 1px 1px rgba(255,255,255,0.1),0 -1px 0 rgba(0,0,0,0.5)}
+  .menu-btn{width:60px;height:18px;border-radius:9px;background:linear-gradient(180deg,#333 0%,#1e1e1e 100%);border:none;
+    box-shadow:0 3px 3px var(--shadow-hard,rgba(0,0,0,0.32)),0 5px 10px var(--shadow-soft,rgba(0,0,0,0.22)),inset 0 1px 0 rgba(255,255,255,0.1),inset 0 -1px 2px rgba(0,0,0,0.35);
+    display:flex;align-items:center;justify-content:center;cursor:pointer;transition:transform 0.06s,filter 0.06s}
+  .menu-btn-lbl{font-family:'Press Start 2P',monospace;font-size:7px;color:rgba(255,255,255,0.3);user-select:none;letter-spacing:0.08em;
+    text-shadow:0 1px 1px rgba(255,255,255,0.1),0 -1px 0 rgba(0,0,0,0.5)}
+
+  /* ── 実機モード（ホーム画面から起動 or 実機Safari）：モックのiPhone外装を消してゲーム機本体だけ表示 ── */
+  body.device { background:var(--body-bg, #e8e3d8); }
+  body.device { overflow:hidden; }
+  html.device, body.device { width:100%; height:100%; }
+  body.device .iphone {
+    background:transparent; border:none; border-radius:0; padding:0; box-shadow:none;
+    width:auto;           /* 外装を消した分、幅を中身(252px)に合わせて左寄りを解消 */
+  }
+  body.device .btn-l, body.device .btn-l2, body.device .btn-r,
+  body.device .island, body.device .home-bar { display:none; }
+  body.device .iphone-inner { border-radius:0; background:transparent; }
+  body.device .screen-area { border-radius:0; }
+</style>
+</head>
+<body>
+<div class="iphone">
+  <div class="btn-l"></div><div class="btn-l2"></div><div class="btn-r"></div>
+  <div class="iphone-inner">
+    <div class="island"></div>
+    <div class="screen-area">
+      <div class="app">
+        <div class="power-led"></div>
+        <div class="lcd-wrap"><canvas id="lcd"></canvas></div>
+        <div class="controller-wrap">
+          <div class="controller-row">
+            <div class="dpad">
+              <div class="dpad-h"></div><div class="dpad-v"></div><div class="dpad-center"></div>
+              <div class="dpad-arrow up">▲</div><div class="dpad-arrow down">▼</div>
+              <div class="dpad-arrow left">◀</div><div class="dpad-arrow right">▶</div>
+            </div>
+            <div class="btns"><div class="btn-row">
+              <div class="btns-wrap btn-b"><div class="action-btn" id="bb"><span class="btn-lbl">B</span></div></div>
+              <div class="btns-wrap"><div class="action-btn" id="ba"><span class="btn-lbl">A</span></div></div>
+            </div></div>
+          </div>
+          <div class="menu-btn" id="bmenu"><span class="menu-btn-lbl">MENU</span></div>
+        </div>
+        <div class="speaker-grille"></div>
+      </div>
+      <div class="home-bar"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const W=54, H=65, S=4;
+  const ON='#1a2410', OFF='#b8c890', DIM='#8aaa6a';
+  const GY=54;
+  const SC=[OFF,DIM,ON];
+
+  const cv=document.getElementById('lcd');
+  cv.width=W*S; cv.height=H*S;
+  const ct=cv.getContext('2d');
+  ct.imageSmoothingEnabled=false;
+
+  // ── BODY COLOR（本体SETTINGSの設定を反映） ──
+  (function(){
+    const COLORS=["#e8e3d8","#272727","#9ed0d8","#c8b8e0","#e8a89a","#98d0b0"];
+    let idx=1; // 本体のデフォルト(ONYX)に合わせる
+    try{ const b=localStorage.getItem("myvader_bodycolor"); if(b!==null) idx=Math.min(COLORS.length-1, Math.max(0, Number(b)||0)); }catch(e){}
+    const bg=COLORS[idx], isDark=(idx===1);
+    document.documentElement.style.setProperty("--body-bg", bg);
+    const sa=document.querySelector(".screen-area"), app=document.querySelector(".app");
+    if(sa) sa.style.background=bg;
+    if(app){
+      app.style.background=bg;
+      app.style.setProperty("--shadow-hard", isDark?"rgba(0,0,0,0.88)":"rgba(0,0,0,0.28)");
+      app.style.setProperty("--shadow-soft", isDark?"rgba(0,0,0,0.72)":"rgba(0,0,0,0.16)");
+    }
+    const hb=document.querySelector(".home-bar");
+    if(hb) hb.style.background = isDark?"rgba(255,255,255,0.2)":"rgba(0,0,0,0.18)";
+  })();
+
+
+  function d(x,y,col){ x=Math.round(x);y=Math.round(y); if(x<0||x>=W||y<0||y>=H)return; ct.fillStyle=col||ON; ct.fillRect(x*S,y*S,S,S); }
+  function hl(y,col,dash){ for(let x=0;x<W;x++) if(!dash||x%2===0) d(x,y,col||ON); }
+  function stamp(g,ox,oy,col){ g.forEach((r,ry)=>r.forEach((v,rx)=>{if(v)d(ox+rx,oy+ry,col||ON);})); }
+  function txt(s,px,py,sz,col){ ct.font=`${sz}px "Press Start 2P"`; ct.fillStyle=col||ON; ct.textAlign='left'; ct.textBaseline='top'; ct.fillText(s,px*S,py*S); }
+  function txtC(s,py,sz,col){ ct.font=`${sz}px "Press Start 2P"`; ct.fillStyle=col||ON; ct.textAlign='center'; ct.textBaseline='top'; ct.fillText(s,(W*S)/2,py*S); }
+
+  // ── スプライト ──
+  // ── 自機：育成中キャラ連動（9×8デフォルメ6種） ──
+  const CHARS={
+    egg:[
+      [0,0,0,0,0,0,0,0,0],[0,0,1,1,1,1,1,0,0],[0,1,1,1,1,1,1,1,0],[0,1,0,1,1,1,0,1,0],
+      [0,1,1,1,1,1,1,1,0],[0,1,1,1,1,1,1,1,0],[0,0,1,1,1,1,1,0,0],[0,0,0,0,0,0,0,0,0],
+    ],
+    mid:[
+      [0,0,1,0,0,0,1,0,0],[0,0,1,1,1,1,1,0,0],[0,1,1,1,1,1,1,1,0],[0,1,0,1,1,1,0,1,0],
+      [0,1,1,1,1,1,1,1,0],[0,0,1,1,1,1,1,0,0],[0,0,1,0,0,0,1,0,0],[0,1,1,0,0,0,1,1,0],
+    ],
+    larva:[
+      [0,0,1,0,0,0,1,0,0],[0,0,0,1,1,1,0,0,0],[0,1,1,1,1,1,1,1,0],[1,1,0,1,1,1,0,1,1],
+      [1,1,1,1,1,1,1,1,1],[0,1,1,1,1,1,1,1,0],[0,0,1,0,0,0,1,0,0],[0,1,1,0,0,0,1,1,0],
+    ],
+    grey:[
+      [0,0,1,1,1,1,1,0,0],[0,1,1,1,1,1,1,1,0],[1,1,1,1,1,1,1,1,1],[1,0,1,1,1,1,1,0,1],
+      [1,1,1,1,1,1,1,1,1],[0,1,1,1,1,1,1,1,0],[0,0,1,1,0,1,1,0,0],[0,1,1,0,0,0,1,1,0],
+    ],
+    tako:[
+      [0,0,1,0,0,0,1,0,0],[0,0,0,1,0,1,0,0,0],[0,1,1,1,1,1,1,1,0],[1,1,0,1,1,1,0,1,1],
+      [1,1,1,1,1,1,1,1,1],[0,1,1,1,1,1,1,1,0],[0,1,0,1,0,1,0,1,0],[0,1,0,1,0,1,0,1,0],
+    ],
+    inv:[
+      [1,0,0,0,0,0,0,0,1],[0,1,0,0,0,0,0,1,0],[0,1,1,1,1,1,1,1,0],[1,1,0,1,1,1,0,1,1],
+      [1,1,1,1,1,1,1,1,1],[0,1,1,1,1,1,1,1,0],[0,0,1,0,0,0,1,0,0],[0,1,1,0,0,0,1,1,0],
+    ],
+  };
+  let lineage='grey';            // 育成中キャラと連動
+  try{ const l=localStorage.getItem('myvader_lineage'); if(l && CHARS[l]) lineage=l; }catch(e){}
+  function CHAR(){ return CHARS[lineage]; }
+  // 屈伸フレーム（2コマ目）：脚の段を足元の段に畳み、体を1段沈める。足の接地位置は不変
+  function crouch(g){
+    const merged = g[g.length-2].map((v,i)=> (v || g[g.length-1][i]) ? 1 : 0);
+    return [g[0].map(()=>0), ...g.slice(0, g.length-2), merged];
+  }
+  const CHARS_CROUCH = {}; Object.keys(CHARS).forEach(k=>CHARS_CROUCH[k]=crouch(CHARS[k]));
+  function CHAR2(){ return CHARS_CROUCH[lineage]; }
+  // スコアを本体（invader_game.html）へ報告
+  function reportScore(){ try{ localStorage.setItem('myvader_result', JSON.stringify({game:'shootingstar', score:Math.max(0,score), at:Date.now()})); }catch(e){} }
+  const CH_W=9, CH_H=8;
+  const STAR=[
+    [0,0,2,0,0],
+    [0,1,2,1,0],
+    [1,2,2,2,1],
+    [0,1,2,1,0],
+    [0,0,2,0,0],
+  ];
+  const STAR_W=5, STAR_H=5;
+
+  // ── 音 ──
+  let ac=null;
+  function beep(freq,dur,type){
+    try{
+      if(localStorage.getItem('myvader_sound')==='off') return;   // 本体のSOUND設定を尊重
+      if(!ac) ac=new (window.AudioContext||window.webkitAudioContext)();
+      const o=ac.createOscillator(), g=ac.createGain();
+      o.connect(g); g.connect(ac.destination);
+      o.type=type||'square'; o.frequency.setValueAtTime(freq,ac.currentTime);
+      g.gain.setValueAtTime(0.1,ac.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.001,ac.currentTime+(dur||0.06));
+      o.start(); o.stop(ac.currentTime+(dur||0.06));
+    }catch(e){}
+  }
+
+  // ── 状態 ──
+  const STATE={TITLE:0,PLAY:2,GAMEOVER:4,HELP:5};
+  let menuSel=0; // 0=START 1=HOW TO PLAY
+  let state=STATE.TITLE;
+  const TICK=50, FPS=1000/TICK;
+  const MISS_MAX=5;           // 自機被弾の上限
+
+  let plyX, score, elapsed, lives;
+  const PLY_MIN=1, PLY_MAX=W-CH_W-1;
+  const CY=GY-CH_H;            // 自機の上端y
+  const GUN_X_OFF=4;          // 砲口（中央、9幅）
+
+  let stars=[];               // {x,y,vx,vy}
+  let beams=[];               // {x,y}
+  let spawnTimer=0;
+  let fireTimer=0;
+  let flashes=[];             // 撃破/落下エフェクト {x,y,t,type}
+
+  const keys={left:false,right:false,fire:false};
+
+  function level(){ return Math.floor(elapsed/FPS/15); }      // 15秒ごとにレベル+1
+  function spawnGap(){ return Math.max(20-level()*2, 6); }     // レベルで間隔短縮
+  function spawnBurst(){ return 1 + Math.floor(level()/2); }   // レベルで同時スポーン数増
+
+  function startGame(){
+    plyX=W/2-CH_W/2; score=0; elapsed=0; lives=MISS_MAX;
+    stars=[]; beams=[]; flashes=[]; spawnTimer=0; fireTimer=0;
+    state=STATE.PLAY;
+  }
+
+  // 星のスポーン（4方向から）。下に必ず落ちる成分を持たせるが方向はバリエーション
+  function spawnStar(){
+    const patterns=[
+      {x:Math.random()*(W-10)+3, y:-3, vx:(Math.random()-0.5)*0.4, vy:0.6+Math.random()*0.3}, // 上から落下
+      {x:-3, y:9+Math.random()*20, vx:0.7+Math.random()*0.3, vy:0.3+Math.random()*0.3},        // 左から
+      {x:W+1, y:9+Math.random()*20, vx:-(0.7+Math.random()*0.3), vy:0.3+Math.random()*0.3},     // 右から
+      {x:W*0.6+Math.random()*W*0.3, y:-3, vx:-(0.4+Math.random()*0.3), vy:0.6+Math.random()*0.2},// 右上から斜め
+    ];
+    const p=patterns[Math.floor(Math.random()*patterns.length)];
+    stars.push(p);
+  }
+
+  function fire(){
+    // 自機の砲口から真上へ
+    beams.push({x:plyX+GUN_X_OFF, y:CY-1});
+    beep(880,0.04);
+  }
+
+  // ── 衝突 ──
+  function pixels(g,ox,oy){ const o=[]; g.forEach((r,ry)=>r.forEach((v,rx)=>{if(v)o.push([ox+rx,oy+ry]);})); return o; }
+
+  function update(){
+    if(state!==STATE.PLAY) return;
+    elapsed++;
+    const t=elapsed/FPS;
+
+    // 自機移動
+    const spd=1.3;
+    if(keys.left) plyX-=spd;
+    if(keys.right) plyX+=spd;
+    if(plyX<PLY_MIN) plyX=PLY_MIN;
+    if(plyX>PLY_MAX) plyX=PLY_MAX;
+
+    // 連射
+    if(keys.fire){ fireTimer--; if(fireTimer<=0){ fire(); fireTimer=4; } }
+    else fireTimer=0;
+
+    // ビーム移動
+    beams.forEach(b=>b.y-=3);
+    beams=beams.filter(b=>b.y>11);
+
+    // 星スポーン
+    spawnTimer++;
+    if(spawnTimer>=spawnGap()){ spawnTimer=0; const n=spawnBurst(); for(let i=0;i<n;i++) spawnStar(); }
+
+    // 星移動
+    stars.forEach(s=>{ s.x+=s.vx; s.y+=s.vy; });
+
+    // ビーム×星 命中判定
+    const starHitSet=new Set();
+    beams.forEach((b,bi)=>{
+      stars.forEach((s,si)=>{
+        if(starHitSet.has(si)) return;
+        // 星の中心付近にビームが入ったか（簡易：星bbox内）
+        if(b.x>=s.x-1 && b.x<=s.x+STAR_W && b.y>=s.y-1 && b.y<=s.y+STAR_H){
+          starHitSet.add(si); b.hit=true;
+          score+=5;
+          flashes.push({x:s.x+2,y:s.y+2,t:6,type:'hit'});
+          beep(1200,0.05);
+        }
+      });
+    });
+    // ヒットした星とビームを除去
+    stars=stars.filter((s,si)=>!starHitSet.has(si));
+    beams=beams.filter(b=>!b.hit);
+
+    // 星 落下/自機衝突 判定
+    const survive=[];
+    stars.forEach(s=>{
+      // 自機に当たった
+      const hitsPlayer = (s.x+STAR_W>=plyX && s.x<=plyX+CH_W && s.y+STAR_H>=CY && s.y<=CY+CH_H);
+      // 地面に落ちた
+      const hitsGround = (s.y+STAR_H>=GY);
+      if(hitsPlayer){
+        score-=15; lives--;
+        flashes.push({x:s.x+2, y:Math.min(s.y+2,GY-1), t:8, type:'miss'});
+        beep(180,0.14,'sawtooth');
+        if(lives<=0){ state=STATE.GAMEOVER; reportScore(); beep(140,0.4,'sawtooth'); }
+      } else if(hitsGround){
+        score-=10;
+        flashes.push({x:s.x+2, y:GY-1, t:6, type:'miss'});
+        beep(200,0.1,'sawtooth');
+      } else if(s.x<-8||s.x>W+8){
+        // 撃てずに左右へ抜けた星も減点
+        score-=10;
+        const fx=Math.max(1,Math.min(W-2,s.x+2));
+        flashes.push({x:fx, y:Math.round(s.y)+2, t:6, type:'miss'});
+        beep(200,0.1,'sawtooth');
+      } else {
+        survive.push(s);
+      }
+    });
+    stars=survive;
+
+    // エフェクト寿命
+    flashes.forEach(f=>f.t--);
+    flashes=flashes.filter(f=>f.t>0);
+  }
+
+  // ── 描画 ──
+  function star(x,y){
+    for(let ry=0;ry<5;ry++)for(let rx=0;rx<5;rx++){ const v=STAR[ry][rx]; if(v) d(x+rx,y+ry,SC[v]); }
+  }
+  function tail(s){
+    const cx=s.x+2, cy=s.y+2;
+    const mag=Math.hypot(s.vx,s.vy)||1;
+    const dx=s.vx/mag, dy=s.vy/mag;
+    const len=7;
+    for(let i=2;i<=len;i++){
+      if(i>len*0.6 && i%2===0) continue;
+      d(cx-dx*i, cy-dy*i, DIM);
+    }
+  }
+
+  function draw(){
+    if(state===STATE.TITLE){
+      ct.fillStyle=OFF; ct.fillRect(0,0,W*S,H*S);
+      // 流れ星の装飾
+      star(24,10); for(let i=2;i<=8;i++){ if(i>5&&i%2===0)continue; d(26-i,12-i,DIM); }
+      txtC('SHOOTING',23,7,ON);
+      txtC('STAR',30,7,ON);
+      txtC('SHOOT THE STARS',41,5,DIM);
+      // メニュー
+      const items=['START','HOW TO PLAY'];
+      items.forEach((it,i)=>{
+        const y=50+i*9;
+        const sel=(i===menuSel);
+        if(sel) txtC('>'+it+'<',y,6,ON);
+        else    txtC(it,y,6,DIM);
+      });
+      return;
+    }
+    if(state===STATE.HELP){
+      ct.fillStyle=OFF; ct.fillRect(0,0,W*S,H*S);
+      txtC('HOW TO PLAY',5,6,ON);
+      hl(15,ON);
+      txt('MOVE',3,19,5,ON);  txt('< >',34,19,5,ON);
+      txt('SHOOT',3,28,5,ON); txt('A',34,28,5,ON);
+      hl(38,ON);
+      txt('HIT STAR',3,42,5,ON);  txt('+5',W-12,42,5,ON);
+      txt('MISSED',3,49,5,ON);    txt('-10',W-17,49,5,ON);
+      txt('GET HIT',3,56,5,ON);   txt('-15',W-17,56,5,ON);
+      if(Math.floor(Date.now()/450)%2===0) txtC('A/B : BACK',64,5,ON);
+      return;
+    }
+    if(state===STATE.PLAY){
+      ct.fillStyle=OFF; ct.fillRect(0,0,W*S,H*S);
+      // ヘッダー：スコア
+      txt('SCORE',1,1,6,ON);
+      txt((''+Math.max(0,score)).padStart(5,'0'),(W-27),1,6,ON);
+      hl(10,DIM);
+      // 地面
+      hl(GY,ON);
+      for(let x=0;x<W;x+=3) d(x,GY+1,DIM);
+
+      // 星＋尾
+      stars.forEach(s=>{ tail(s); star(Math.round(s.x),Math.round(s.y)); });
+      // ビーム
+      beams.forEach(b=>{ d(b.x,b.y,ON); d(b.x,b.y+1,DIM); });
+      // 自機
+      stamp((Math.floor(elapsed/5)%2) ? CHAR2() : CHAR(), Math.round(plyX), CY, ON);  // 2コマ屈伸（描画のみ・判定は不変）
+      // エフェクト
+      flashes.forEach(f=>{
+        if(f.type==='hit'){
+          const r=(6-f.t);
+          d(f.x-r,f.y,DIM); d(f.x+r,f.y,DIM); d(f.x,f.y-r,DIM); d(f.x,f.y+r,DIM);
+        } else {
+          d(f.x-1,f.y-1,ON); d(f.x+1,f.y+1,ON); d(f.x-1,f.y+1,ON); d(f.x+1,f.y-1,ON);
+        }
+      });
+
+      // フッター：残りライフ＋レベル
+      txt('LIFE',1,H-5,5,DIM);
+      for(let i=0;i<MISS_MAX;i++){
+        const lx=15+i*4, on=i<lives;
+        d(lx,H-4,on?ON:DIM); d(lx+1,H-4,on?ON:DIM); d(lx,H-3,on?ON:DIM); d(lx+1,H-3,on?ON:DIM);
+      }
+      txt('LV'+(level()+1),(W-11),H-5,5,DIM);
+      return;
+    }
+    if(state===STATE.GAMEOVER){
+      ct.fillStyle=OFF; ct.fillRect(0,0,W*S,H*S);
+      star(W/2-2,10);
+      txtC('GAME',22,8,ON);
+      txtC('OVER',32,8,ON);
+      txtC('SCORE',44,6,DIM);
+      txtC((''+Math.max(0,score)).padStart(5,'0'),53,8,ON);
+      if(Math.floor(Date.now()/450)%2===0) txtC('PRESS A',64,5,DIM);
+      return;
+    }
+  }
+
+  setInterval(()=>{ update(); draw(); }, TICK);
+
+  // ── 入力 ──
+  function press(el,fn){
+    el.addEventListener('touchstart',e=>{e.preventDefault(); el._pressed=true; fn();},{passive:false});
+    el.addEventListener('mousedown',e=>{ el._pressed=true; fn(); });
+  }
+  function release(el,fn){
+    const handler=()=>{ if(el._pressed){ el._pressed=false; fn(); } };
+    el.addEventListener('touchend',e=>{e.preventDefault(); handler();},{passive:false});
+    el.addEventListener('mouseup',handler);
+    el.addEventListener('mouseleave',handler);
+  }
+  function anim(el){ el.style.transform='translateY(2px) scale(.9)'; el.style.filter='brightness(.7)'; setTimeout(()=>{el.style.transform='';el.style.filter='';},100); }
+  function dAnim(el){ el.style.transform='translateY(2px) scale(.88)'; el.style.filter='brightness(2.5)'; setTimeout(()=>{el.style.transform='';el.style.filter='';},100); }
+
+  const eL=document.querySelector('.dpad-arrow.left');
+  const eR=document.querySelector('.dpad-arrow.right');
+  const eU=document.querySelector('.dpad-arrow.up');
+  const eD=document.querySelector('.dpad-arrow.down');
+  press(eL,()=>{keys.left=true;dAnim(eL);}); release(eL,()=>keys.left=false);
+  press(eR,()=>{keys.right=true;dAnim(eR);}); release(eR,()=>keys.right=false);
+  // タイトルのメニュー選択
+  function menuUp(){ if(state===STATE.TITLE){ menuSel=(menuSel+1)%2; beep(500,0.05); } }
+  press(eU,()=>{dAnim(eU); menuUp();});
+  press(eD,()=>{dAnim(eD); menuUp();});
+
+  const ba=document.getElementById('ba');
+  function confirmTitle(){
+    if(menuSel===0) startGame();
+    else state=STATE.HELP;
+  }
+  function onADown(){
+    anim(ba);
+    // プレイ中のみ押した瞬間に発射。状態遷移は離した時に処理（二重発火防止）
+    if(state===STATE.PLAY){ keys.fire=true; fire(); fireTimer=4; }
+  }
+  function onAUp(){
+    keys.fire=false;
+    if(state===STATE.TITLE){ confirmTitle(); return; }
+    if(state===STATE.HELP){ state=STATE.TITLE; return; }
+    if(state===STATE.GAMEOVER){ state=STATE.TITLE; menuSel=0; return; }
+  }
+  press(ba,onADown); release(ba,onAUp);
+  press(document.getElementById('bb'), ()=>{ anim(document.getElementById('bb')); if(state===STATE.HELP) state=STATE.TITLE; });
+  press(document.getElementById('bmenu'), ()=>{ const m=document.getElementById('bmenu'); m.style.transform='scale(.93)'; setTimeout(()=>m.style.transform='',100); if(window.parent && window.parent !== window) window.parent.postMessage({myvader:"exit"}, "*"); else window.location.href='invader_game.html'; });
+
+  // キーボード
+  document.addEventListener('keydown',e=>{
+    if(e.key==='ArrowLeft')keys.left=true; if(e.key==='ArrowRight')keys.right=true;
+    if((e.key==='ArrowUp'||e.key==='ArrowDown') && state===STATE.TITLE){ e.preventDefault(); menuUp(); }
+    if(e.key===' '||e.key.toLowerCase()==='a'){ e.preventDefault();
+      if(state===STATE.PLAY){ if(!keys.fire){ keys.fire=true; fire(); fireTimer=4; } }
+    }
+  });
+  document.addEventListener('keyup',e=>{
+    if(e.key==='ArrowLeft')keys.left=false; if(e.key==='ArrowRight')keys.right=false;
+    if(e.key===' '||e.key.toLowerCase()==='a'){ keys.fire=false; onAUp(); }
+  });
+
+})();
+</script>
+
+<script>
+// iPhone実機表示：ゲーム機シェルを画面サイズに合わせて拡大（デザイン比率は維持）
+
+  // 実機（ホーム画面アプリ / iOS Safari）ではモックのiPhone外装を消す
+  (function(){
+    var standalone = window.navigator.standalone === true ||
+                     (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches);
+    var touchPhone = /iPhone|iPod|Android/i.test(navigator.userAgent);
+    if(standalone || touchPhone) document.body.classList.add("device");
+  })();
+(function(){
+  function fit(){
+    var el=document.querySelector(".iphone"); if(!el) return;
+    el.style.transform="none";
+    var r=el.getBoundingClientRect();
+    var w=r.width||280, h=r.height||600;
+    var s=Math.min(window.innerWidth*0.995/w, window.innerHeight*0.995/h);
+    el.style.transformOrigin="center center";
+    el.style.transform="scale("+s+")";
+    // ステータスバー領域まで描画を広げているので、電源LEDだけセーフエリア分だけ下げて重なりを避ける
+    var led=document.querySelector(".power-led");
+    if(led && document.body.classList.contains("device")){
+      var p=document.createElement("div");
+      p.style.cssText="position:fixed;top:0;left:0;width:1px;height:env(safe-area-inset-top);";
+      document.body.appendChild(p);
+      var sat=p.getBoundingClientRect().height; p.remove();
+      led.style.top=(12+sat/s)+"px";
+    }
+  }
+  window.addEventListener("resize",fit);
+  window.addEventListener("orientationchange",function(){setTimeout(fit,300);});
+  window.addEventListener("load",fit);
+  document.addEventListener("DOMContentLoaded",fit);
+})();
+</script>
+</body>
+</html>

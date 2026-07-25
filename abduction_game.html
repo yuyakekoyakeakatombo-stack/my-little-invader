@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="My Little Invader">
+<meta name="theme-color" content="#111111">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<title>ABDUCTION — my Vader</title>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  body{background:#111;display:flex;justify-content:center;align-items:center;min-height:100vh}
+  /* ── iPhoneシェル（invader_game.html と同一デザイン） ── */
+  .iphone{width:280px;background:#2a2a2a;border-radius:44px;padding:14px;border:1px solid #444;
+    box-shadow:0 0 0 1px #111,inset 0 1px 0 #555,0 40px 80px rgba(0,0,0,0.8);position:relative}
+  .btn-l{position:absolute;left:-5px;top:100px;width:4px;height:28px;background:#1e1e1e;border-radius:2px 0 0 2px;border:1px solid #111}
+  .btn-l2{position:absolute;left:-5px;top:136px;width:4px;height:50px;background:#1e1e1e;border-radius:2px 0 0 2px;border:1px solid #111}
+  .btn-r{position:absolute;right:-5px;top:120px;width:4px;height:60px;background:#1e1e1e;border-radius:0 2px 2px 0;border:1px solid #111}
+  .iphone-inner{background:#000;border-radius:34px;overflow:hidden}
+  .island{position:absolute;top:10px;left:50%;transform:translateX(-50%);width:88px;height:26px;background:#000;border-radius:20px;z-index:10}
+  .screen-area{width:252px;height:545px;background:var(--body-bg,#e8e3d8);overflow:hidden;position:relative;display:flex;flex-direction:column;align-items:center}
+  .home-bar{position:absolute;bottom:6px;left:50%;transform:translateX(-50%);width:80px;height:4px;background:rgba(0,0,0,0.18);border-radius:4px}
+  .app{width:100%;height:100%;background:var(--body-bg,#e8e3d8);position:relative;display:flex;flex-direction:column;align-items:center}
+  .power-led{position:absolute;top:12px;right:14px;width:5px;height:5px;border-radius:50%;background:#1fd45e;
+    box-shadow:0 0 4px #1fd45e,0 0 10px rgba(31,212,94,0.55);z-index:20}
+  .speaker-grille{position:absolute;bottom:26px;left:50%;transform:translateX(-50%);width:64px;height:5px;
+    background-image:radial-gradient(circle at 2px 2.5px,rgba(0,0,0,0.28) 1.5px,transparent 0);background-size:5px 5px;pointer-events:none}
+  .lcd-wrap{background:#b8c890;border-radius:4px;position:relative;overflow:hidden;flex-shrink:0;margin-top:48px;width:216px;height:260px;
+    box-shadow:0 0 0 2px #18160e,0 0 0 5px #2e2c1e,0 0 0 7px #131108,inset 0 2px 6px rgba(0,0,0,0.24),inset 2px 0 4px rgba(0,0,0,0.1),0 5px 9px rgba(0,0,0,0.40)}
+  .lcd-wrap::after{content:'';position:absolute;inset:0;
+    background:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,0,0,0.04) 3px,rgba(0,0,0,0.04) 4px);pointer-events:none;z-index:2}
+  canvas{display:block;image-rendering:pixelated;width:216px;height:260px}
+  .controller-wrap{display:flex;flex-direction:column;align-items:center;gap:8px;width:216px;margin-top:42px}
+  .controller-row{width:216px;display:flex;justify-content:space-between;align-items:center}
+  .dpad{position:relative;width:72px;height:72px;flex-shrink:0}
+  .dpad-h,.dpad-v{position:absolute;background:linear-gradient(180deg,#3c3c3c 0%,#252525 55%,#1c1c1c 100%);
+    border-radius:5px;border:1px solid rgba(0,0,0,0.55);
+    box-shadow:0 4px 4px var(--shadow-hard,rgba(0,0,0,0.32)),0 6px 12px var(--shadow-soft,rgba(0,0,0,0.22)),inset 0 1px 0 rgba(255,255,255,0.1),inset 0 -2px 4px rgba(0,0,0,0.42)}
+  .dpad-h{width:72px;height:24px;top:24px;left:0}
+  .dpad-v{width:24px;height:72px;top:0;left:24px}
+  .dpad-center{position:absolute;width:24px;height:24px;top:24px;left:24px;background:#252525;z-index:1}
+  .dpad-center::before{content:'';position:absolute;inset:0;
+    background:linear-gradient(rgba(255,255,255,0.07) 0,rgba(255,255,255,0.07) 1px,transparent 1px) 50% 50%/12px 100% no-repeat,
+    linear-gradient(90deg,rgba(255,255,255,0.07) 0,rgba(255,255,255,0.07) 1px,transparent 1px) 50% 50%/100% 12px no-repeat}
+  .dpad-arrow{position:absolute;display:flex;align-items:center;justify-content:center;font-size:6px;color:rgba(255,255,255,0.14);
+    z-index:2;width:24px;height:24px;user-select:none;transition:transform 0.06s,filter 0.06s}
+  .dpad-arrow.up{top:0;left:24px}.dpad-arrow.down{bottom:0;left:24px}
+  .dpad-arrow.left{top:24px;left:0}.dpad-arrow.right{top:24px;right:0}
+  .btns{display:flex;gap:8px;align-items:center}
+  .btn-row{display:flex;gap:12px;align-items:flex-start}
+  .btns-wrap{display:flex;flex-direction:column;align-items:center;gap:3px}
+  .btns-wrap.btn-b{transform:translateY(8px)}
+  .action-btn{width:34px;height:34px;min-width:34px;min-height:34px;max-width:34px;max-height:34px;border-radius:50%;
+    background:linear-gradient(145deg,#363636 0%,#232323 55%,#1a1a1a 100%);border:none;
+    box-shadow:0 4px 4px var(--shadow-hard,rgba(0,0,0,0.32)),0 6px 12px var(--shadow-soft,rgba(0,0,0,0.22)),inset 0 1px 2px rgba(255,255,255,0.13),inset 0 -2px 4px rgba(0,0,0,0.45);
+    display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;transition:transform 0.06s,filter 0.06s}
+  .btn-lbl{font-family:'Press Start 2P',monospace;font-size:9px;color:rgba(255,255,255,0.3);user-select:none;
+    text-shadow:0 1px 1px rgba(255,255,255,0.1),0 -1px 0 rgba(0,0,0,0.5)}
+  .menu-btn{width:60px;height:18px;border-radius:9px;background:linear-gradient(180deg,#333 0%,#1e1e1e 100%);border:none;
+    box-shadow:0 3px 3px var(--shadow-hard,rgba(0,0,0,0.32)),0 5px 10px var(--shadow-soft,rgba(0,0,0,0.22)),inset 0 1px 0 rgba(255,255,255,0.1),inset 0 -1px 2px rgba(0,0,0,0.35);
+    display:flex;align-items:center;justify-content:center;cursor:pointer;transition:transform 0.06s,filter 0.06s}
+  .menu-btn-lbl{font-family:'Press Start 2P',monospace;font-size:7px;color:rgba(255,255,255,0.3);user-select:none;letter-spacing:0.08em;
+    text-shadow:0 1px 1px rgba(255,255,255,0.1),0 -1px 0 rgba(0,0,0,0.5)}
+
+  /* ── 実機モード（ホーム画面から起動 or 実機Safari）：モックのiPhone外装を消してゲーム機本体だけ表示 ── */
+  body.device { background:var(--body-bg, #e8e3d8); }
+  body.device { overflow:hidden; }
+  html.device, body.device { width:100%; height:100%; }
+  body.device .iphone {
+    background:transparent; border:none; border-radius:0; padding:0; box-shadow:none;
+    width:auto;           /* 外装を消した分、幅を中身(252px)に合わせて左寄りを解消 */
+  }
+  body.device .btn-l, body.device .btn-l2, body.device .btn-r,
+  body.device .island, body.device .home-bar { display:none; }
+  body.device .iphone-inner { border-radius:0; background:transparent; }
+  body.device .screen-area { border-radius:0; }
+</style>
+</head>
+<body>
+<div class="iphone">
+  <div class="btn-l"></div><div class="btn-l2"></div><div class="btn-r"></div>
+  <div class="iphone-inner">
+    <div class="island"></div>
+    <div class="screen-area">
+      <div class="app">
+        <div class="power-led"></div>
+        <div class="lcd-wrap"><canvas id="lcd"></canvas></div>
+        <div class="controller-wrap">
+          <div class="controller-row">
+            <div class="dpad">
+              <div class="dpad-h"></div><div class="dpad-v"></div><div class="dpad-center"></div>
+              <div class="dpad-arrow up">▲</div><div class="dpad-arrow down">▼</div>
+              <div class="dpad-arrow left">◀</div><div class="dpad-arrow right">▶</div>
+            </div>
+            <div class="btns"><div class="btn-row">
+              <div class="btns-wrap btn-b"><div class="action-btn" id="bb"><span class="btn-lbl">B</span></div></div>
+              <div class="btns-wrap"><div class="action-btn" id="ba"><span class="btn-lbl">A</span></div></div>
+            </div></div>
+          </div>
+          <div class="menu-btn" id="bmenu"><span class="menu-btn-lbl">MENU</span></div>
+        </div>
+        <div class="speaker-grille"></div>
+      </div>
+      <div class="home-bar"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const W=54, H=65, S=4;
+  const ON='#1a2410', OFF='#b8c890', DIM='#8aaa6a';
+  const GY=54;                  // 地面y
+  const GROUND_Y=GY-8;          // キャラ立ち位置（上端、キャラ高さ8）
+
+  const cv=document.getElementById('lcd');
+  cv.width=W*S; cv.height=H*S;
+  const ct=cv.getContext('2d');
+  ct.imageSmoothingEnabled=false;
+
+  // ── BODY COLOR（本体SETTINGSの設定を反映） ──
+  (function(){
+    const COLORS=["#e8e3d8","#272727","#9ed0d8","#c8b8e0","#e8a89a","#98d0b0"];
+    let idx=1; // 本体のデフォルト(ONYX)に合わせる
+    try{ const b=localStorage.getItem("myvader_bodycolor"); if(b!==null) idx=Math.min(COLORS.length-1, Math.max(0, Number(b)||0)); }catch(e){}
+    const bg=COLORS[idx], isDark=(idx===1);
+    document.documentElement.style.setProperty("--body-bg", bg);
+    const sa=document.querySelector(".screen-area"), app=document.querySelector(".app");
+    if(sa) sa.style.background=bg;
+    if(app){
+      app.style.background=bg;
+      app.style.setProperty("--shadow-hard", isDark?"rgba(0,0,0,0.88)":"rgba(0,0,0,0.28)");
+      app.style.setProperty("--shadow-soft", isDark?"rgba(0,0,0,0.72)":"rgba(0,0,0,0.16)");
+    }
+    const hb=document.querySelector(".home-bar");
+    if(hb) hb.style.background = isDark?"rgba(255,255,255,0.2)":"rgba(0,0,0,0.18)";
+  })();
+
+
+  function d(x,y,col){ if(x<0||x>=W||y<0||y>=H)return; ct.fillStyle=col||ON; ct.fillRect(x*S,y*S,S,S); }
+  function hl(y,col,dash){ for(let x=0;x<W;x++) if(!dash||x%2===0) d(x,y,col||ON); }
+  function stamp(g,ox,oy,col){ g.forEach((r,ry)=>r.forEach((v,rx)=>{if(v)d(ox+rx,oy+ry,col||ON);})); }
+  function txtC(s,py,sz,col){ ct.font=`${sz}px "Press Start 2P"`; ct.fillStyle=col||ON; ct.textAlign='center'; ct.textBaseline='top'; ct.fillText(s,(W*S)/2,py*S); }
+  function txt(s,px,py,sz,col){ ct.font=`${sz}px "Press Start 2P"`; ct.fillStyle=col||ON; ct.textAlign='left'; ct.textBaseline='top'; ct.fillText(s,px*S,py*S); }
+
+  // ── スプライト ──
+  const UFO=[
+    [0,0,0,0,1,1,1,0,0,0,0],
+    [0,0,0,1,1,1,1,1,0,0,0],
+    [0,0,1,1,1,1,1,1,1,0,0],
+    [1,1,1,0,1,0,1,0,1,1,1],
+    [1,1,1,1,1,1,1,1,1,1,1],
+    [1,1,1,1,1,1,1,1,1,1,1],
+    [0,0,1,1,0,0,0,1,1,0,0],
+  ];
+  const CHARS={
+    egg:[
+      [0,0,0,0,0,0,0,0,0],[0,0,1,1,1,1,1,0,0],[0,1,1,1,1,1,1,1,0],[0,1,0,1,1,1,0,1,0],
+      [0,1,1,1,1,1,1,1,0],[0,1,1,1,1,1,1,1,0],[0,0,1,1,1,1,1,0,0],[0,0,0,0,0,0,0,0,0],
+    ],
+    mid:[
+      [0,0,1,0,0,0,1,0,0],[0,0,1,1,1,1,1,0,0],[0,1,1,1,1,1,1,1,0],[0,1,0,1,1,1,0,1,0],
+      [0,1,1,1,1,1,1,1,0],[0,0,1,1,1,1,1,0,0],[0,0,1,0,0,0,1,0,0],[0,1,1,0,0,0,1,1,0],
+    ],
+    larva:[
+      [0,0,1,0,0,0,1,0,0],[0,0,0,1,1,1,0,0,0],[0,1,1,1,1,1,1,1,0],[1,1,0,1,1,1,0,1,1],
+      [1,1,1,1,1,1,1,1,1],[0,1,1,1,1,1,1,1,0],[0,0,1,0,0,0,1,0,0],[0,1,1,0,0,0,1,1,0],
+    ],
+    grey:[
+      [0,0,1,1,1,1,1,0,0],[0,1,1,1,1,1,1,1,0],[1,1,1,1,1,1,1,1,1],[1,0,1,1,1,1,1,0,1],
+      [1,1,1,1,1,1,1,1,1],[0,1,1,1,1,1,1,1,0],[0,0,1,1,0,1,1,0,0],[0,1,1,0,0,0,1,1,0],
+    ],
+    tako:[
+      [0,0,1,0,0,0,1,0,0],[0,0,0,1,0,1,0,0,0],[0,1,1,1,1,1,1,1,0],[1,1,0,1,1,1,0,1,1],
+      [1,1,1,1,1,1,1,1,1],[0,1,1,1,1,1,1,1,0],[0,1,0,1,0,1,0,1,0],[0,1,0,1,0,1,0,1,0],
+    ],
+    inv:[
+      [1,0,0,0,0,0,0,0,1],[0,1,0,0,0,0,0,1,0],[0,1,1,1,1,1,1,1,0],[1,1,0,1,1,1,0,1,1],
+      [1,1,1,1,1,1,1,1,1],[0,1,1,1,1,1,1,1,0],[0,0,1,0,0,0,1,0,0],[0,1,1,0,0,0,1,1,0],
+    ],
+  };
+  let lineage='grey';            // 育成中キャラと連動
+  try{ const l=localStorage.getItem('myvader_lineage'); if(l && CHARS[l]) lineage=l; }catch(e){}
+  function CHAR(){ return CHARS[lineage]; }
+  // 屈伸フレーム（2コマ目）：脚の段を足元の段に畳み、体を1段沈める。足の接地位置は不変
+  function crouch(g){
+    const merged = g[g.length-2].map((v,i)=> (v || g[g.length-1][i]) ? 1 : 0);
+    return [g[0].map(()=>0), ...g.slice(0, g.length-2), merged];
+  }
+  const CHARS_CROUCH = {}; Object.keys(CHARS).forEach(k=>CHARS_CROUCH[k]=crouch(CHARS[k]));
+  function CHAR2(){ return CHARS_CROUCH[lineage]; }
+  // スコアを本体（invader_game.html）へ報告
+  function reportScore(){ try{ localStorage.setItem('myvader_result', JSON.stringify({game:'abduction', score:Math.max(0,score), at:Date.now()})); }catch(e){} }
+  const UFO_W=11, UFO_H=7, CH_W=9, CH_H=8;
+
+  // ── 音 ──
+  let ac=null;
+  function beep(freq,dur,type){
+    try{
+      if(localStorage.getItem('myvader_sound')==='off') return;   // 本体のSOUND設定を尊重
+      if(!ac) ac=new (window.AudioContext||window.webkitAudioContext)();
+      const o=ac.createOscillator(), g=ac.createGain();
+      o.connect(g); g.connect(ac.destination);
+      o.type=type||'square'; o.frequency.setValueAtTime(freq,ac.currentTime);
+      g.gain.setValueAtTime(0.12,ac.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.001,ac.currentTime+(dur||0.08));
+      o.start(); o.stop(ac.currentTime+(dur||0.08));
+    }catch(e){}
+  }
+
+  // ── ゲーム状態 ──
+  const STATE={TITLE:0,PLAY:2,GAMEOVER:4,CAUGHT:6,HELP:7};
+  let menuSel=0;
+  let state=STATE.TITLE;
+  const TICK=50;
+  const FPS=1000/TICK;
+
+  // 経過時間（秒）に応じた難易度を返す
+  function curDiff(){
+    const t=elapsed/FPS; // 経過秒
+    return {
+      ufoSpeed: Math.min(0.5 + t*0.04, 1.6),    // 0.5→最大1.6
+      beamDur:  Math.min(10 + t*0.3, 18),       // 10→最大18フレーム
+      safeDur:  Math.max(20 - t*0.4, 8),        // 20→最小8フレーム
+      diveChance: Math.min(0.30 + t*0.012, 0.6),
+      beamHalf: Math.min(3 + Math.floor(t/5), 9),
+      canCharge: t>=12,                          // 12秒以降から突進が出る
+      chargeSpeed: Math.min(1.4 + (t-12)*0.05, 2.6),
+      chargeChance: Math.min(0.4 + (t-12)*0.02, 0.8), // 降下後に突進する確率
+    };
+  }
+
+  // スコア
+  let score=0;
+  let elapsed=0;            // 経過フレーム
+  let hitCount=0;           // UFO衝突回数
+  const SCORE_PER_SEC=10;   // 生存加点/秒
+  const PENALTY_HIT=30;     // UFO衝突1回の減点
+  let hitCooldown=0;        // 連続減点防止
+
+  // プレイヤー
+  let plyX, plyY, vy, jumping;
+  const PLY_MIN=1, PLY_MAX=W-CH_W-1;
+  const GRAV=0.55, JUMP_V=-4.2;
+
+  // UFO
+  const UFO_HIGH=9;
+  let ufoX, ufoDir, ufoY, ufoYtarget;
+  let mode, modeTimer, beamX;
+  let chargeDir=1;
+  let graceFrames=0;
+  let caughtTimer=0;
+  let caughtX=0;
+  const CAUGHT_DUR=20;
+
+  // 入力
+  const keys={left:false,right:false};
+
+  function ufoCenter(){ return ufoX+5; }
+  function beamEdge(y){
+    const y0=Math.round(ufoY)+UFO_H, y1=GY-1;
+    if(y1<=y0) return 0;
+    return Math.round((y-y0)/(y1-y0)*curDiff().beamHalf);
+  }
+
+  function startGame(){
+    plyX=W/2-CH_W/2; plyY=GROUND_Y; vy=0; jumping=false;
+    ufoX=21; ufoDir=1; ufoY=UFO_HIGH; ufoYtarget=UFO_HIGH;
+    mode='safe'; modeTimer=0; beamX=ufoCenter();
+    graceFrames=6;
+    score=0; elapsed=0; hitCount=0; hitCooldown=0;
+    state=STATE.PLAY;
+  }
+
+  function jump(){ if(state===STATE.PLAY && !jumping){ jumping=true; vy=JUMP_V; beep(700,0.1); } }
+
+  // ── 衝突判定 ──
+  function rectsOverlap(ax,ay,aw,ah,bx,by,bw,bh){
+    return ax<bx+bw && ax+aw>bx && ay<by+bh && ay+ah>by;
+  }
+  // スプライトの塗りドット集合を {x,y} で返す
+  function spritePixels(g,ox,oy){
+    const out=[];
+    g.forEach((r,ry)=>r.forEach((v,rx)=>{ if(v) out.push([ox+rx, oy+ry]); }));
+    return out;
+  }
+  // プレイヤーの塗りドット
+  function playerPixels(){
+    return spritePixels(CHAR(), Math.round(plyX), Math.round(plyY));
+  }
+  function checkBeamHit(){
+    if(mode!=='beam') return false;
+    const y0=Math.round(ufoY)+UFO_H, y1=GY-1;
+    for(const [px,py] of playerPixels()){
+      if(py<y0 || py>y1) continue;
+      const half=beamEdge(py);
+      if(px>=beamX-half && px<=beamX+half) return true;
+    }
+    return false;
+  }
+  function checkUfoHit(){
+    // 両スプライトの塗りドットが1つでも重なったら衝突
+    const ufoPix=new Set(spritePixels(UFO, Math.round(ufoX), Math.round(ufoY)).map(([x,y])=>x+','+y));
+    for(const [px,py] of playerPixels()){
+      if(ufoPix.has(px+','+py)) return true;
+    }
+    return false;
+  }
+
+  // ── 更新 ──
+  function update(){
+    if(state===STATE.CAUGHT){
+      caughtTimer--;
+      // UFOを通常高度へ戻す（吸い上げる動き）
+      if(ufoY>UFO_HIGH) ufoY=Math.max(UFO_HIGH, ufoY-1);
+      const targetX=ufoCenter()-CH_W/2;
+      caughtX += (targetX-caughtX)*0.25;
+      plyX=caughtX;
+      const top=ufoY+UFO_H;
+      plyY -= (GROUND_Y-top)/CAUGHT_DUR + 0.3;
+      if(plyY<top) plyY=top;
+      if(caughtTimer<=0){ state=STATE.GAMEOVER; reportScore(); beep(160,0.4,'sawtooth'); }
+      return;
+    }
+    if(state!==STATE.PLAY) return;
+
+    const D=curDiff();
+    modeTimer++;
+    elapsed++;
+    if(hitCooldown>0) hitCooldown--;
+
+    // 生存加点
+    score = Math.floor(elapsed/FPS*SCORE_PER_SEC) - hitCount*PENALTY_HIT;
+
+    // UFOロジック
+    if(mode==='safe'){
+      ufoYtarget=UFO_HIGH;
+      ufoX+=ufoDir*D.ufoSpeed;
+      if(ufoX<=1){ufoX=1;ufoDir=1;} if(ufoX>=W-UFO_W-1){ufoX=W-UFO_W-1;ufoDir=-1;}
+      if(modeTimer>D.safeDur){
+        modeTimer=0;
+        if(Math.random()<D.diveChance){ mode='dive'; ufoYtarget=GROUND_Y; }
+        else { mode='warn'; beamX=ufoCenter(); }
+      }
+    } else if(mode==='warn'){
+      if(modeTimer>4){ modeTimer=0; mode='beam'; beep(300,0.12); }
+    } else if(mode==='beam'){
+      if(modeTimer>D.beamDur){ modeTimer=0; mode='safe'; }
+    } else if(mode==='dive'){
+      ufoX+=ufoDir*D.ufoSpeed*0.7;
+      if(ufoX<=1){ufoX=1;ufoDir=1;} if(ufoX>=W-UFO_W-1){ufoX=W-UFO_W-1;ufoDir=-1;}
+      if(modeTimer>22){
+        modeTimer=0;
+        // 難易度が上がっていれば突進へ、そうでなければ通常復帰
+        if(D.canCharge && Math.random()<D.chargeChance){
+          mode='charge';
+          // キャラのいる方向を向く
+          chargeDir = (plyX+CH_W/2 > ufoCenter()) ? 1 : -1;
+        } else {
+          mode='safe';
+        }
+      }
+    } else if(mode==='charge'){
+      // 地面の高さを保ったままキャラへ向かってスライド
+      ufoYtarget=GROUND_Y;
+      ufoX += chargeDir*D.chargeSpeed;
+      // 端に達するか、画面を横切ったら終了
+      if(ufoX<=1){ ufoX=1; mode='safe'; modeTimer=0; }
+      else if(ufoX>=W-UFO_W-1){ ufoX=W-UFO_W-1; mode='safe'; modeTimer=0; }
+      else if(modeTimer>40){ mode='safe'; modeTimer=0; }
+    }
+    if(ufoY<ufoYtarget) ufoY=Math.min(ufoY+2,ufoYtarget);
+    else if(ufoY>ufoYtarget) ufoY=Math.max(ufoY-2,ufoYtarget);
+
+    // プレイヤー横移動
+    const spd=1.2;
+    if(keys.left)  plyX-=spd;
+    if(keys.right) plyX+=spd;
+    if(plyX<PLY_MIN) plyX=PLY_MIN;
+    if(plyX>PLY_MAX) plyX=PLY_MAX;
+
+    // ジャンプ物理
+    if(jumping){
+      plyY+=vy; vy+=GRAV;
+      if(plyY>=GROUND_Y){ plyY=GROUND_Y; jumping=false; vy=0; }
+    }
+
+    if(graceFrames>0){ graceFrames--; return; }
+
+    // ビーム被弾 → 吸い上げ → ゲームオーバー
+    if(checkBeamHit()){
+      state=STATE.CAUGHT; caughtTimer=CAUGHT_DUR; caughtX=plyX;
+      beep(200,0.15,'sawtooth');
+      return;
+    }
+    // UFO本体衝突 → 減点のみ（ゲーム続行、連続減点防止）
+    if(checkUfoHit() && hitCooldown<=0){
+      hitCount++;
+      hitCooldown=Math.round(0.6*FPS);
+      beep(240,0.18,'sawtooth');
+    }
+  }
+
+  // ── 描画 ──
+  function drawField(){
+    ct.fillStyle=OFF; ct.fillRect(0,0,W*S,H*S);
+    // ヘッダー：スコア表示
+    txt('SCORE',1,1,6,ON);
+    const sc=Math.max(0,score);
+    txt((''+sc).padStart(5,'0'),(W-27),1,6,ON);
+    hl(10,DIM);
+    // 地面
+    hl(GY,ON);
+    for(let x=0;x<W;x+=3) d(x,GY+1,DIM);
+  }
+  function drawHud(){
+    const t=Math.floor(elapsed/FPS);
+    txt('TIME '+t,1,H-5,5,DIM);
+    txt('HIT '+hitCount,(W-20),H-5,5,DIM);
+  }
+
+  function draw(){
+    if(state===STATE.TITLE){
+      ct.fillStyle=OFF; ct.fillRect(0,0,W*S,H*S);
+      stamp(UFO, W/2-5, 11, ON);
+      txtC('ABDUCTION',22,7,ON);
+      txtC('FROM THE UFO',32,5,DIM);
+      const items=['START','HOW TO PLAY'];
+      items.forEach((it,i)=>{
+        const y=46+i*9, sel=(i===menuSel);
+        if(sel) txtC('>'+it+'<',y,6,ON);
+        else    txtC(it,y,6,DIM);
+      });
+      return;
+    }
+    if(state===STATE.HELP){
+      ct.fillStyle=OFF; ct.fillRect(0,0,W*S,H*S);
+      txtC('HOW TO PLAY',5,6,ON);
+      hl(15,ON);
+      txt('MOVE',3,20,5,ON); txt('< >',34,20,5,ON);
+      txt('JUMP',3,29,5,ON); txt('A',34,29,5,ON);
+      hl(39,ON);
+      txt('BEAM = CAUGHT',3,42,5,ON);
+      txt('JUMP OVER UFO',3,50,5,ON);
+      txt('SURVIVE LONG!',3,58,5,ON);
+      if(Math.floor(Date.now()/450)%2===0) txtC('A/B : BACK',64,5,ON);
+      return;
+    }
+    if(state===STATE.PLAY){
+      drawField();
+      const ufoCol=(mode==='warn'&&Math.floor(Date.now()/100)%2===0)?DIM:ON;
+      // 突進中は後方にスピード線（DIM）
+      if(mode==='charge'){
+        const ufoMidY=Math.round(ufoY)+3;
+        for(let i=1;i<=4;i++){
+          const tx = Math.round(ufoX) + (chargeDir>0 ? -i*2 : UFO_W-1+i*2);
+          d(tx, ufoMidY, DIM); d(tx, ufoMidY+2, DIM);
+        }
+      }
+      stamp(UFO,Math.round(ufoX),Math.round(ufoY),ufoCol);
+      if(mode==='beam'){
+        const y0=Math.round(ufoY)+UFO_H, y1=GY-1;
+        for(let y=y0;y<=y1;y++){
+          const half=beamEdge(y);
+          for(let dx=-half;dx<=half;dx++) d(beamX+dx,y,DIM);
+        }
+      }
+      // UFO衝突直後は点滅で無敵を示す
+      const flashing = hitCooldown>0 && Math.floor(hitCooldown/2)%2===0;
+      if(!flashing) stamp((!jumping && Math.floor(elapsed/5)%2) ? CHAR2() : CHAR(), Math.round(plyX), Math.round(plyY), ON);  // 2コマ屈伸（接地中のみ・判定は不変）
+      drawHud();
+      return;
+    }
+    if(state===STATE.CAUGHT){
+      drawField();
+      stamp(UFO,Math.round(ufoX),Math.round(ufoY),ON);
+      const y0=Math.round(ufoY)+UFO_H, y1=GY-1;
+      for(let y=y0;y<=y1;y++){
+        const half=beamEdge(y);
+        for(let dx=-half;dx<=half;dx++) d(beamX+dx,y,DIM);
+      }
+      if(Math.floor(caughtTimer/2)%2===0){
+        stamp(CHAR(),Math.round(plyX),Math.round(plyY),ON);
+      }
+      drawHud();
+      return;
+    }
+    if(state===STATE.GAMEOVER){
+      ct.fillStyle=OFF; ct.fillRect(0,0,W*S,H*S);
+      stamp(UFO, W/2-5, 10, ON);
+      txtC('GAME',22,8,ON);
+      txtC('OVER',32,8,ON);
+      txtC('SCORE',44,6,DIM);
+      txtC((''+Math.max(0,score)).padStart(5,'0'),53,8,ON);
+      if(Math.floor(Date.now()/450)%2===0) txtC('PRESS A',64,5,DIM);
+      return;
+    }
+  }
+
+  // ── メインループ ──
+  function loop(){ update(); draw(); }
+  setInterval(loop, TICK);
+
+  // ── 入力 ──
+  function press(el,fn){
+    el.addEventListener('touchstart',e=>{e.preventDefault(); el._pressed=true; fn();},{passive:false});
+    el.addEventListener('mousedown',e=>{ el._pressed=true; fn(); });
+  }
+  function release(el,fn){
+    const handler=()=>{ if(el._pressed){ el._pressed=false; fn(); } };
+    el.addEventListener('touchend',e=>{e.preventDefault(); handler();},{passive:false});
+    el.addEventListener('mouseup',handler);
+    el.addEventListener('mouseleave',handler);
+  }
+  function anim(el){ el.style.transform='translateY(2px) scale(.9)'; el.style.filter='brightness(.7)'; setTimeout(()=>{el.style.transform='';el.style.filter='';},100); }
+  function dpadAnim(el){ el.style.transform='translateY(2px) scale(.88)'; el.style.filter='brightness(2.5)'; setTimeout(()=>{el.style.transform='';el.style.filter='';},100); }
+
+  const elL=document.querySelector('.dpad-arrow.left');
+  const elR=document.querySelector('.dpad-arrow.right');
+  const elU=document.querySelector('.dpad-arrow.up');
+  const elD=document.querySelector('.dpad-arrow.down');
+  press(elL,()=>{keys.left=true;dpadAnim(elL);});  release(elL,()=>keys.left=false);
+  press(elR,()=>{keys.right=true;dpadAnim(elR);}); release(elR,()=>keys.right=false);
+  function menuMove(){ if(state===STATE.TITLE){ menuSel=(menuSel+1)%2; beep(500,0.05); } }
+  press(elU,()=>{dpadAnim(elU); menuMove();});
+  press(elD,()=>{dpadAnim(elD); menuMove();});
+
+  function confirmTitle(){ if(menuSel===0) startGame(); else state=STATE.HELP; }
+  function onADown(){
+    anim(document.getElementById('ba'));
+    if(state===STATE.PLAY){ jump(); }
+  }
+  function onAUp(){
+    if(state===STATE.TITLE) confirmTitle();
+    else if(state===STATE.HELP) state=STATE.TITLE;
+    else if(state===STATE.GAMEOVER){ state=STATE.TITLE; menuSel=0; }
+  }
+  press(document.getElementById('ba'), onADown);
+  release(document.getElementById('ba'), onAUp);
+  press(document.getElementById('bb'), ()=>{ anim(document.getElementById('bb')); if(state===STATE.HELP) state=STATE.TITLE; });
+  press(document.getElementById('bmenu'), ()=>{
+    const m=document.getElementById('bmenu'); m.style.transform='scale(.93)'; setTimeout(()=>m.style.transform='',100);
+    // iframe内なら親に通知して閉じる（ページ遷移しない）。単独で開いた時のみ遷移
+    if(window.parent && window.parent !== window) window.parent.postMessage({myvader:"exit"}, "*");
+    else window.location.href='invader_game.html';
+  });
+
+  // キーボード対応
+  document.addEventListener('keydown',e=>{
+    if(e.key==='ArrowLeft') keys.left=true;
+    if(e.key==='ArrowRight') keys.right=true;
+    if((e.key==='ArrowUp'||e.key==='ArrowDown') && state===STATE.TITLE){ e.preventDefault(); menuMove(); return; }
+    if(e.key===' '||e.key==='ArrowUp'||e.key.toLowerCase()==='a'){ e.preventDefault(); if(state===STATE.PLAY) jump(); }
+  });
+  document.addEventListener('keyup',e=>{
+    if(e.key==='ArrowLeft') keys.left=false;
+    if(e.key==='ArrowRight') keys.right=false;
+    if((e.key===' '||e.key.toLowerCase()==='a'||e.key==='ArrowUp') && state!==STATE.PLAY) onAUp();
+  });
+
+})();
+</script>
+
+<script>
+// iPhone実機表示：ゲーム機シェルを画面サイズに合わせて拡大（デザイン比率は維持）
+
+  // 実機（ホーム画面アプリ / iOS Safari）ではモックのiPhone外装を消す
+  (function(){
+    var standalone = window.navigator.standalone === true ||
+                     (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches);
+    var touchPhone = /iPhone|iPod|Android/i.test(navigator.userAgent);
+    if(standalone || touchPhone) document.body.classList.add("device");
+  })();
+(function(){
+  function fit(){
+    var el=document.querySelector(".iphone"); if(!el) return;
+    el.style.transform="none";
+    var r=el.getBoundingClientRect();
+    var w=r.width||280, h=r.height||600;
+    var s=Math.min(window.innerWidth*0.995/w, window.innerHeight*0.995/h);
+    el.style.transformOrigin="center center";
+    el.style.transform="scale("+s+")";
+    // ステータスバー領域まで描画を広げているので、電源LEDだけセーフエリア分だけ下げて重なりを避ける
+    var led=document.querySelector(".power-led");
+    if(led && document.body.classList.contains("device")){
+      var p=document.createElement("div");
+      p.style.cssText="position:fixed;top:0;left:0;width:1px;height:env(safe-area-inset-top);";
+      document.body.appendChild(p);
+      var sat=p.getBoundingClientRect().height; p.remove();
+      led.style.top=(12+sat/s)+"px";
+    }
+  }
+  window.addEventListener("resize",fit);
+  window.addEventListener("orientationchange",function(){setTimeout(fit,300);});
+  window.addEventListener("load",fit);
+  document.addEventListener("DOMContentLoaded",fit);
+})();
+</script>
+</body>
+</html>

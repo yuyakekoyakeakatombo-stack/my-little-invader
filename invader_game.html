@@ -1,0 +1,2534 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="My Little Invader">
+<meta name="theme-color" content="#111111">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<title>My Little Invader</title>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background:#111; display:flex; justify-content:center; align-items:center; min-height:100vh; }
+
+  /* ── iPhoneシェル（開発プレビュー用コンテナ） ── */
+  .iphone {
+    width:280px; background:#2a2a2a; border-radius:44px; padding:14px;
+    border:1px solid #444;
+    box-shadow:0 0 0 1px #111, inset 0 1px 0 #555, 0 40px 80px rgba(0,0,0,0.8);
+    position:relative;
+  }
+
+  /* iPhone側面ボタン（iPhoneのUI） */
+  .btn-l  { position:absolute; left:-5px; top:100px; width:4px; height:28px; background:#1e1e1e; border-radius:2px 0 0 2px; border:1px solid #111; }
+  .btn-l2 { position:absolute; left:-5px; top:136px; width:4px; height:50px; background:#1e1e1e; border-radius:2px 0 0 2px; border:1px solid #111; }
+  .btn-r  { position:absolute; right:-5px; top:120px; width:4px; height:60px; background:#1e1e1e; border-radius:0 2px 2px 0; border:1px solid #111; }
+
+  /* iPhone内側 */
+  .iphone-inner { background:#000; border-radius:34px; overflow:hidden; }
+  .island { position:absolute; top:10px; left:50%; transform:translateX(-50%); width:88px; height:26px; background:#000; border-radius:20px; z-index:10; }
+
+  /* iPhoneスクリーン ＝ ゲーム機の表示面 */
+  .screen-area {
+    width:252px; height:545px; background:var(--body-bg, #e8e3d8);
+    overflow:hidden; position:relative; display:flex; flex-direction:column;
+    align-items:center;
+  }
+  /* iPhoneホームバー */
+  .home-bar { position:absolute; bottom:6px; left:50%; transform:translateX(-50%); width:80px; height:4px; background:rgba(0,0,0,0.18); border-radius:4px; }
+
+  /* ── ゲーム機UI（iPhone画面全体を占有） ── */
+  .app {
+    width:100%; height:100%;
+    background:var(--body-bg, #e8e3d8);
+    position:relative;
+    display:flex; flex-direction:column; align-items:center;
+  }
+
+  /* 電源LED（右上コーナー、ダイナミックアイランド近傍） */
+  .power-led {
+    position:absolute; top:12px; right:14px;
+    width:5px; height:5px; border-radius:50%;
+    background:#1fd45e;
+    box-shadow:0 0 4px #1fd45e, 0 0 10px rgba(31,212,94,0.55);
+    z-index:20;
+  }
+
+  /* スピーカーグリル（ホームバーの上、下部中央） */
+  .speaker-grille {
+    position:absolute; bottom:26px; left:50%; transform:translateX(-50%);
+    width:64px; height:5px;
+    background-image: radial-gradient(circle at 2px 2.5px, rgba(0,0,0,0.28) 1.5px, transparent 0);
+    background-size: 5px 5px;
+    pointer-events:none;
+  }
+
+  .view { display:none; flex-direction:column; align-items:center; width:100%; }
+  .view.active { display:flex; }
+
+  /* ── LCD パネル（多重ベゼル） ── */
+  .lcd-wrap {
+    background:#b8c890; border-radius:4px;
+    position:relative; overflow:hidden; flex-shrink:0;
+    box-shadow:
+      0 0 0 2px #18160e,
+      0 0 0 5px #2e2c1e,
+      0 0 0 7px #131108,
+      inset 0 2px 6px rgba(0,0,0,0.24),
+      inset 2px 0 4px rgba(0,0,0,0.1),
+      0 5px 9px rgba(0,0,0,0.40);
+  }
+  .lcd-wrap::after {
+    content:''; position:absolute; inset:0;
+    background:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,0,0,0.04) 3px,rgba(0,0,0,0.04) 4px);
+    pointer-events:none; z-index:2;
+  }
+  canvas { display:block; image-rendering:pixelated; width:216px; height:260px; }
+
+  /* opening */
+  #view-opening .lcd-wrap { margin-top:16px; width:216px; height:260px; }
+  .title-area { margin-top:14px; display:flex; flex-direction:column; align-items:center; gap:8px; }
+  .game-title { font-family:'Press Start 2P',monospace; font-size:11px; color:#1a2410; text-align:center; line-height:1.6; }
+  .story-text { font-family:'Press Start 2P',monospace; font-size:5px; color:#4a5830; text-align:center; line-height:2; letter-spacing:0.03em; padding:0 8px; }
+  .story-text em { font-style:normal; color:#1a2410; }
+  .tap-prompt { font-family:'Press Start 2P',monospace; font-size:7px; color:#7a7660; animation:blink 1.2s step-end infinite; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+
+  /* main / menu */
+  .name-strip { margin-top:40px; width:216px; display:flex; justify-content:space-between; align-items:baseline; }
+  .pet-name { font-family:'Press Start 2P',monospace; font-size:8px; color:#1a2410; }
+  .pet-day  { font-family:'Press Start 2P',monospace; font-size:6px; color:#7a7660; }
+  #view-main .lcd-wrap, #view-menu .lcd-wrap { margin-top:6px; width:216px; height:260px; }
+
+  /* ── コントローラー ── */
+  .controller { margin-top:18px; width:216px; display:flex; justify-content:space-between; align-items:center; }
+  .dpad { position:relative; width:72px; height:72px; flex-shrink:0; }
+  .dpad-h, .dpad-v {
+    position:absolute;
+    background:linear-gradient(180deg,#3c3c3c 0%,#252525 55%,#1c1c1c 100%);
+    border-radius:5px; border:1px solid rgba(0,0,0,0.55);
+    box-shadow:0 4px 4px var(--shadow-hard,rgba(0,0,0,0.32)), 0 6px 12px var(--shadow-soft,rgba(0,0,0,0.22)), inset 0 1px 0 rgba(255,255,255,0.1), inset 0 -2px 4px rgba(0,0,0,0.42);
+  }
+  .dpad-h { width:72px; height:24px; top:24px; left:0; }
+  .dpad-v { width:24px; height:72px; top:0; left:24px; }
+  /* Dパッドセンター＋十字刻み */
+  .dpad-center {
+    position:absolute; width:24px; height:24px; top:24px; left:24px;
+    background:#252525; z-index:1;
+  }
+  .dpad-center::before {
+    content:''; position:absolute; inset:0;
+    background:
+      linear-gradient(rgba(255,255,255,0.07) 0,rgba(255,255,255,0.07) 1px,transparent 1px) 50% 50%/12px 100% no-repeat,
+      linear-gradient(90deg,rgba(255,255,255,0.07) 0,rgba(255,255,255,0.07) 1px,transparent 1px) 50% 50%/100% 12px no-repeat;
+  }
+  .dpad-arrow {
+    position:absolute; display:flex; align-items:center; justify-content:center;
+    font-size:6px; color:rgba(255,255,255,0.14); z-index:2; width:24px; height:24px;
+    user-select:none; transition:transform 0.06s, filter 0.06s;
+  }
+  .dpad-arrow.up    { top:0; left:24px; }
+  .dpad-arrow.down  { bottom:0; left:24px; }
+  .dpad-arrow.left  { top:24px; left:0; }
+  .dpad-arrow.right { top:24px; right:0; }
+
+  .btns { display:flex; gap:8px; align-items:center; }
+  /* Nintendo式：Bが下・Aが上の斜め配置 */
+  .btn-row { display:flex; gap:12px; align-items:flex-start; }
+  .btns-wrap { display:flex; flex-direction:column; align-items:center; gap:3px; }
+  .btns-wrap.btn-b { transform:translateY(8px); }
+
+  .action-btn {
+    width:34px; height:34px; min-width:34px; min-height:34px; max-width:34px; max-height:34px;
+    border-radius:50%;
+    background:linear-gradient(145deg,#363636 0%,#232323 55%,#1a1a1a 100%);
+    border:none;
+    box-shadow:0 4px 4px var(--shadow-hard,rgba(0,0,0,0.32)), 0 6px 12px var(--shadow-soft,rgba(0,0,0,0.22)), inset 0 1px 2px rgba(255,255,255,0.13), inset 0 -2px 4px rgba(0,0,0,0.45);
+    display:flex; align-items:center; justify-content:center;
+    cursor:pointer; flex-shrink:0; transition:transform 0.06s, filter 0.06s;
+  }
+  .btn-lbl { font-family:'Press Start 2P',monospace; font-size:9px; color:rgba(255,255,255,0.3); user-select:none;
+    text-shadow: 0 1px 1px rgba(255,255,255,0.1), 0 -1px 0 rgba(0,0,0,0.5); }
+  .lbl-b   { color:rgba(255,255,255,0.3); }
+  .lbl-a   { color:rgba(255,255,255,0.3); }
+
+  /* MENUボタン */
+  .controller-wrap { display:flex; flex-direction:column; align-items:center; gap:8px; width:216px; margin-top:42px; }
+  .controller-row  { width:216px; display:flex; justify-content:space-between; align-items:center; }
+  .menu-btn {
+    width:60px; height:18px;
+    border-radius:9px; background:linear-gradient(180deg,#333 0%,#1e1e1e 100%); border:none;
+    box-shadow:0 3px 3px var(--shadow-hard,rgba(0,0,0,0.32)), 0 5px 10px var(--shadow-soft,rgba(0,0,0,0.22)), inset 0 1px 0 rgba(255,255,255,0.1), inset 0 -1px 2px rgba(0,0,0,0.35);
+    display:flex; align-items:center; justify-content:center;
+    cursor:pointer; transition:transform 0.06s, filter 0.06s;
+  }
+  .menu-btn-lbl { font-family:'Press Start 2P',monospace; font-size:7px; color:rgba(255,255,255,0.3); user-select:none; letter-spacing:0.08em;
+    text-shadow: 0 1px 1px rgba(255,255,255,0.1), 0 -1px 0 rgba(0,0,0,0.5); }
+
+  /* ── 実機モード（ホーム画面から起動 or 実機Safari）：モックのiPhone外装を消してゲーム機本体だけ表示 ── */
+  body.device { background:var(--body-bg, #e8e3d8); }
+  body.device { overflow:hidden; }
+  html.device, body.device { width:100%; height:100%; }
+  body.device .iphone {
+    background:transparent; border:none; border-radius:0; padding:0; box-shadow:none;
+    width:auto;           /* 外装を消した分、幅を中身(252px)に合わせて左寄りを解消 */
+  }
+  body.device .btn-l, body.device .btn-l2, body.device .btn-r,
+  body.device .island, body.device .home-bar { display:none; }
+  body.device .iphone-inner { border-radius:0; background:transparent; }
+  body.device .screen-area { border-radius:0; }
+</style>
+</head>
+<body>
+<div class="iphone">
+  <div class="btn-l"></div><div class="btn-l2"></div><div class="btn-r"></div>
+  <div class="iphone-inner">
+    <div class="island"></div>
+    <div class="screen-area">
+      <div class="app">
+        <div class="power-led"></div>
+
+        <!-- OPENING -->
+        <div class="view active" id="view-opening">
+          <div class="lcd-wrap" style="margin-top:48px;">
+            <canvas id="lcd-o"></canvas>
+          </div>
+          <div class="controller-wrap">
+            <div class="controller-row">
+              <div class="dpad">
+                <div class="dpad-h"></div><div class="dpad-v"></div><div class="dpad-center"></div>
+                <div class="dpad-arrow up">▲</div><div class="dpad-arrow down">▼</div>
+                <div class="dpad-arrow left">◀</div><div class="dpad-arrow right">▶</div>
+              </div>
+              <div class="btns"><div class="btn-row">
+                <div class="btns-wrap btn-b"><div class="action-btn" id="ob"><span class="btn-lbl lbl-b">B</span></div></div>
+                <div class="btns-wrap"><div class="action-btn" id="oa"><span class="btn-lbl lbl-a">A</span></div></div>
+              </div></div>
+            </div>
+            <div class="menu-btn" id="omenu"><span class="menu-btn-lbl">MENU</span></div>
+          </div>
+        </div>
+
+        <!-- NAMING -->
+        <div class="view" id="view-naming">
+          <div class="lcd-wrap" style="margin-top:48px;"><canvas id="lcd-g"></canvas></div>
+          <div class="controller-wrap">
+            <div class="controller-row">
+              <div class="dpad">
+                <div class="dpad-h"></div><div class="dpad-v"></div><div class="dpad-center"></div>
+                <div class="dpad-arrow up">▲</div><div class="dpad-arrow down">▼</div>
+                <div class="dpad-arrow left">◀</div><div class="dpad-arrow right">▶</div>
+              </div>
+              <div class="btns"><div class="btn-row">
+                <div class="btns-wrap btn-b"><div class="action-btn" id="gb"><span class="btn-lbl lbl-b">B</span></div></div>
+                <div class="btns-wrap"><div class="action-btn" id="ga"><span class="btn-lbl lbl-a">A</span></div></div>
+              </div></div>
+            </div>
+            <div class="menu-btn" id="gmenu"><span class="menu-btn-lbl">MENU</span></div>
+          </div>
+        </div>
+
+        <!-- MAIN -->
+        <div class="view" id="view-main">
+          <div class="lcd-wrap" style="margin-top:48px;"><canvas id="lcd-m"></canvas></div>
+          <div class="controller-wrap">
+            <div class="controller-row">
+              <div class="dpad">
+                <div class="dpad-h"></div><div class="dpad-v"></div><div class="dpad-center"></div>
+                <div class="dpad-arrow up">▲</div><div class="dpad-arrow down">▼</div>
+                <div class="dpad-arrow left">◀</div><div class="dpad-arrow right">▶</div>
+              </div>
+              <div class="btns"><div class="btn-row">
+                <div class="btns-wrap btn-b"><div class="action-btn" id="mb"><span class="btn-lbl lbl-b">B</span></div></div>
+                <div class="btns-wrap"><div class="action-btn" id="ma"><span class="btn-lbl lbl-a">A</span></div></div>
+              </div></div>
+            </div>
+            <div class="menu-btn" id="mmenu"><span class="menu-btn-lbl">MENU</span></div>
+          </div>
+        </div>
+
+        <!-- MENU -->
+        <div class="view" id="view-menu">
+          <div class="lcd-wrap" style="margin-top:48px;"><canvas id="lcd-n"></canvas></div>
+          <div class="controller-wrap">
+            <div class="controller-row">
+              <div class="dpad">
+                <div class="dpad-h"></div><div class="dpad-v"></div><div class="dpad-center"></div>
+                <div class="dpad-arrow up">▲</div><div class="dpad-arrow down">▼</div>
+                <div class="dpad-arrow left">◀</div><div class="dpad-arrow right">▶</div>
+              </div>
+              <div class="btns"><div class="btn-row">
+                <div class="btns-wrap btn-b"><div class="action-btn" id="nb"><span class="btn-lbl lbl-b">B</span></div></div>
+                <div class="btns-wrap"><div class="action-btn" id="na"><span class="btn-lbl lbl-a">A</span></div></div>
+              </div></div>
+            </div>
+            <div class="menu-btn" id="nmenu"><span class="menu-btn-lbl">MENU</span></div>
+          </div>
+        </div>
+
+        <!-- STORY -->
+        <div class="view" id="view-story">
+          <div class="lcd-wrap" style="margin-top:48px;"><canvas id="lcd-s"></canvas></div>
+          <div class="controller-wrap">
+            <div class="controller-row">
+              <div class="dpad">
+                <div class="dpad-h"></div><div class="dpad-v"></div><div class="dpad-center"></div>
+                <div class="dpad-arrow up">▲</div><div class="dpad-arrow down">▼</div>
+                <div class="dpad-arrow left">◀</div><div class="dpad-arrow right">▶</div>
+              </div>
+              <div class="btns"><div class="btn-row">
+                <div class="btns-wrap btn-b"><div class="action-btn" id="sb"><span class="btn-lbl lbl-b">B</span></div></div>
+                <div class="btns-wrap"><div class="action-btn" id="sa"><span class="btn-lbl lbl-a">A</span></div></div>
+              </div></div>
+            </div>
+            <div class="menu-btn" id="smenu"><span class="menu-btn-lbl">MENU</span></div>
+          </div>
+        </div>
+        <div class="speaker-grille"></div>
+
+      </div>
+      <div class="home-bar"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  // My Little Invader 本体（育成画面）。ミニゲームへの遷移と復帰は同一フォルダ内の相対パス
+  const W=54, H=65, S=4;
+  const ON='#1a2410', OFF='#b8c890', DIM='#8aaa6a';
+  // 育成画面の地面（お世話アイコンはMENU内に移動したため元の高さ。ミニゲーム側と同じ）
+  const MAIN_GY = 61;
+
+  // ════════════════════════════════════════
+  // 多言語（EN/JP。デフォルトEN。※日本語はPress Start 2P非対応のためフォールバック表示）
+  // ════════════════════════════════════════
+  let lang = 'en';
+  try{ if(localStorage.getItem('myvader_lang') === 'ja') lang = 'ja'; }catch(e){}
+  const I18N = {
+    en: {
+      feed:'FEED', clean:'CLEAN', med:'MEDICINE', pet:'PRAISE', scold:'SCOLD', game:'MINI GAME',
+      status:'STATUS', story:'STORY', settings:'SETTINGS', play:'PLAY',
+      sound:'SOUND', bodycolor:'BODY COLOR', location:'LOCATION', language:'LANGUAGE', debug:'DEBUG', reset:'ALL RESET',
+      on:'ON', off:'OFF', exec:'EXEC', sure:'SURE?', yesno:'A:YES  B:NO',
+      hungry:'HUNGRY', mood:'MOOD', body:'BODY', stage:'STAGE', ptype:'TYPE',
+      good:'GOOD', sick:'SICK', weak:'WEAK', dead:'DEAD',
+      newborn:'NEWBORN', baby:'BABY', child:'CHILD', adult:'ADULT', finalst:'FINAL',
+      gray:'GRAY', martian:'MARTIAN', alien:'ALIEN',
+      nameq:'NAME?', done:'DONE', langval:'ENGLISH',
+    },
+    ja: {
+      feed:'ごはん', clean:'そうじ', med:'くすり', pet:'ほめる', scold:'しかる', game:'ゲーム',
+      status:'ステータス', story:'ストーリー', settings:'せってい', play:'あそぶ',
+      sound:'サウンド', bodycolor:'カラー', location:'ロケーション', language:'げんご', debug:'デバッグ', reset:'リセット',
+      on:'オン', off:'オフ', exec:'じっこう', sure:'ほんとうに？', yesno:'A:はい B:いいえ',
+      hungry:'おなか', mood:'きげん', body:'からだ', stage:'せいちょう', ptype:'タイプ',
+      good:'げんき', sick:'びょうき', weak:'よわり', dead:'おばけ',
+      newborn:'うまれたて', baby:'あかちゃん', child:'こども', adult:'おとな', finalst:'さいしゅう',
+      gray:'グレイ', martian:'マーシャン', alien:'エイリアン',
+      nameq:'なまえは？', done:'けってい', langval:'にほんご',
+    },
+  };
+  function T(k){ return (I18N[lang] && I18N[lang][k]) || I18N.en[k] || k; }
+  function toggleLang(){ lang = (lang==='en') ? 'ja' : 'en'; try{ localStorage.setItem('myvader_lang', lang); }catch(e){} }
+  // フォント：英語はピクセル字体（Press Start 2P）
+  //          日本語はグリフを持つゴシック体で、小さいと潰れるため大きめに描画（可読性優先）
+  const JP_FONT = '"Hiragino Maru Gothic ProN","Yu Gothic","Hiragino Sans",sans-serif';
+  function uiFont(px){
+    if(lang==='ja') return Math.max(9, px + 2) + 'px ' + JP_FONT;  // 例:6px→9px / 7px→9px / 8px→10px
+    return px + 'px "Press Start 2P"';
+  }
+  // ペット名は英数字ならピクセル字体、かな交じりならゴシック体で描画
+  function isAscii(s){ return /^[\x00-\x7F]*$/.test(s||''); }
+  function nameFont(px, s){ return isAscii(s) ? px + 'px "Press Start 2P"' : Math.max(9, px+2) + 'px ' + JP_FONT; }
+
+  function initCanvas(id) {
+    const c = document.getElementById(id);
+    c.width = W*S; c.height = H*S;
+    const ctx = c.getContext('2d');
+    ctx.imageSmoothingEnabled = false;
+    return ctx;
+  }
+  function dot(ctx,x,y,col){ if(x<0||x>=W||y<0||y>=H)return; ctx.fillStyle=col||ON; ctx.fillRect(x*S,y*S,S,S); }
+  function stamp(ctx,grid,ox,oy,col){ const c=col||ON; grid.forEach((row,ry)=>row.forEach((v,rx)=>{if(v)dot(ctx,ox+rx,oy+ry,c);})); }
+
+  // ── 遷移 ──
+  let scene = 'opening';
+  let storyScrollY = 0;
+  let storyDone = false;
+
+  function showView(id) {
+    document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+    document.getElementById('view-'+id).classList.add('active');
+    scene = id;
+    if(id==='story'){ storyScrollY=H*S; storyDone=false; }
+  }
+
+  // ── 音 ──
+  let ac = null;
+  function playClick(freq=1200) {
+    if(!soundOn) return;   // SOUND=OFFならミュート
+    if(!ac) ac = new (window.AudioContext||window.webkitAudioContext)();
+    const osc=ac.createOscillator(), g=ac.createGain();
+    osc.connect(g); g.connect(ac.destination);
+    osc.type='square';
+    osc.frequency.setValueAtTime(freq, ac.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(freq*0.33, ac.currentTime+0.04);
+    g.gain.setValueAtTime(0.15, ac.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime+0.05);
+    osc.start(); osc.stop(ac.currentTime+0.05);
+  }
+  function onPress(el, fn) {
+    el.addEventListener('touchstart',e=>{e.preventDefault();fn();},{passive:false});
+    el.addEventListener('click',fn);
+  }
+
+  // ── 電源LED：端末バッテリーが20%未満で赤く点灯（Battery Status API対応ブラウザのみ）──
+  function updatePowerLed(level){
+    const el = document.querySelector('.power-led'); if(!el) return;
+    const low = (typeof level === 'number') && level < 0.20;
+    el.style.background = low ? '#ff3b30' : '#1fd45e';
+    el.style.boxShadow  = low
+      ? '0 0 4px #ff3b30, 0 0 10px rgba(255,59,48,0.55)'
+      : '0 0 4px #1fd45e, 0 0 10px rgba(31,212,94,0.55)';
+  }
+  if(navigator.getBattery){
+    navigator.getBattery().then(b=>{
+      const upd = ()=>updatePowerLed(b.level);
+      upd();
+      b.addEventListener('levelchange', upd);   // 残量変化で更新
+      b.addEventListener('chargingchange', upd);
+    }).catch(()=>{});
+  }
+
+  // ════════════════════════════════════════
+  // OPENING  (interval: 80ms、元モックと同一)
+  // ════════════════════════════════════════
+  const ctxO = initCanvas('lcd-o');
+
+  const UFO_SPR = [
+    [0,0,0,0,1,1,1,0,0,0,0],
+    [0,0,0,1,1,1,1,1,0,0,0],
+    [0,0,1,1,1,1,1,1,1,0,0],
+    [1,1,1,0,1,0,1,0,1,1,1],
+    [1,1,1,1,1,1,1,1,1,1,1],
+    [1,1,1,1,1,1,1,1,1,1,1],
+    [0,0,1,1,0,0,0,1,1,0,0],
+  ];
+  const BABY_SPR = [[1,1],[1,1]];
+  const STARS_O = [[3,2],[11,4],[22,1],[33,5],[44,2],[50,6],[7,8],[18,10],[38,7],[48,11],[25,3],[14,14],[42,13],[6,16],[30,15]];
+
+  const O_PHASES = [35,45,45,90,35,50,80];
+  const O_TOTAL  = O_PHASES.reduce((a,b)=>a+b,0);
+  const UFO_START_X = W+2;
+  const UFO_END_X   = Math.floor(W/2)-7;
+  const UFO_CX      = UFO_END_X+5;
+  const UFO_Y=3, BEAM_TOP=UFO_Y+7;
+  const GROUND_Y=H-4, BABY_END_Y=GROUND_Y-2, BABY_X=UFO_CX-1;
+
+  function easeOut(t){return 1-(1-t)*(1-t);}
+  function easeIn(t) {return t*t;}
+  function getPhaseO(f){ let r=f%O_TOTAL; for(let p=0;p<O_PHASES.length;p++){if(r<O_PHASES[p])return{ph:p,t:r/O_PHASES[p]};r-=O_PHASES[p];} return{ph:0,t:0}; }
+
+  function drawGroundO(){
+    for(let x=0;x<W;x++) dot(ctxO,x,GROUND_Y,ON);
+    for(let x=0;x<W;x+=3) dot(ctxO,x,GROUND_Y-1,DIM);
+    // 建物（元モックと同じ）
+    for(let y=H-11;y<H-4;y++){dot(ctxO,1,y,ON);dot(ctxO,2,y,ON);dot(ctxO,3,y,ON);dot(ctxO,4,y,ON);}
+    for(let y=H-8;y<H-4;y++){dot(ctxO,5,y,ON);dot(ctxO,6,y,ON);}
+    for(let y=H-13;y<H-4;y++){dot(ctxO,W-6,y,ON);dot(ctxO,W-5,y,ON);dot(ctxO,W-4,y,ON);dot(ctxO,W-3,y,ON);}
+    for(let y=H-9;y<H-4;y++){dot(ctxO,W-7,y,ON);dot(ctxO,W-8,y,ON);}
+  }
+  function drawBeamO(cx,topY,progress){
+    const fullBot=H-5, beamBot=Math.round(topY+(fullBot-topY)*progress);
+    const totalH=fullBot-topY, maxHalf=10;
+    for(let y=topY;y<=beamBot;y++){
+      const p=totalH>0?(y-topY)/totalH:0;
+      const half=Math.round(p*maxHalf);
+      for(let dx=-half;dx<=half;dx++) dot(ctxO,cx+dx,y,OFF);
+    }
+  }
+
+  let fO=0, openingReady=false, openingDone=false;
+  let titleWait=0; // アニメ後の待機カウンタ
+
+  function tickOpening(){
+    ctxO.fillStyle=DIM; ctxO.fillRect(0,0,W*S,H*S);
+    STARS_O.forEach(([x,y],i)=>dot(ctxO,x,y,(fO+i*7)%30<22?OFF:DIM));
+    drawGroundO();
+
+    if (!openingDone) {
+      // ── UFOアニメーション（1回のみ） ──
+      const f = Math.min(fO, O_TOTAL-1);
+      const{ph,t}=getPhaseO(f);
+      if(ph===1){ const ux=Math.round(UFO_START_X+(UFO_END_X-UFO_START_X)*easeOut(t)); stamp(ctxO,UFO_SPR,ux,UFO_Y,ON); }
+      else if(ph===2){ stamp(ctxO,UFO_SPR,UFO_END_X,UFO_Y,ON); drawBeamO(UFO_CX,BEAM_TOP,easeOut(t)); }
+      else if(ph===3){ drawBeamO(UFO_CX,BEAM_TOP,1); stamp(ctxO,UFO_SPR,UFO_END_X,UFO_Y,ON); const by=Math.round(BEAM_TOP+(BABY_END_Y-BEAM_TOP)*easeOut(t)); stamp(ctxO,BABY_SPR,BABY_X,by,ON); }
+      else if(ph===4){ const bp=1-easeOut(t); if(bp>0)drawBeamO(UFO_CX,BEAM_TOP,bp); stamp(ctxO,UFO_SPR,UFO_END_X,UFO_Y,ON); stamp(ctxO,BABY_SPR,BABY_X,BABY_END_Y,ON); }
+      else if(ph===5){ const ux=Math.round(UFO_END_X+(-UFO_END_X-16)*easeIn(t)); const uy=Math.round(UFO_Y-12*easeIn(t)); stamp(ctxO,UFO_SPR,ux,uy,ON); stamp(ctxO,BABY_SPR,BABY_X,BABY_END_Y,ON); }
+      else if(ph===6){
+        const totalDx=W-BABY_X+4, bx=BABY_X+Math.round(t*totalDx);
+        const seg=Math.min(t*5,4.999), segIdx=Math.floor(seg), segT=seg-segIdx;
+        const by=BABY_END_Y-Math.round(Math.sin(segT*Math.PI)*3*(1-(segIdx/5)*0.5));
+        if(bx<W+2) stamp(ctxO,BABY_SPR,bx,by,ON);
+      }
+      fO++;
+      if(fO >= O_TOTAL){ openingDone=true; titleWait=0; }
+
+    } else {
+      // ── タイトル＋PRESS A ──
+      if(scene!=='opening') return;
+      titleWait++;
+      const cx = (W*S)/2;
+
+      ctxO.textAlign = 'center';
+      ctxO.textBaseline = 'middle';
+
+      // タイトル（常時・2行組み）
+      ctxO.fillStyle = ON;
+      ctxO.font = '9px "Press Start 2P"';
+      ctxO.fillText('My Little', cx, 19*S);
+      ctxO.font = '11px "Press Start 2P"';
+      ctxO.fillText('Invader', cx, 26*S);
+
+      // 一拍（約1.5秒=19フレーム）後にPRESS A点滅
+      if(titleWait > 19){
+        if(!openingReady) openingReady = true;
+        const blink = Math.floor(titleWait / 9) % 2 === 0;
+        ctxO.font = '6px "Press Start 2P"';
+        ctxO.fillStyle = blink ? ON : DIM;
+        ctxO.fillText('PRESS  A', cx, 35*S);
+      }
+    }
+  }
+
+  setInterval(tickOpening, 80);
+
+  // Aボタンでスタート（いつでも）。命名は育成画面の「NAME:????」から行う
+  onPress(document.getElementById('oa'), ()=>{ playClick(); showView('main'); });
+  onPress(document.getElementById('ob'), ()=>{ playClick(); btnAnim(document.getElementById('ob')); });
+  onPress(document.getElementById('omenu'), ()=>{ playClick(); btnAnim(document.getElementById('omenu'),1,0.93); });
+
+  // ════════════════════════════════════════
+  // ペット状態（フェーズ1: 名前・日数・表示用ステータスの骨格）
+  // ════════════════════════════════════════
+  const SAVE_KEY = 'myvader_pet';
+  function defaultPet(){ return {
+    name:'', birth:0, lastTick:0,
+    hunger:4, mood:3, health:'GOOD',      // 表示ステータス
+    hungerAcc:0, moodAcc:0,               // 進行タイマー（分）
+    P:0, D:50, C:50, B:50, W:0,           // 隠しパラメータ（性格/しつけ/ケア/なつき/汚れ）
+    plateAt:0, plateSpoiled:false,        // 残った皿（放置で食べ残し汚れ化＝plateSpoiled）
+    poopAt:0,                             // 次のうんち発生時刻
+    wokeUntil:0,                          // しかられて起きている期限
+    dayKey:'', bGainToday:0,              // なつき度の日次獲得上限管理
+    dirtAcc:0,                            // 汚れ放置時間（分・病気抽選用）
+    starveAcc:0,                          // 空腹MAX継続時間（分。1080=衰弱, 1800=死）
+    sickAcc:0,                            // 病気放置時間（分。2160=死）
+    sickCount:0, fullFeeds:0,             // 病気回数・満腹給餌回数（進化条件用）
+    lowBDays:0, calDay:'',                // なつき度低下の連続日数（UFO帰還判定）
+    dead:'', ufoFlag:false,               // 死因('starve'|'sick')・帰還トリガー
+    stage:'egg', lineage:'', form:'',     // 育成段階: egg→mid→larva→adult(系統)→final(形態)
+    EP:0, ageMin:0, eggTargetEP:0,        // 進化ポイント/年齢(分)/NEWBORN→BABYの個体別目標EP
+    finalAt:0, departFlag:false,          // 最終形態到達時刻・旅立ちエンド確定
+    nightPlays:0,                         // 夜更かしプレイ回数（22時以降。i3条件）
+    best:{sw:0,ss:0,ab:0},                // ミニゲーム自己ベスト（g3条件）
+    tantrumAt:0, tantrumType:'',          // わがまま拒否中（Stage2まで。正当なしかるで解消）
+  }; }
+  let pet = defaultPet();
+  try { const sv = JSON.parse(localStorage.getItem(SAVE_KEY)); if(sv && sv.name) pet = Object.assign(defaultPet(), sv); } catch(e){}
+  if(pet.name && !pet.lastTick) pet.lastTick = Date.now();  // 旧セーブ互換
+
+  // ミニゲームへ渡す自機系統（デフォルメ6種のキー）
+  function gameLineage(){
+    if(pet.stage==='egg') return 'egg';
+    if(pet.stage==='mid') return 'mid';
+    if(pet.stage==='larva') return 'larva';
+    return pet.lineage || 'grey';   // adult/final は系統で
+  }
+  function savePet(){ try {
+    localStorage.setItem(SAVE_KEY, JSON.stringify(pet));
+    localStorage.setItem('myvader_lineage', gameLineage());
+  } catch(e){} }
+
+  // ミニゲームへの遷移中はステータス進行を一時停止（戻ってきた時に差し引く）
+  let returnedFromGame = false;   // ミニゲームからの復帰時はオープニングを飛ばして育成画面へ
+  try {
+    const pz = localStorage.getItem('myvader_pause');
+    if(pz){
+      localStorage.removeItem('myvader_pause');
+      returnedFromGame = true;
+      const d = Date.now() - Number(pz);
+      if(pet.lastTick && d > 0) pet.lastTick = Math.min(Date.now(), pet.lastTick + d);
+    }
+  } catch(e){}
+
+  // UFO帰還エンディング：トリガー確定後、次回起動時に発火（企画書§8 E3）
+  let ufoEnding = !!(pet.ufoFlag && !pet.dead), ufoT = 0;
+  // 疎遠期：なつき度<20が3日以上続くと反応が消える（帰還の前兆・挽回可能）
+  function isEstranged(){ return pet.lowBDays >= 3 && pet.B < 20; }
+  // 衰弱：空腹MAXを18時間（起床換算）放置
+  function isWeak(){ return !pet.dead && pet.starveAcc >= 1080; }
+
+  // ════════════════════════════════════════
+  // 進化システム（企画書§5）
+  //  EP: 1日=1.0＋天気補正(晴れ+0.2/雨-0.2)。DEBUG中は60倍で貯まる
+  //  たまご→(約30h±5h・EPで判定)→中間体→(EP1)→幼体→(EP4)→成体[P分岐]→(EP11)→最終形態[C×D+特殊]
+  // ════════════════════════════════════════
+  // NEWBORN→BABY：30時間±5時間。他段階と同じEP（天気補正付きの累積）で判定し、機嫌でも増減
+  const EGG_H_BASE = 30, EGG_H_JITTER = 5;
+  function rollEggTarget(){ return (EGG_H_BASE + (Math.random()*2-1)*EGG_H_JITTER) / 24; }  // 時間→EP(1日=1.0)
+  let evoT = 0;                                   // 進化演出フレーム
+  let departEnding = !!(pet.departFlag && !pet.dead), departT = 0;   // 旅立ちエンド（E4）
+
+  function evolveTo(st){ pet.stage = st; evoT = 36; savePet(); }
+  function pickForm(){
+    const L = pet.lineage;
+    // 特殊条件（隠し進化）を優先
+    if(L==='tako' && pet.fullFeeds >= 10 && pet.sickCount >= 1) return 't3';   // クラーケン：大食いルート
+    if(L==='grey' && pet.best.sw >= 250 && pet.best.ss >= 100 && pet.best.ab >= 400) return 'g3';  // オールラウンダー
+    if(L==='inv'  && pet.nightPlays >= 7 && pet.D >= 50) return 'i3';          // ワイルド（夜更かしだが悪い子ではない）
+    const good = pet.C >= 70 && pet.D >= 60;
+    const bad  = pet.C < 40 || pet.D < 30;
+    const n = good ? 1 : (bad ? 3 : 2);
+    return (L==='grey'?'g':L==='tako'?'t':'i') + n;
+  }
+  function maybeEvolve(){
+    if(pet.dead || !pet.name) return;
+    if(effectiveAsleep()) return;                 // 進化は起きている時（起床時）に起こる
+    if(pet.stage==='egg'){   // NEWBORN→BABY：EPが個体ごとの目標(30h±5h)に達したら。以後の段階はBABY起点で数えるためEPリセット
+      if(!pet.eggTargetEP) pet.eggTargetEP = rollEggTarget();
+      if(pet.EP >= pet.eggTargetEP){ pet.EP = 0; return evolveTo('mid'); }
+      return;
+    }
+    if(pet.stage==='mid'   && pet.EP >= 1)      return evolveTo('larva');
+    if(pet.stage==='larva' && pet.EP >= 4){
+      pet.lineage = pet.P >= 30 ? 'inv' : (pet.P <= -30 ? 'tako' : 'grey');   // 性格で系統決定
+      return evolveTo('adult');
+    }
+    if(pet.stage==='adult' && pet.EP >= 11){
+      pet.form = pickForm();                      // ケア×しつけ＋特殊条件で形態決定
+      pet.finalAt = Date.now();
+      return evolveTo('final');
+    }
+  }
+
+  // ミニゲームの結果を受け取り（戻ってきた起動時に処理）
+  function processGameResult(){
+    try {
+      const raw = localStorage.getItem('myvader_result');
+      if(!raw) return;
+      localStorage.removeItem('myvader_result');
+      returnedFromGame = true;
+      const r = JSON.parse(raw);
+      if(!r || !pet.name || pet.dead) return;
+      if(Date.now() - r.at > 3600000) return;     // 1時間以上前の結果は無視
+      if(pet.mood < 4) pet.mood++;                // 遊んで楽しかった
+      gainB(2);
+      const h = new Date(r.at).getHours();
+      if(h >= 22 || h < 4){ pet.nightPlays++; pet.P = Math.min(100, pet.P + 2); }   // 夜更かし
+      if(r.game==='spacewalk'){    pet.best.sw = Math.max(pet.best.sw, r.score); if(r.score >= 250) pet.P = Math.max(-100, pet.P - 2); }
+      if(r.game==='shootingstar'){ pet.best.ss = Math.max(pet.best.ss, r.score); if(r.score >= 100) pet.P = Math.min(100, pet.P + 2); }
+      if(r.game==='abduction'){    pet.best.ab = Math.max(pet.best.ab, r.score); if(r.score >= 400) pet.C = Math.min(100, pet.C + 2); }
+      pet.C = Math.min(100, pet.C + 1);           // 遊んであげたケア加点
+      savePet();
+    } catch(e){}
+  }
+  processGameResult();
+  // ミニゲームからの復帰：オープニングを飛ばして育成画面へ直行
+  if(returnedFromGame && pet.name) showView('main');
+
+  // ── ミニゲームを同一ページ内のフルスクリーンiframeで開く ──
+  // ホーム画面アプリで別ファイルへ遷移するとSafariのUI付き表示に抜け出してしまうため、
+  // 遷移せずiframeで重ねる。プレイ中は本体の時間進行を止める。
+  let miniFrame = null, inMiniGame = false;
+  function openMiniGame(file){
+    if(miniFrame) return;
+    inMiniGame = true;
+    savePet();
+    const f = document.createElement('iframe');
+    f.src = file;
+    f.setAttribute('scrolling','no');
+    f.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;border:none;z-index:9999;background:#000;';
+    document.body.appendChild(f);
+    miniFrame = f;
+  }
+  function closeMiniGame(){
+    if(miniFrame){ miniFrame.remove(); miniFrame = null; }
+    inMiniGame = false;
+    pet.lastTick = Date.now();     // プレイ中のぶんは進行させない
+    processGameResult();           // スコアを育成に反映
+    savePet();
+    inPlay = false;
+    showView('main');
+  }
+  window.addEventListener('message', function(e){
+    if(e && e.data && e.data.myvader === 'exit') closeMiniGame();
+  });
+  // 経過日数：進化タイマー(EP/ageMin)とは別カウント。カレンダーの日付境界(0:00)で+1
+  function startOfDay(t){ const d = new Date(t); d.setHours(0,0,0,0); return d.getTime(); }
+  function petDay(){
+    if(!pet.birth) return 1;
+    const days = Math.round((startOfDay(Date.now()) - startOfDay(pet.birth)) / 86400000);
+    return Math.min(99, days + 1);   // 誕生日=DAY01、次の0:00でDAY02
+  }
+  function dayLabel(){ return 'DAY' + String(petDay()).padStart(2,'0'); }
+
+  // ── 時間進行（企画書§4 ドラフト値）──
+  const HUNGER_MIN = 180;   // 3時間でおなか♥1減（幼体）
+  const MOOD_MIN   = 240;   // 4時間でごきげん♪1減
+  const CATCHUP_CAP_MS = 14*86400000;  // 起動時の経過計算は最大14日分
+
+  // ── 睡眠スケジュール（企画書§4：段階/系統別。毎日±ランダムでばらつく）──
+  // 日ごとに安定した擬似乱数（同じ日は同じ、日が変われば変わる。個体ごとにも異なる）
+  function dayIndex(d){ const x = new Date(d); x.setHours(0,0,0,0); return Math.floor(x.getTime()/86400000); }
+  function dayRnd(di, salt){
+    let s = (Math.imul(di, 2654435761) ^ ((pet.birth||0) & 0xffffffff)) | 0;
+    for(let i=0;i<salt.length;i++) s = (Math.imul(s, 31) + salt.charCodeAt(i)) | 0;
+    s ^= s >>> 15; s = Math.imul(s, 2246822519); s ^= s >>> 13;
+    return ((s >>> 0) % 100000) / 100000;   // 0..1
+  }
+  // 段階/系統別の睡眠設定：bed=就寝時,wake=起床時（inv=夜更かしで24=0時）,jit=±分ゆらぎ,nap種別
+  function sleepConfig(){
+    const st = pet.stage;
+    if(st==='egg' || st==='mid') return {bed:19, wake:8, jit:45, nap:'baby'};   // 赤ちゃん：ほぼ寝ている
+    if(st==='larva')             return {bed:20, wake:8, jit:40, nap:'young'};  // 幼体：夜＋昼寝（幅広）
+    const L = pet.lineage;
+    if(L==='tako') return (pet.form==='t3')
+      ? {bed:21, wake:7, jit:40, nap:'none'}     // クラーケンは昼寝なし
+      : {bed:21, wake:7, jit:45, nap:'young'};   // タコ：まるっと・昼寝あり（幅広）
+    if(L==='inv')  return {bed:24, wake:9, jit:60, nap:'none'};   // インベーダー：夜更かし
+    return {bed:22, wake:7, jit:40, nap:'none'};                  // グレイ：バランス・昼寝なし
+  }
+  // その日の昼寝ウィンドウ（幼体/タコ/赤ちゃんのみ。回数・時間帯を日ごとにランダム化）
+  function napWindows(di, kind){
+    if(kind==='none') return [];
+    const r = dayRnd(di,'napn');
+    let count = (kind==='baby') ? (r<0.15?1:2)          // 赤ちゃんは昼寝多め（ほぼ2回）
+                                : (r<0.30?0 : r<0.80?1:2); // 幼体/タコ：なし30%/1回50%/2回20%
+    const out = [];
+    for(let i=0;i<count;i++){
+      const base  = dayRnd(di,'nside'+i) < 0.45 ? 9 : 13;               // 午前(9時台〜) or 午後(13時台〜)
+      const start = base*60 + Math.floor(dayRnd(di,'nstart'+i)*150);    // 基準＋0〜2.5時間
+      const dur   = (kind==='baby'?80:60) + Math.floor(dayRnd(di,'ndur'+i)*40);  // 60/80＋0〜40分
+      out.push([start, start+dur]);
+    }
+    return out;
+  }
+  function isAsleep(d){
+    const cfg = sleepConfig();
+    const di  = dayIndex(d);
+    const minutes = d.getHours()*60 + d.getMinutes();
+    // 夜間睡眠（毎日±jitterでゆらぐ）
+    let bedM  = cfg.bed*60  + Math.round((dayRnd(di,'bed') *2-1)*cfg.jit);
+    const wakeM = cfg.wake*60 + Math.round((dayRnd(di,'wake')*2-1)*cfg.jit);
+    bedM = ((bedM % 1440) + 1440) % 1440;
+    const night = (bedM <= wakeM) ? (minutes >= bedM && minutes < wakeM)
+                                  : (minutes >= bedM || minutes < wakeM);
+    if(night) return true;
+    // 昼寝
+    return napWindows(di, cfg.nap).some(([a,b]) => minutes >= a && minutes < b);
+  }
+  // 実効睡眠（しかられて起きた直後は起きている）
+  // DEBUG中は常に起きている扱い（3秒サイクルの夜に操作がランダムに弾かれるのを防ぎ、いつでも検証可能に）
+  function effectiveAsleep(){
+    if(debugMode) return false;
+    return isAsleep(new Date()) && Date.now() >= (pet.wokeUntil || 0);
+  }
+
+  // 経過時間ぶんのステータス進行。睡眠中は1/3減速。DEBUG中は60倍加速（検証用）
+  function advancePet(){
+    if(!pet.name || !pet.lastTick) return;
+    const now = Date.now();
+    if(pet.dead || ufoEnding || departEnding || inMiniGame){ pet.lastTick = now; return; }   // 死亡・エンディング後・ミニゲーム中は進行停止
+    let elapsed = now - pet.lastTick;
+    if(elapsed < 60000) return;                    // 1分未満は持ち越し
+    let remain = Math.min(elapsed, CATCHUP_CAP_MS);
+    const mult = debugMode ? 60 : 1;
+    const STEP = 60000;                            // 実1分刻み
+    let vt = now - remain;
+    while(remain >= STEP){
+      vt += STEP; remain -= STEP;
+      const sleeping = isAsleep(new Date(vt));
+      // 残しておいた皿：起きていて空腹なら食べる（傷んだ皿は食べない）
+      if(pet.plateAt && !pet.plateSpoiled && !sleeping && pet.hunger < 4){ pet.plateAt = 0; pet.hunger++; schedulePoop(); }
+      const rate = sleeping ? 1/3 : 1;
+      const gameMin = mult * rate;
+      const dirtN = pet.W + (pet.plateSpoiled ? 1 : 0);   // 汚れ総数（うんち＋食べ残し）
+      // 年齢と進化ポイント（睡眠減速なし。EPは1日=1.0＋天気補正）
+      pet.ageMin += mult;
+      const wb = weatherFetched ? (weather==='clear' ? 0.2 : weather==='rain' ? -0.2 : 0) : 0;
+      // NEWBORN期は世話の充実度（機嫌）でも進化速度が少し増減
+      const careF = (pet.stage==='egg') ? (pet.mood>=3 ? 1.15 : (pet.mood<=1 ? 0.85 : 1)) : 1;
+      pet.EP += mult / 1440 * (1 + wb) * careF;
+      pet.hungerAcc += gameMin;
+      pet.moodAcc   += gameMin * (dirtN > 0 ? 2 : 1);   // 汚れ放置中はごきげん低下が2倍
+      if(pet.hungerAcc >= HUNGER_MIN){ pet.hungerAcc -= HUNGER_MIN; if(pet.hunger > 0) pet.hunger--; }
+      if(pet.moodAcc   >= MOOD_MIN)  { pet.moodAcc   -= MOOD_MIN;   if(pet.mood   > 0) pet.mood--;   }
+
+      // 汚れ放置 → 病気（6時間ごとに抽選。1個=10%、2個以上=25%）
+      if(dirtN > 0 && pet.health === 'GOOD'){
+        pet.dirtAcc += gameMin;
+        if(pet.dirtAcc >= 360){
+          pet.dirtAcc -= 360;
+          if(Math.random() < (dirtN >= 2 ? 0.25 : 0.10)) pet.health = 'SICK';
+        }
+      }
+      // 病気放置 → 死（36時間・起床換算）
+      if(pet.health === 'SICK'){
+        pet.sickAcc += gameMin;
+        if(pet.sickAcc >= 2160){ pet.dead = 'sick'; break; }
+      }
+      // 空腹MAX → 衰弱(18時間) → 死(さらに12時間)
+      if(pet.hunger === 0){
+        pet.starveAcc += gameMin;
+        if(pet.starveAcc >= 1800){ pet.dead = 'starve'; break; }
+      } else pet.starveAcc = 0;
+    }
+    pet.lastTick = now - remain;
+
+    // 皿の放置 → 食べ残し汚れ化（2時間。DEBUG中は2分）。皿は残したまま「傷んだ皿」にする
+    const PLATE_MS = debugMode ? 120000 : 7200000;
+    if(pet.plateAt && !pet.plateSpoiled && now - pet.plateAt >= PLATE_MS){ pet.plateSpoiled = true; }
+    // うんち発生
+    if(pet.poopAt && now >= pet.poopAt){ pet.poopAt = 0; pet.W = Math.min(4, pet.W + 1); }
+
+    // わがまま拒否の放置（60分。DEBUG中は60秒）→ しつけ低下
+    const TANTRUM_MS = debugMode ? 60000 : 3600000;
+    if(pet.tantrumAt && now - pet.tantrumAt >= TANTRUM_MS){
+      pet.tantrumAt = 0; pet.tantrumType = '';
+      pet.D = Math.max(0, pet.D - 3);
+    }
+
+    // 日次処理：なつき度が低い日が続くとUFO帰還へ（3日で疎遠期、5日でトリガー確定）
+    const tk = todayKey();
+    if(pet.calDay !== tk){
+      if(pet.calDay){
+        pet.lowBDays = (pet.B < 20) ? pet.lowBDays + 1 : 0;
+        if(pet.lowBDays >= 5) pet.ufoFlag = true;
+      }
+      pet.calDay = tk;
+    }
+    // 旅立ちエンド（E4）：最終形態から14日・なつき度60以上・健康
+    if(pet.stage==='final' && pet.finalAt && !pet.departFlag &&
+       now - pet.finalAt >= 14*86400000 && pet.B >= 60 && pet.health === 'GOOD'){
+      pet.departFlag = true;
+    }
+
+    maybeEvolve();   // 進化条件チェック（起きている時のみ発動）
+    savePet();
+  }
+
+  // ════════════════════════════════════════
+  // NAMING（スタート時のみ・1〜6文字・以後変更不可）
+  //  文字種：ABC(英数) / ひらがな / カタカナ。MENUボタンで切替（言語設定に依存せず全て選べる）
+  // ════════════════════════════════════════
+  const ctxG = initCanvas('lcd-g');
+  const NAME_MAX = 6;
+  // ABC：6×6グリッド
+  const ABC_ROWS = (()=>{ const s='ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789', rows=[];
+    for(let r=0;r<6;r++){ const row=[]; for(let c=0;c<6;c++) row.push(s[r*6+c]||null); rows.push(row);} return rows; })();
+  // 五十音表（5段×10行。空欄はnull。末尾列に を/ん/ー）※定義は左=あ行で書き、下で列を反転してあ行を右端に
+  const HIRA_ROWS = [
+    ['あ','か','さ','た','な','は','ま','や','ら','わ'],
+    ['い','き','し','ち','に','ひ','み',null,'り','を'],
+    ['う','く','す','つ','ぬ','ふ','む','ゆ','る','ん'],
+    ['え','け','せ','て','ね','へ','め',null,'れ','ー'],
+    ['お','こ','そ','と','の','ほ','も','よ','ろ',null],
+  ];
+  const KATA_ROWS = [
+    ['ア','カ','サ','タ','ナ','ハ','マ','ヤ','ラ','ワ'],
+    ['イ','キ','シ','チ','ニ','ヒ','ミ',null,'リ','ヲ'],
+    ['ウ','ク','ス','ツ','ヌ','フ','ム','ユ','ル','ン'],
+    ['エ','ケ','セ','テ','ネ','ヘ','メ',null,'レ','ー'],
+    ['オ','コ','ソ','ト','ノ','ホ','モ','ヨ','ロ',null],
+  ];
+  // 五十音表の伝統的な並び（あ行を右端）にするため各段の列を反転
+  [HIRA_ROWS, KATA_ROWS].forEach(rows=>rows.forEach(r=>r.reverse()));
+  const NAME_MODES = ['abc','hira','kata'];
+  const MODE_TAG = {abc:'ABC', hira:'ひらがな', kata:'カタカナ'};   // 切替ボタンの表示（語で切替）
+  let nameMode = 'abc';
+  let nameBuf = '', nameR = 0, nameC = 0, onDone = false, onSwitch = false;
+  let nameSelActive = false;     // 育成画面で「NAME:????」を選択中（黒塗り反転表示。Aで命名画面へ）
+  let fG = 0;
+
+  function nameLayout(){
+    if(nameMode==='abc') return {cells:ABC_ROWS, cellW:8, rowH:6, gx0:3, gy0:17, kana:false};
+    return {cells:(nameMode==='hira'?HIRA_ROWS:KATA_ROWS), cellW:5, rowH:8, gx0:2, gy0:16, kana:true};
+  }
+  function setNameMode(m){ nameMode = m; nameR=0; nameC = (m==='abc') ? 0 : 9; }  // かなは「あ」（右端）から
+  function cycleNameMode(){ setNameMode(NAME_MODES[(NAME_MODES.indexOf(nameMode)+1)%NAME_MODES.length]); }
+  function startNaming(){ setNameMode((lang==='ja')?'hira':'abc'); nameBuf=''; onDone=false; onSwitch=false; }
+
+  function tickNaming(){
+    if(scene !== 'naming') return;
+    fG++;
+    ctxG.fillStyle = OFF; ctxG.fillRect(0,0,W*S,H*S);
+    ctxG.textBaseline = 'top';
+
+    // タイトル
+    ctxG.font = uiFont(6); ctxG.fillStyle = ON; ctxG.textAlign = 'center';
+    ctxG.fillText(T('nameq'), (W*S)/2, 1*S);
+
+    // 名前スロット（6枠、入力中の枠は点滅）
+    const slotW = 7, startX = Math.round(W/2 - NAME_MAX*slotW/2);
+    for(let i=0;i<NAME_MAX;i++){
+      const cx = startX + i*slotW;
+      const ch = nameBuf[i];
+      if(ch){
+        ctxG.font = nameFont(8, ch); ctxG.fillStyle = ON; ctxG.textAlign = 'center';
+        ctxG.fillText(ch, (cx + slotW/2)*S, 6*S);
+      }
+      const cursorHere = (i === nameBuf.length);
+      const blink = Math.floor(fG/4)%2===0;
+      const lineCol = cursorHere ? (blink?ON:DIM) : DIM;
+      for(let dx=0;dx<5;dx++) dot(ctxG, cx+1+dx, 11, lineCol);
+    }
+    for(let x=1;x<W-1;x++) dot(ctxG, x, 14, DIM);
+
+    // 文字グリッド
+    const L = nameLayout();
+    for(let r=0;r<L.cells.length;r++){
+      for(let c=0;c<L.cells[r].length;c++){
+        const ch = L.cells[r][c]; if(ch===null) continue;
+        const x = L.gx0 + c*L.cellW, y = L.gy0 + r*L.rowH;
+        const isSel = (!onDone && !onSwitch && r===nameR && c===nameC);
+        // 網掛けの高さ：文字に合わせて短く（下に伸びすぎるのを防ぐ）。かな6/英数5
+        const hlH = L.kana ? 6 : 5;
+        if(isSel){ for(let dx=0;dx<L.cellW;dx++) for(let dy=0;dy<hlH;dy++) dot(ctxG, x+dx, y+dy, DIM); }
+        // かなは言語設定に依らず常にゴシック体・同一サイズ（ひらがな/カタカナで統一）
+        ctxG.font = L.kana ? ('9px ' + JP_FONT) : '7px "Press Start 2P"';
+        ctxG.fillStyle = ON; ctxG.textAlign = 'center'; ctxG.textBaseline = 'middle';
+        ctxG.fillText(ch, (x + L.cellW/2)*S, (y + hlH/2)*S);   // 網掛け内で上下中央
+        ctxG.textBaseline = 'top';
+      }
+    }
+
+    // ── 下部ボタン列：左下=入力切替（現在の文字種を語で表示・押すと循環）、右=DONE ──
+    const by = 59;
+    const swBoxTop = by - 1, swBoxL = 1, swBoxW = 24;   // ボタン領域 x1..24 / y58..64
+    if(onSwitch){ // 選択：薄緑の網掛け（文字選択と同じ）
+      for(let dx=0;dx<swBoxW;dx++) for(let dy=0;dy<7;dy++) dot(ctxG, swBoxL+dx, swBoxTop+dy, DIM);
+    }
+    // かなラベルはアプリ言語に依らず常にゴシック体で大きめに（ABCとの見た目サイズを揃える）
+    ctxG.font = (nameMode==='abc') ? '7px "Press Start 2P"' : ('9px ' + JP_FONT);
+    ctxG.fillStyle = ON; ctxG.textAlign='center'; ctxG.textBaseline='middle';
+    ctxG.fillText(MODE_TAG[nameMode], (swBoxL + swBoxW/2)*S, (by+2)*S);
+    ctxG.textBaseline='top';
+    // DONE（右寄せ・1文字以上で有効）。切替ボタンと縦位置・サイズを揃える
+    const doneCx = 40;
+    if(onDone){ for(let dx=0;dx<20;dx++) for(let dy=0;dy<7;dy++) dot(ctxG, 30+dx, by-1+dy, DIM); }
+    ctxG.font = (lang==='ja') ? ('9px '+JP_FONT) : '7px "Press Start 2P"';
+    ctxG.fillStyle = nameBuf.length ? ON : '#7a7660';
+    ctxG.textAlign = 'center'; ctxG.textBaseline = 'middle';
+    ctxG.fillText(T('done'), doneCx*S, (by+2)*S);
+    ctxG.textBaseline = 'top';
+  }
+  setInterval(tickNaming, 100);
+
+  function nameMove(dir){
+    const L = nameLayout(), R = L.cells.length, C = L.cells[0].length;
+    if(onSwitch || onDone){   // 下部ボタン列：左=切替ボタン / 右=DONE、上でグリッドへ戻る
+      if(dir==='left'){  onSwitch=true;  onDone=false; }
+      if(dir==='right'){ onSwitch=false; onDone=true;  }
+      if(dir==='up'){ onSwitch=false; onDone=false; nameR=R-1; nameC=Math.min(nameC,C-1); if(L.cells[nameR][nameC]===null) nameMove('left'); }
+      return;
+    }
+    if(dir==='down' && nameR===R-1){ onSwitch=true; return; }   // 最下段から下で下部ボタンへ（まず切替ボタン）
+    let nr=nameR, nc=nameC;
+    for(let k=0;k<R*C;k++){
+      if(dir==='left')  nc=(nc-1+C)%C;
+      else if(dir==='right') nc=(nc+1)%C;
+      else if(dir==='up')    nr=(nr-1+R)%R;
+      else if(dir==='down')  nr=(nr+1)%R;
+      if(L.cells[nr][nc]!==null){ nameR=nr; nameC=nc; return; }
+    }
+  }
+  document.querySelectorAll('#view-naming .dpad-arrow').forEach(el=>{
+    onPress(el,()=>{
+      playClick(900); dpadAnim(el);
+      if(el.classList.contains('up'))    nameMove('up');
+      if(el.classList.contains('down'))  nameMove('down');
+      if(el.classList.contains('left'))  nameMove('left');
+      if(el.classList.contains('right')) nameMove('right');
+    });
+  });
+  onPress(document.getElementById('ga'),()=>{
+    btnAnim(document.getElementById('ga'));
+    if(onSwitch){ playClick(1100); cycleNameMode(); return; }   // 切替ボタン選択中のA＝文字種を循環
+    if(onDone){
+      if(nameBuf.length >= 1){
+        playClick(1400);
+        pet.name = nameBuf;
+        if(!pet.birth) pet.birth = Date.now();
+        pet.lastTick = Date.now();
+        pet.eggTargetEP = rollEggTarget();   // この個体のNEWBORN→BABY時間(30h±5h)を決定
+        savePet();
+        showView('main');
+      } else { playClick(300); }
+    } else if(nameBuf.length < NAME_MAX){
+      const ch = nameLayout().cells[nameR][nameC];
+      if(ch){
+        playClick(900);
+        nameBuf += ch;
+        if(nameBuf.length === NAME_MAX) onDone = true;   // 満杯でDONEへ
+      }
+    } else { playClick(300); }
+  });
+  onPress(document.getElementById('gb'),()=>{
+    playClick(); btnAnim(document.getElementById('gb'));
+    if(nameBuf.length){ nameBuf = nameBuf.slice(0,-1); }   // 1文字削除
+    else { showView('main'); }                             // 空なら育成画面へ戻る（後で命名できる）
+  });
+  // MENUボタン：文字種切替のショートカット（A → あ → ア → A）
+  onPress(document.getElementById('gmenu'),()=>{
+    playClick(); btnAnim(document.getElementById('gmenu'),1,0.93);
+    cycleNameMode();
+    onSwitch=false; onDone=false;
+  });
+
+  // ════════════════════════════════════════
+  // 天気・時刻システム
+  // ════════════════════════════════════════
+  // weather: 'clear' | 'cloudy' | 'rain'
+  // timeOfDay: 'day' | 'night'
+  let weather = 'clear';
+  let timeOfDay = 'day';
+
+  function getTimeOfDay() {
+    const h = new Date().getHours();
+    return (h >= 7 && h < 19) ? 'day' : 'night';
+  }
+
+  // Open-Meteo WMO天気コード → weather種別
+  function codeToWeather(code) {
+    if ([0,1].includes(code))                          return 'clear';
+    if ([2,3,45,48].includes(code))                    return 'cloudy';
+    if (code >= 51)                                    return 'rain';
+    return 'clear';
+  }
+
+  async function fetchWeather() {
+    try {
+      const pos = await new Promise((res,rej)=>
+        navigator.geolocation.getCurrentPosition(res,rej,{timeout:8000})
+      );
+      const {latitude:lat, longitude:lon} = pos.coords;
+      const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=weathercode`;
+      const r = await fetch(url);
+      const d = await r.json();
+      weather = codeToWeather(d.current.weathercode);
+      weatherFetched = true;
+    } catch(e) {
+      // 位置情報拒否 or オフライン → そのまま
+    }
+  }
+
+  // ── デバッグ：天気・時刻を自動サイクル ──
+  const DEBUG_STATES = [
+    { weather:'clear',  timeOfDay:'day'   },
+    { weather:'clear',  timeOfDay:'night' },
+    { weather:'cloudy', timeOfDay:'day'   },
+    { weather:'cloudy', timeOfDay:'night' },
+    { weather:'rain',   timeOfDay:'day'   },
+    { weather:'rain',   timeOfDay:'night' },
+  ];
+  let debugIdx = 0;
+  let debugMode = false; // 通常OFF。SETTINGS→DEBUGでON（天気/時間帯サイクル＋時間進行60倍）
+
+  function cycleDebug() {
+    if (!debugMode) return;
+    debugIdx = (debugIdx + 1) % DEBUG_STATES.length;
+    weather    = DEBUG_STATES[debugIdx].weather;
+    timeOfDay  = DEBUG_STATES[debugIdx].timeOfDay;
+  }
+  const DEBUG_INTERVAL = 3000; // 3秒ごとに切り替え
+  let debugTimer = null;       // DEBUG ON時にのみ起動
+  // 初期状態は実時刻に従う（天気はLOCATION取得まで晴れ）
+  weather   = 'clear';
+  timeOfDay = getTimeOfDay();
+
+  // ── 位置情報 ON/OFF（ONにすると現在地の天気を取得して育成画面に反映） ──
+  let locationOn = false;
+  try{ if(localStorage.getItem('myvader_location') === 'on') locationOn = true; }catch(e){}
+  let weatherFetched = false;   // 実データ取得済みか（天気補正の有効判定に使用）
+
+  async function fetchWeatherOnce() {
+    if (!locationOn) return;
+    try {
+      const pos = await new Promise((res,rej)=>
+        navigator.geolocation.getCurrentPosition(res,rej,{timeout:8000})
+      );
+      const {latitude:lat, longitude:lon} = pos.coords;
+      const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=weathercode`;
+      const r = await fetch(url);
+      const d = await r.json();
+      weather = codeToWeather(d.current.weathercode);
+      weatherFetched = true;
+    } catch(e) {
+      // 拒否 or オフライン → clear のまま。トグルはONだが未取得
+    }
+  }
+  function setLocation(on){
+    locationOn = on;
+    try{ localStorage.setItem('myvader_location', on ? 'on' : 'off'); }catch(e){}
+    if(on){ fetchWeatherOnce(); }
+    else { weatherFetched = false; weather = 'clear'; }
+  }
+  if(locationOn) fetchWeatherOnce();   // 起動時に許可済みなら取得
+
+  // 以後30分ごとに再取得（ONのときのみ）
+  setInterval(()=>{
+    if(locationOn) fetchWeather();
+  }, 30 * 60 * 1000);
+
+  setInterval(()=>{ timeOfDay = getTimeOfDay(); }, 60 * 1000);
+  timeOfDay = getTimeOfDay();
+
+  function getColors() {
+    return {
+      day:   { bg:'#b8c890', dim:'#8aaa6a', on:'#1a2410' },
+      night: { bg:'#707858', dim:'#505840', on:'#0a0e08' },
+    }[timeOfDay];
+  }
+
+  // 雨粒パーティクル（数を減らして線で描く）
+  const rainDrops = Array.from({length:10},()=>({
+    x: Math.random()*54|0,
+    y: (Math.random()*65)|0,
+    speed: 1 + Math.random()*1.5,
+  }));
+  function updateRain(BG, DM) {
+    rainDrops.forEach(d=>{
+      // 線（3ドット縦）
+      dot(ctxM, d.x, Math.round(d.y),   DM);
+      dot(ctxM, d.x, Math.round(d.y)+1, DM);
+      dot(ctxM, d.x, Math.round(d.y)+2, DM);
+      d.y += d.speed;
+      if(d.y >= MAIN_GY-1){ d.y=10; d.x=Math.random()*W|0; }
+    });
+  }
+
+  // 雲スプライト
+  const CLOUD_A = [[0,1,1,1,0,0,0],[1,1,1,1,1,0,0],[1,1,1,1,1,1,1],[0,1,1,1,1,1,0]];
+  const CLOUD_B = [[0,0,1,1,0],[0,1,1,1,1],[1,1,1,1,1],[0,1,1,1,0]];
+
+  // 太陽（11×11、小さめコア＋隙間＋8方向光線）
+  const SUN = [
+    [0,0,0,0,0,1,0,0,0,0,0],
+    [0,0,0,0,0,0,0,0,0,0,0],
+    [0,0,1,0,0,0,0,0,1,0,0],
+    [0,0,0,0,1,1,1,0,0,0,0],
+    [0,0,0,1,1,1,1,1,0,0,0],
+    [1,0,0,1,1,1,1,1,0,0,1],
+    [0,0,0,1,1,1,1,1,0,0,0],
+    [0,0,0,0,1,1,1,0,0,0,0],
+    [0,0,1,0,0,0,0,0,1,0,0],
+    [0,0,0,0,0,0,0,0,0,0,0],
+    [0,0,0,0,0,1,0,0,0,0,0],
+  ];
+
+  // 月（7×7、正円ベースの三日月・左右反転）
+  const MOON = [
+    [0,0,1,1,1,0,0],
+    [0,0,0,1,1,1,0],
+    [0,0,0,0,1,1,1],
+    [0,0,0,0,1,1,1],
+    [0,0,0,0,1,1,1],
+    [0,0,0,1,1,1,0],
+    [0,0,1,1,1,0,0],
+  ];
+
+  // ════════════════════════════════════════
+  // MAIN  (interval: 100ms)
+  // ════════════════════════════════════════
+  const ctxM = initCanvas('lcd-m');
+
+  const LARVA_A=[
+    [0,0,1,0,0,0,0,0,1,0,0],[0,0,1,0,0,0,0,0,1,0,0],
+    [0,1,1,1,1,1,1,1,1,1,0],[1,1,1,0,1,1,1,0,1,1,1],
+    [1,1,1,1,1,1,1,1,1,1,1],[1,1,1,1,1,1,1,1,1,1,1],
+    [0,1,1,1,1,1,1,1,1,1,0],[0,1,0,0,0,0,0,0,0,1,0],
+    [1,0,0,0,0,0,0,0,0,0,1],
+  ];
+  const LARVA_B=[
+    [0,0,1,0,0,0,0,0,1,0,0],[0,0,1,0,0,0,0,0,1,0,0],
+    [0,1,1,1,1,1,1,1,1,1,0],[1,1,1,0,1,1,1,0,1,1,1],
+    [1,1,1,1,1,1,1,1,1,1,1],[1,1,1,1,1,1,1,1,1,1,1],
+    [0,1,1,1,1,1,1,1,1,1,0],[0,0,1,0,0,0,0,0,1,0,0],
+    [0,1,0,0,0,0,0,0,0,1,0],
+  ];
+  // 雨の時のスロー版（足を縮めたポーズ）
+  const LARVA_RAIN=[
+    [0,0,1,0,0,0,0,0,1,0,0],[0,0,1,0,0,0,0,0,1,0,0],
+    [0,1,1,1,1,1,1,1,1,1,0],[1,1,1,0,1,1,1,0,1,1,1],
+    [1,1,1,1,1,1,1,1,1,1,1],[1,1,1,1,1,1,1,1,1,1,1],
+    [0,1,1,1,1,1,1,1,1,1,0],[0,0,0,1,1,1,1,1,0,0,0],
+    [0,0,0,0,0,0,0,0,0,0,0],
+  ];
+
+  // ════════════════════════════════════════
+  // 育成段階スプライト（invader_chars2.html から忠実にコピー）
+  // ════════════════════════════════════════
+  // Stage1 たまご (8×8)
+  const EGG_A=[
+    [0,0,1,1,1,1,0,0],[0,1,1,1,1,1,1,0],[1,1,1,1,1,1,1,1],[1,1,0,1,1,0,1,1],
+    [1,1,1,1,1,1,1,1],[1,1,1,1,1,1,1,1],[0,1,1,1,1,1,1,0],[0,0,1,1,1,1,0,0],
+  ];
+  const EGG_B=[
+    [0,0,0,1,1,1,1,0],[0,1,1,1,1,1,1,1],[1,1,1,1,1,1,1,0],[1,1,0,1,1,0,1,1],
+    [1,1,1,1,1,1,1,1],[0,1,1,1,1,1,1,1],[0,0,1,1,1,1,1,0],[0,0,0,1,1,0,0,0],
+  ];
+  const EGG_SLEEP=[
+    [0,0,1,1,1,1,0,0],[0,1,1,1,1,1,1,0],[1,1,1,1,1,1,1,1],[1,1,1,0,0,1,1,1],
+    [1,1,1,1,1,1,1,1],[1,1,1,1,1,1,1,1],[0,1,1,1,1,1,1,0],[0,0,1,1,1,1,0,0],
+  ];
+  // Stage1.5 中間体 (10×8有効)
+  const MID_A=[
+    [0,0,0,1,0,1,0,0,0,0],[0,0,1,1,1,1,1,0,0,0],[0,1,1,1,1,1,1,1,0,0],[1,1,1,0,1,1,0,1,1,0],
+    [1,1,1,1,1,1,1,1,1,0],[0,1,1,1,1,1,1,1,0,0],[0,0,1,1,1,1,1,0,0,0],[0,0,1,0,0,0,1,0,0,0],
+  ];
+  const MID_B=[
+    [0,0,0,1,0,1,0,0,0,0],[0,0,1,1,1,1,1,0,0,0],[0,1,1,1,1,1,1,1,0,0],[1,1,1,0,1,1,0,1,1,0],
+    [1,1,1,1,1,1,1,1,1,0],[0,1,1,1,1,1,1,1,0,0],[0,0,1,1,1,1,1,0,0,0],[0,1,1,0,0,0,1,1,0,0],
+  ];
+  // Stage3 成体（3系統）
+  const S3_SPR={
+    grey:[
+      [0,0,1,1,1,1,1,0,0],[0,1,1,1,1,1,1,1,0],[1,1,1,1,1,1,1,1,1],[1,1,1,1,1,1,1,1,1],
+      [1,0,1,1,1,1,1,0,1],[1,1,1,1,1,1,1,1,1],[0,1,1,1,1,1,1,1,0],[0,0,0,1,1,1,0,0,0],
+      [0,0,1,1,1,1,1,0,0],[0,0,1,1,0,1,1,0,0],[0,0,1,1,0,1,1,0,0],
+    ],
+    tako:[
+      [0,0,1,0,0,0,1,0,0],[0,0,0,1,0,1,0,0,0],[0,0,1,1,1,1,1,0,0],[0,1,1,1,1,1,1,1,0],
+      [1,1,1,1,1,1,1,1,1],[1,0,1,1,1,1,1,0,1],[1,1,1,1,1,1,1,1,1],[0,0,1,0,1,0,1,0,0],
+      [0,0,1,0,1,0,1,0,0],[0,0,1,0,1,0,1,0,0],
+    ],
+    inv:[
+      [0,0,1,0,0,0,0,0,1,0,0],[0,0,0,1,0,0,0,1,0,0,0],[0,0,1,1,1,1,1,1,1,0,0],[0,1,1,1,1,1,1,1,1,1,0],
+      [1,1,1,1,1,1,1,1,1,1,1],[1,1,0,1,1,1,1,1,0,1,1],[1,1,1,1,1,1,1,1,1,1,1],[0,0,1,1,0,0,0,1,1,0,0],
+      [0,1,1,0,0,0,0,0,1,1,0],
+    ],
+  };
+  // Stage4 最終形態（9種）
+  const S4_SPR={
+    g1:[
+      [0,1,0,0,1,1,1,0,0,1,0],[0,0,1,1,1,1,1,1,1,0,0],[0,1,1,1,1,1,1,1,1,1,0],[1,1,1,1,1,1,1,1,1,1,1],
+      [1,1,1,1,1,1,1,1,1,1,1],[1,1,0,1,1,1,1,1,0,1,1],[1,1,1,1,1,1,1,1,1,1,1],[0,1,1,1,1,1,1,1,1,1,0],
+      [0,0,1,1,1,1,1,1,1,0,0],[0,0,0,0,1,1,1,0,0,0,0],[0,0,1,1,1,1,1,1,1,0,0],[0,0,0,0,1,0,1,0,0,0,0],
+      [0,0,0,1,1,0,1,1,0,0,0],
+    ],
+    g2:[
+      [0,0,1,0,0,0,0,0,1,0,0],[0,0,1,1,1,1,1,1,1,0,0],[0,1,1,1,1,1,1,1,1,1,0],[1,1,1,1,1,1,1,1,1,1,1],
+      [1,1,0,0,1,1,1,0,0,1,1],[1,1,0,0,1,1,1,0,0,1,1],[0,1,1,1,1,1,1,1,1,1,0],[0,0,1,1,1,1,1,1,1,0,0],
+      [0,0,0,0,0,1,0,0,0,0,0],[0,0,0,1,1,1,1,1,0,0,0],[0,0,1,0,1,1,1,0,1,0,0],[0,0,0,0,1,0,1,0,0,0,0],
+      [0,0,0,1,1,0,1,1,0,0,0],
+    ],
+    g3:[
+      [0,0,1,1,1,1,1,1,1,0,0],[0,1,1,1,1,1,1,1,1,1,0],[1,1,1,1,1,1,1,1,1,1,1],[1,0,0,0,1,1,1,0,0,0,1],
+      [1,1,0,0,0,1,0,0,0,1,1],[1,1,1,1,1,1,1,1,1,1,1],[0,1,1,1,1,1,1,1,1,1,0],[0,0,0,0,1,1,1,0,0,0,0],
+      [0,1,1,1,1,1,1,1,1,1,0],[1,1,0,0,1,1,1,0,0,1,1],[0,0,0,0,1,1,1,0,0,0,0],[0,0,0,1,1,0,1,1,0,0,0],
+      [0,0,0,1,1,0,1,1,0,0,0],
+    ],
+    t1:[
+      [0,0,0,1,0,0,0,0,0,1,0,0,0],[0,0,0,0,1,0,0,0,1,0,0,0,0],[0,0,0,1,1,1,1,1,1,1,0,0,0],[0,0,1,1,1,1,1,1,1,1,1,0,0],
+      [0,1,1,1,1,1,1,1,1,1,1,1,0],[0,1,1,0,1,1,1,1,1,0,1,1,0],[0,1,1,1,1,1,1,1,1,1,1,1,0],[0,0,1,1,1,1,1,1,1,1,1,0,0],
+      [1,0,0,1,1,1,1,1,1,1,0,0,1],[0,1,1,1,0,1,0,1,0,1,1,1,0],[0,0,0,0,0,1,0,1,0,0,0,0,0],[0,0,0,0,1,0,0,0,1,0,0,0,0],
+    ],
+    t2:[
+      [0,0,0,0,1,0,0,0,1,0,0,0],[0,0,0,0,1,1,1,1,1,0,0,0],[0,0,0,1,1,1,1,1,1,1,0,0],[0,0,1,1,1,1,1,1,1,1,1,0],
+      [0,0,1,1,1,1,1,1,1,1,1,0],[0,1,1,1,0,1,1,1,0,1,1,1],[0,1,1,1,1,1,1,1,1,1,1,1],[0,0,0,1,1,0,1,0,1,1,0,0],
+      [0,0,1,0,1,0,1,0,1,0,1,0],[1,0,1,0,1,0,1,0,1,0,1,0],[0,1,1,0,1,0,1,0,1,0,1,1],
+    ],
+    t3:[
+      [0,0,0,0,0,1,0,0,0,1,0,0,0,0,0],[0,0,0,0,0,0,1,0,1,0,0,0,0,0,0],[0,0,0,0,1,1,1,1,1,1,1,0,0,0,0],[0,0,0,1,1,0,1,0,1,0,1,1,0,0,0],
+      [1,0,0,1,1,1,1,1,1,1,1,1,0,0,0],[0,1,0,0,1,1,1,1,1,1,1,0,0,0,1],[0,1,0,1,1,1,1,1,1,1,1,1,0,1,0],[0,0,1,1,0,0,1,1,1,0,0,1,1,1,0],
+      [0,0,0,0,0,1,1,0,1,1,0,0,0,0,0],[0,0,0,0,0,1,0,0,0,1,0,0,0,0,0],[0,0,0,0,0,1,0,0,0,1,0,0,0,0,0],[0,0,0,0,0,1,0,0,0,1,0,0,0,0,0],
+    ],
+    i1:[
+      [0,1,1,0,0,0,0,0,0,0,1,1,0],[0,0,1,1,0,1,0,1,0,1,1,0,0],[0,0,1,1,1,1,1,1,1,1,1,0,0],[0,1,1,1,1,1,1,1,1,1,1,1,0],
+      [0,1,1,1,1,1,1,1,1,1,1,1,0],[0,1,1,0,1,1,1,1,1,0,1,1,0],[1,1,1,1,1,1,1,1,1,1,1,1,1],[0,0,1,1,1,1,1,1,1,1,1,0,0],
+      [0,0,0,1,1,0,0,0,1,1,0,0,0],[0,0,1,1,0,0,0,0,0,1,1,0,0],[0,1,1,0,0,0,0,0,0,0,1,1,0],
+    ],
+    i2:[
+      [0,0,0,1,0,0,0,0,0,1,0,0,0],[0,0,0,0,1,0,0,0,1,0,0,0,0],[0,0,0,1,1,1,1,1,1,1,0,0,0],[0,0,1,1,1,1,1,1,1,1,1,0,0],
+      [0,1,1,1,1,1,1,1,1,1,1,1,0],[0,1,1,0,1,1,1,1,1,0,1,1,0],[0,1,1,1,1,1,1,1,1,1,1,1,0],[1,1,1,0,1,0,0,0,1,0,1,1,1],
+      [0,0,0,0,0,1,0,1,0,0,0,0,0],[0,0,0,0,1,0,0,0,1,0,0,0,0],[0,0,0,1,1,0,0,0,1,1,0,0,0],
+    ],
+    i3:[
+      [1,0,0,0,0,0,0,0,0,0,1],[0,1,0,0,0,0,0,0,0,1,0],[1,1,1,1,1,1,1,1,1,1,1],[1,1,0,0,1,1,1,0,0,1,1],
+      [1,1,1,0,0,1,0,0,1,1,1],[1,1,1,1,1,1,1,1,1,1,1],[1,1,1,1,1,1,1,1,1,1,1],[1,0,1,1,0,0,0,1,1,0,1],
+      [1,0,0,1,1,0,1,1,0,0,1],[0,0,0,1,0,0,0,1,0,0,0],[0,0,1,1,0,0,0,1,1,0,0],
+    ],
+  };
+  // ── 睡眠時の表情と寝姿 ──
+  // 目：穴を閉じ線に置き換え（シートの「黒い顔に穴」方式）
+  // 姿勢：脚・触手の段を下からn段カットして地面に伏せる（lie）
+  function withRows(g, repl){ const c = g.map(r=>[...r]); for(const [i,row] of repl) c[i]=row; return c; }
+  function lie(g, n){ return n ? g.slice(0, g.length - n) : g; }
+  const MID_SLEEP   = lie(withRows(MID_A,      [[3,[1,1,1,1,0,0,1,1,1,0]]]), 1);            // 足を畳む
+  const LARVA_SLEEP = withRows(LARVA_RAIN, [[3,[1,1,1,1,0,0,0,1,1,1,1]]]);                  // 元々足縮めポーズ
+  const S3_SLEEP = {
+    grey: lie(withRows(S3_SPR.grey, [[4,[1,1,1,0,0,0,1,1,1]]]), 2),
+    tako: lie(withRows(S3_SPR.tako, [[5,[1,1,1,0,0,0,1,1,1]]]), 2),
+    inv:  lie(withRows(S3_SPR.inv,  [[5,[1,1,1,1,0,0,0,1,1,1,1]]]), 1),
+  };
+  const S4_SLEEP = {
+    g1: lie(withRows(S4_SPR.g1, [[5,[1,1,1,1,0,0,0,1,1,1,1]]]), 2),
+    g2: lie(withRows(S4_SPR.g2, [[4,[1,1,1,1,1,1,1,1,1,1,1]]]), 2),   // 2段の目の上段を閉じて下段が閉じ線に
+    g3: lie(withRows(S4_SPR.g3, [[3,[1,1,1,1,1,1,1,1,1,1,1]]]), 2),
+    t1: lie(withRows(S4_SPR.t1, [[5,[0,1,1,1,1,0,0,0,1,1,1,1,0]]]), 1),
+    t2: lie(withRows(S4_SPR.t2, [[5,[0,1,1,1,1,0,0,0,1,1,1,1]]]), 1),
+    t3: lie(withRows(S4_SPR.t3, [[3,[0,0,0,1,1,0,0,0,0,0,1,1,0,0,0]]]), 2),  // クラーケン：keye4のつながったスリット
+    i1: lie(withRows(S4_SPR.i1, [[5,[0,1,1,1,1,0,0,0,1,1,1,1,0]]]), 2),
+    i2: lie(withRows(S4_SPR.i2, [[5,[0,1,1,1,1,0,0,0,1,1,1,1,0]]]), 2),
+    i3: lie(withRows(S4_SPR.i3, [[3,[1,1,1,1,1,1,1,1,1,1,1]]]), 2),
+  };
+
+  // ── 食事中の顔：目を1ドット皿側（右）にずらし、口の穴をパクパク開閉 ──
+  function eatKey(){ return pet.stage==='adult' ? pet.lineage : (pet.stage==='final' ? pet.form : pet.stage); }
+  const EAT_FACE = {   // 目を右に寄せる行の差し替え（眉毛目のg3/i3は口のみ）
+    egg:  [[3,[1,1,1,0,1,1,0,1]]],
+    mid:  [[3,[1,1,1,1,0,1,1,0,1,0]]],
+    larva:[[3,[1,1,1,1,0,1,1,1,0,1,1]]],
+    grey: [[4,[1,1,0,1,1,1,1,1,0]]],
+    tako: [[5,[1,1,0,1,1,1,1,1,0]]],
+    inv:  [[5,[1,1,1,0,1,1,1,1,1,0,1]]],
+    g1:   [[5,[1,1,1,0,1,1,1,1,1,0,1]]],
+    g2:   [[4,[1,1,1,0,0,1,1,1,0,0,1]],[5,[1,1,1,0,0,1,1,1,0,0,1]]],
+    g3:   [],
+    t1:   [[5,[0,1,1,1,0,1,1,1,1,1,0,1,0]]],
+    t2:   [[5,[0,1,1,1,1,0,1,1,1,0,1,1]]],
+    t3:   [[3,[0,0,0,1,1,1,0,1,0,1,0,1,0,0,0]]],
+    i1:   [[5,[0,1,1,1,0,1,1,1,1,1,0,1,0]]],
+    i2:   [[5,[0,1,1,1,0,1,1,1,1,1,0,1,0]]],
+    i3:   [],
+  };
+  const EAT_MOUTH = {  // 口の位置 [列,行]（開くと下に1ドット伸びる）
+    egg:[5,5], mid:[6,5], larva:[7,5], grey:[5,6], tako:[4,6], inv:[7,6],
+    g1:[7,7], g2:[7,6], g3:[7,5], t1:[8,6], t2:[8,6], t3:[9,4], i1:[8,6], i2:[8,6], i3:[7,5],
+  };
+  function eatSprite(){
+    const repl = EAT_FACE[eatKey()];
+    const base = charSprites().a;
+    return (repl && repl.length) ? withRows(base, repl) : base;
+  }
+
+  // 現在の段階のスプライトセット {a:通常, b:アニメ, rest:休息/丸まり(開眼), sleep:就寝(閉眼)}
+  function charSprites(){
+    switch(pet.stage){
+      case 'egg':   return {a:EGG_A, b:EGG_B, rest:EGG_A, sleep:EGG_SLEEP};
+      case 'mid':   return {a:MID_A, b:MID_B, rest:MID_A, sleep:MID_SLEEP};
+      case 'larva': return {a:LARVA_A, b:LARVA_B, rest:LARVA_RAIN, sleep:LARVA_SLEEP};
+      case 'adult': { const s = S3_SPR[pet.lineage] || S3_SPR.grey; return {a:s, b:s, rest:s, sleep:S3_SLEEP[pet.lineage] || S3_SLEEP.grey}; }
+      default:      { const f = S4_SPR[pet.form]; return f ? {a:f, b:f, rest:f, sleep:S4_SLEEP[pet.form]} : {a:S3_SPR.grey, b:S3_SPR.grey, rest:S3_SPR.grey, sleep:S3_SLEEP.grey}; }
+    }
+  }
+  // STAGE：成長段階（うまれたて〜最終系）
+  function stageLabel(){
+    if(pet.stage==='egg')   return T('newborn');
+    if(pet.stage==='mid')   return T('baby');
+    if(pet.stage==='larva') return T('child');
+    if(pet.stage==='adult') return T('adult');
+    return T('finalst');
+  }
+  // TYPE：進化系統（分岐前は---）。tako=Martian
+  function typeLabel(){
+    if(pet.stage==='adult' || pet.stage==='final'){
+      return pet.lineage==='grey' ? T('gray') : pet.lineage==='tako' ? T('martian') : T('alien');
+    }
+    return '---';
+  }
+
+  // ── 感情マーク（invader_chars2.html の確定形 em1〜em6 に準拠） ──
+  const ICO_HEART=[          // ハート 7×6（ふっくら）
+    [0,1,1,0,1,1,0],
+    [1,1,1,1,1,1,1],
+    [1,1,1,1,1,1,1],
+    [0,1,1,1,1,1,0],
+    [0,0,1,1,1,0,0],
+    [0,0,0,1,0,0,0],
+  ];
+  const ICO_EXCL=[           // ！ 2×6（2列幅で太く）
+    [1,1],
+    [1,1],
+    [1,1],
+    [1,1],
+    [0,0],
+    [1,1],
+  ];
+  const ICO_ZZZ=[            // Zzz 8×5（大Z＋小Z、右肩上がり）
+    [1,1,1,1,0,0,0,0],
+    [0,0,1,0,0,0,0,0],
+    [0,1,0,0,0,1,1,1],
+    [1,1,1,1,0,0,1,0],
+    [0,0,0,0,0,1,1,1],
+  ];
+  const ICO_NOTE=[           // 音符 6×6（八分音符、旗付き）
+    [0,0,1,1,1,0],
+    [0,0,1,0,1,1],
+    [0,0,1,0,0,0],
+    [0,0,1,0,0,0],
+    [1,1,1,0,0,0],
+    [1,1,1,0,0,0],
+  ];
+  const ICO_ANGER=[          // イライラ 6×5（怒りマーク：十字カーブ4本の井桁）
+    [0,1,0,0,1,0],
+    [1,1,0,0,1,1],
+    [0,0,0,0,0,0],
+    [1,1,0,0,1,1],
+    [0,1,0,0,1,0],
+  ];
+  const ICO_DOTS=[           // 退屈 8×2（・・・ 3点リーダー）
+    [1,1,0,1,1,0,1,1],
+    [1,1,0,1,1,0,1,1],
+  ];
+  const ICO_DROP=[                // 汗しずく（病気）
+    [0,0,1,0],
+    [0,1,1,0],
+    [1,1,1,1],
+    [0,1,1,0],
+  ];
+  const GHOST_SPR=[               // おばけ 9×8（DIMで描画）
+    [0,0,1,1,1,1,1,0,0],
+    [0,1,1,1,1,1,1,1,0],
+    [1,1,0,1,1,1,0,1,1],
+    [1,1,0,1,1,1,0,1,1],
+    [1,1,1,1,1,1,1,1,1],
+    [1,1,1,1,1,1,1,1,1],
+    [1,1,1,1,1,1,1,1,1],
+    [1,0,1,0,1,0,1,0,1],
+  ];
+  const POOP_SPR=[           // うんち 5×4
+    [0,0,1,0,0],
+    [0,1,1,0,0],
+    [0,1,1,1,0],
+    [1,1,1,1,1],
+  ];
+  // ごはん：平皿＋ドーム状の盛り（3段階で減る）
+  const FOOD_DOME=[
+    [0,0,0,0,1,1,1,0,0,0,0],   // 上段（満杯時のみ）
+    [0,0,1,1,1,1,1,1,1,0,0],   // 中段
+    [0,1,1,1,1,1,1,1,1,1,0],   // 下段
+  ];
+  const FOOD_PLATE_RIM =[[1,1,1,1,1,1,1,1,1,1,1]];           // 皿の縁（食べ物より広い）
+  const FOOD_PLATE_BASE=[[0,0,1,1,1,1,1,1,1,0,0]];           // 皿の底（DIM）
+  // level: 3=満杯 2=2/3 1=1/3 0=空皿
+  function drawFoodPlate(px, baseY, level, NK, DM){
+    stamp(ctxM, FOOD_PLATE_BASE, px, baseY,   DM);
+    stamp(ctxM, FOOD_PLATE_RIM,  px, baseY-1, NK);
+    for(let i=0;i<level;i++) stamp(ctxM, [FOOD_DOME[2-i]], px, baseY-2-i, NK);
+  }
+  // 食べ残し（汚れ化）：盛りが崩れ、上にハエがたかる（丸くくずれた残飯）
+  const SPOIL_LUMP=[
+    [0,0,0,1,1,0,1,1,0,0,0],   // なだらかな2つのコブ
+    [0,0,1,1,1,1,1,1,1,0,0],   // 丸い裾
+  ];
+  function drawSpoiledPlate(px, baseY, NK, DM){
+    stamp(ctxM, FOOD_PLATE_BASE, px, baseY,   DM);
+    stamp(ctxM, FOOD_PLATE_RIM,  px, baseY-1, NK);
+    stamp(ctxM, SPOIL_LUMP,      px, baseY-3, NK);
+    // ハエ2匹（傷んだご飯のすぐ上を小さく舞う・羽ばたきで点滅）
+    const flies=[[3,-4],[8,-5]];
+    flies.forEach(([ox,oy],k)=>{
+      const fx = px + ox + Math.round(Math.sin((fM+k*13)/5)*2);
+      const fy = baseY + oy + Math.round(Math.cos((fM+k*7)/4));   // 上下±1で盛りの上を舞う
+      dot(ctxM, fx, fy, NK);                       // 体
+      if(fM%4<2){ dot(ctxM, fx-1, fy, DM); dot(ctxM, fx+1, fy, DM); }  // 羽ばたき
+    });
+  }
+  const EAT_T = 60;          // 食事アニメの長さ（15tickごとに1口＝3口で空に）
+  const POOP_X=[6,48,12,1];  // 汚れの表示位置（発生順。皿の位置と重ならない配置）
+  const PLATE_X = 36, PLATE_W = 11, POOP_W = 5;   // 皿・うんちの占有幅
+
+  // 地面上のオブジェクト（皿・うんち）が占めるx区間 [a,b)
+  function objectSpans(){
+    const spans = [];
+    if(pet.plateAt || pet.plateSpoiled) spans.push([PLATE_X, PLATE_X + PLATE_W]);
+    for(let i=0;i<pet.W && i<POOP_X.length;i++) spans.push([POOP_X[i], POOP_X[i] + POOP_W]);
+    return spans;
+  }
+  // 幅gwのキャラ左端xを置ける自由区間（画面内・障害物を除く）
+  function freeSegments(gw){
+    const spans = objectSpans().slice().sort((a,b)=>a[0]-b[0]);
+    const hardMax = W - gw - 1;
+    const segs = []; let lo = 1;
+    for(const [a,b] of spans){
+      const blockHi = b - 1;                 // x<b && x+gw>a が被り → 禁止xは (a-gw, b)
+      const segHi = Math.min(a - gw, hardMax);
+      if(segHi >= lo) segs.push([lo, segHi]);
+      lo = Math.max(lo, blockHi + 1);
+    }
+    if(hardMax >= lo) segs.push([lo, hardMax]);
+    return segs.filter(([a,b])=>a<=b);
+  }
+
+  // CLEAN実行時：ほうきが左→右に掃いて、通過した汚れが消えていく
+  const BROOM_SPR=[          // 斜めの柄＋ヘッド 7×10
+    [0,0,0,0,0,1,1],
+    [0,0,0,0,1,1,0],
+    [0,0,0,1,1,0,0],
+    [0,0,1,1,0,0,0],
+    [0,1,1,0,0,0,0],
+    [1,1,1,1,0,0,0],
+    [1,1,1,1,0,0,0],
+    [1,1,1,1,0,0,0],
+    [1,0,1,0,1,0,0],
+    [1,0,1,0,1,0,0],
+  ];
+  const CLEAN_T = 36;        // 掃除アニメの長さ
+  let cleanSnapW = 0, cleanSnapPlate = false, cleanSnapSpoiled = false;   // 掃除開始時点の汚れの見た目スナップショット
+
+  const STARS_M = [[4,3],[14,6],[28,2],[38,5],[50,4],[9,11],[44,10],[22,8]];
+
+  // 雲のx座標（ゆっくり流れる）
+  let cloudX = 30;
+
+  // ════════════════════════════════════════
+  // お世話アクションバー（画面下部）
+  //  キャラより細かい 0.5論理ドット(=S/2 px)で描くアイコン。0=OFF 1=DIM 2=ON
+  // ════════════════════════════════════════
+  function careIcon(s){ return s.trim().split('\n').map(r=>r.trim().split('').map(c=>c==='#'?2:(c==='+'?1:0))); }
+  const CARE_ICONS = {
+    FEED: careIcon(`
+.#.#.#.....##
+.#.#.#....###
+.#.#.#...####
+.#####...####
+..###....####
+...#.....####
+...#......##.
+...#......##.
+...#......##.
+...#......##.
+.............
+.............`),
+    CLEAN: careIcon(`
+..........##.
+.........##..
+..+.....##...
+.+++...##....
+..+...##.....
+.....##......
+..######.....
+.########....
+.########....
+.##.##.##....
+.+..+..+.....
+.............`),
+    MED: careIcon(`
+.........##..
+........####.
+.......#####.
+......#####..
+.....#####...
+....##.##....
+...++.++.....
+..+++++......
+.+++++.......
+.++++........
+..++.........
+.............`),
+    PET: careIcon(`
+.............
+..###...###..
+.#####.#####.
+.###########.
+.###########.
+.###########.
+..#########..
+...#######...
+....#####....
+.....###.....
+......#......
+.............`),
+    SCOLD: careIcon(`
+.....#####...
+....#####....
+...#####.....
+..#########..
+.....#####...
+....#####....
+...#####.....
+..#####......
+..####.......
+..###........
+..#..........
+.............`),
+    GAME: careIcon(`
+.............
+...#.....#...
+....#...#....
+...#######...
+..##.###.##..
+.###########.
+.#.#######.#.
+.#.#.....#.#.
+....##.##....
+.............
+.............
+.............`)
+  };
+  const CARE_ORDER  = ['FEED','CLEAN','MED','PET','SCOLD','GAME'];
+  const CARE_LABELS = {FEED:'FEED',CLEAN:'CLEAN',MED:'MEDICINE',PET:'PRAISE',SCOLD:'SCOLD',GAME:'MINI GAME'};  // PET=褒める
+  let careFlash = 0; // （旧・点滅用。現在未使用）
+
+  // ════════════════════════════════════════
+  // お世話アクションの効果とリアクション（企画書§6 状態×アクション）
+  // ════════════════════════════════════════
+  let reactType = null, reactT = 0;   // 育成画面でのリアクション表示
+  // quiet=true のときは演出だけ出し、頭上の感情アイコンは表示しない（睡眠中の掃除など）
+  let reactQuiet = false;
+  function setReaction(type, t=24, quiet=false){ reactType = type; reactT = t; reactQuiet = quiet; }
+
+  // ── 移動AI（進化段階・系統・性格で歩き方が変わる） ──
+  let walkX = null, walkDir = 1, walkTimer = 0;
+  let jumpT = 0, floatT = 0, hopPause = 0, preJumpT = 0;
+  let wiggleT = 0;   // その場モゾモゾ（傾きポーズを左右反転で切り替え）
+  let squatT = 0;    // その場屈伸（脚を畳んで縮む↔伸びるを繰り返す）
+  let squatWalkT = 0; // 屈伸しながら横移動
+  function flipH(g){ return g.map(r=>[...r].reverse()); }
+  // しゃがみフレーム：下から2番目の行（脚）を1段抜いて縮める。足元は据え置きで屈伸に見える
+  function squatFrame(g){ return (g.length >= 5) ? [...g.slice(0, g.length-2), g[g.length-1]] : g; }
+  function moveProfile(){
+    // speed:ドット/tick, jump:行動決定時のジャンプ率, jumpH:高さ, float:浮遊率, mode:'walk'|'hop'
+    let p;
+    switch(pet.stage){
+      case 'egg':   p = {mode:'walk', speed:0.08, jump:0,    jumpH:0, float:0, wiggle:0.45, squat:0.15}; break;  // 幼少期：時々その場モゾモゾ
+      case 'mid':   p = {mode:'walk', speed:0.10, jump:0.05, jumpH:2, float:0, squat:0.15, squatWalk:0.15}; break;
+      case 'larva': p = {mode:'walk', speed:0.14, jump:0.06, jumpH:2, float:0, squat:0.18, squatWalk:0.15}; break;
+      default: {
+        const L = pet.lineage;
+        if(L==='tako')     p = {mode:'walk', speed:0.09, jump:0.03, jumpH:1, float:0.12, squat:0.15, squatWalk:0.12}; // ときどき浮遊（控えめ）
+        else if(L==='inv') p = {mode:'hop',  speed:0.30, jump:0.25, jumpH:3, float:0,    squat:0.10}; // ぴょんぴょん移動
+        else               p = {mode:'walk', speed:0.13, jump:0.05, jumpH:2, float:0,    squat:0.18, squatWalk:0.18}; // グレイ：標準（ジャンプ控えめ）
+      }
+    }
+    // 性格補正：やんちゃは活発、まるっとはおっとり
+    if(pet.P >= 30){ p.speed *= 1.3; p.jump = Math.min(0.5, p.jump*1.5); }
+    else if(pet.P <= -30){ p.speed *= 0.8; }
+    return p;
+  }
+
+  function todayKey(){ const d=new Date(); return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate(); }
+  function gainB(n){   // なつき度（日次上限+5）
+    if(pet.dayKey !== todayKey()){ pet.dayKey = todayKey(); pet.bGainToday = 0; }
+    if(pet.bGainToday < 5){ pet.B = Math.min(100, pet.B + n); pet.bGainToday += n; }
+  }
+  function schedulePoop(){  // 食後45±30分（DEBUG中は45〜75秒）
+    const unit = debugMode ? 1000 : 60000;
+    pet.poopAt = Date.now() + (45 + Math.random()*30) * unit;
+  }
+
+  // わがまま拒否（Stage2まで）。しつけDが低いほど起きやすい（基準20%）
+  function isYoung(){ return pet.stage==='mid' || pet.stage==='larva'; }
+  function rollTantrum(type){
+    if(!isYoung() || pet.tantrumAt) return false;
+    const chance = Math.min(0.5, Math.max(0.05, 0.2 + (50 - pet.D) * 0.004));
+    if(Math.random() < chance){
+      pet.tantrumAt = Date.now(); pet.tantrumType = type;
+      return true;
+    }
+    return false;
+  }
+
+  function doCare(act){
+    if(pet.dead || ufoEnding || departEnding || !pet.name) return;  // おばけ・エンディング後・命名前は世話不可
+    const asleep = effectiveAsleep();
+    switch(act){
+      case 'FEED':
+        if(asleep){ pet.plateAt = Date.now(); }                     // 起こさない。皿を残す（起床後に空腹なら食べる／放置で食べ残し化）
+        else if(pet.tantrumAt || rollTantrum('feed')){ setReaction('refuse'); }  // わがまま：食べない（しかると従う）
+        else if(pet.hunger >= 4){
+          if(pet.P <= -30){                                         // まるっと傾向：満腹でも食べてしまう
+            pet.fullFeeds++; pet.P = Math.max(-100, pet.P - 1);
+            if(pet.health === 'GOOD' && Math.random() < 0.05) pet.health = 'SICK';  // 食べ過ぎ病気リスク
+            schedulePoop(); setReaction('eat', EAT_T);
+          } else { pet.plateAt = Date.now(); setReaction('refuse'); }  // 拒否、皿が残る
+        }
+        else {
+          if(pet.hunger <= 1) gainB(1);                             // 空腹時に食べさせるとなつく
+          pet.hunger++; schedulePoop(); setReaction('eat', EAT_T);  // 3口で減っていく食事アニメ
+        }
+        break;
+      case 'CLEAN':
+        if(pet.W > 0 || pet.plateAt || pet.plateSpoiled){
+          cleanSnapW = pet.W; cleanSnapPlate = !!pet.plateAt; cleanSnapSpoiled = !!pet.plateSpoiled;  // 見た目用に退避
+          pet.W = 0; pet.plateAt = 0; pet.plateSpoiled = false;
+          if(pet.mood < 4) pet.mood++;
+          setReaction('clean', CLEAN_T, asleep);                    // ほうき掃きアニメ（睡眠中は音符を出さない）
+        } else setReaction('nothing');                              // 空振り（…）
+        break;
+      case 'MED':
+        if(pet.health === 'SICK'){
+          pet.health = 'GOOD'; pet.sickAcc = 0; pet.sickCount++;    // 治療（回数は進化条件に使用）
+          setReaction('cured');
+        }
+        else { if(pet.mood > 0) pet.mood--; setReaction('anger'); } // 健康時は嫌がる
+        break;
+      case 'PET':  // PRAISE（褒める）
+        if(asleep){ /* 睡眠中は無反応（起こさない・効果なし） */ }
+        else if(isEstranged()){ setReaction('nothing'); }           // 疎遠期：反応しない（…）
+        else { if(pet.mood < 4) pet.mood++; gainB(1); setReaction('heart'); }
+        break;
+      case 'SCOLD':
+        if(asleep){                                                 // 起こしてしまう
+          pet.wokeUntil = Date.now() + (debugMode ? 30000 : 600000);
+          pet.mood = Math.max(0, pet.mood - 2);
+          pet.P = Math.min(100, pet.P + 2);                         // 夜更かし癖（やんちゃ化）
+          setReaction('anger');
+        } else if(pet.tantrumAt){                                   // 正当なしかる：しゅんとして従う（わがまま解消）
+          pet.tantrumAt = 0; pet.tantrumType = '';
+          pet.D = Math.min(100, pet.D + 5);
+          if(pet.mood > 0) pet.mood--;
+          setReaction('sad');                                       // 食事は出さない。改めてごはんをあげれば食べる
+        } else {                                                    // 不当なしかる
+          pet.mood = Math.max(0, pet.mood - 2);
+          pet.B = Math.max(0, pet.B - 2);
+          pet.D = Math.max(0, pet.D - 4);
+          pet.P = Math.min(100, pet.P + 1);
+          setReaction('sad');
+        }
+        break;
+    }
+    savePet();
+  }
+
+  // ── おばけ画面（餓死・病死後）：漂うだけ。SETTINGSとリセットのみ操作可 ──
+  function drawGhost(BG, DM, NK){
+    ctxM.fillStyle = BG; ctxM.fillRect(0,0,W*S,H*S);
+    ctxM.font='6px "Press Start 2P"'; ctxM.textBaseline='top'; ctxM.fillStyle=NK;
+    ctxM.font=nameFont(6, pet.name); ctxM.textAlign='left';  ctxM.fillText(pet.name||'------', 2*S, 2*S);
+    ctxM.font='6px "Press Start 2P"';   // DAYカウントは常にピクセル字体
+    ctxM.textAlign='right'; ctxM.fillText(dayLabel(), (W-2)*S, 2*S);
+    for(let x=0;x<W;x++) dot(ctxM,x,9,DM);
+    for(let x=0;x<W;x++) dot(ctxM,x,MAIN_GY,NK);
+    for(let x=0;x<W;x+=3) dot(ctxM,x,MAIN_GY-1,DM);
+    STARS_M.forEach(([x,y],i)=>dot(ctxM,x,y+10,(fM+i*9)%28<20?DM:BG));
+    const bob = [0,-1,-2,-1][Math.floor(fM/8)%4];
+    stamp(ctxM, GHOST_SPR, 22, 34+bob, DM);
+    fM++;
+  }
+
+  // ── UFO帰還エンディング（世話不足）：迎えに来て去る → 新しいたまごへ ──
+  function drawUfoEnding(BG, DM, NK){
+    ctxM.fillStyle = BG; ctxM.fillRect(0,0,W*S,H*S);
+    for(let x=0;x<W;x++) dot(ctxM,x,MAIN_GY,NK);
+    for(let x=0;x<W;x+=3) dot(ctxM,x,MAIN_GY-1,DM);
+    const t = ufoT, ux1 = 20, uy = 6;
+    const cr = charSprites().rest;
+    const cX = Math.floor((W - cr[0].length)/2), cY = MAIN_GY - cr.length;
+    const drawBeam = ()=>{ for(let y=uy+7;y<MAIN_GY;y++) for(let x=23;x<=28;x++) if((x+y)%2===0) dot(ctxM,x,y,DM); };
+    if(t < 25){        // UFOが迎えに来る
+      const ux = Math.round((W+2) + (ux1-(W+2))*(t/25));
+      stamp(ctxM, UFO_SPR, ux, uy, NK);
+      stamp(ctxM, cr, cX, cY, NK);
+    } else if(t < 50){ // ビーム照射
+      stamp(ctxM, UFO_SPR, ux1, uy, NK); drawBeam();
+      stamp(ctxM, cr, cX, cY, NK);
+    } else if(t < 70){ // 吸い上げ（振り返らない）
+      stamp(ctxM, UFO_SPR, ux1, uy, NK); drawBeam();
+      const p = (t-50)/20;
+      stamp(ctxM, cr, cX, Math.round(cY + (uy+7-cY)*p), NK);
+    } else if(t < 90){ // 去る
+      const p = (t-70)/20;
+      stamp(ctxM, UFO_SPR, Math.round(ux1+(W+6-ux1)*p), Math.round(uy-10*p), NK);
+    } else {           // 別れの言葉
+      ctxM.font='7px "Press Start 2P"'; ctxM.fillStyle=NK;
+      ctxM.textAlign='center'; ctxM.textBaseline='top';
+      ctxM.fillText('GOODBYE...',(W*S)/2, 28*S);
+    }
+    ufoT++;
+    if(ufoT >= 130){   // 終了 → セーブ消去 → オープニング（新しいたまご）へ
+      try{ localStorage.removeItem(SAVE_KEY); }catch(e){}
+      pet = defaultPet(); nameBuf='';
+      ufoEnding = false; ufoT = 0;
+      showView('opening'); fO = 0; openingReady = false;
+    }
+  }
+
+  // ── 旅立ちエンディング（E4・ハッピー）：仲間の艦隊が迎えに来る大団円 ──
+  function drawDepartEnding(BG, DM, NK){
+    ctxM.fillStyle = BG; ctxM.fillRect(0,0,W*S,H*S);
+    for(let x=0;x<W;x++) dot(ctxM,x,MAIN_GY,NK);
+    for(let x=0;x<W;x+=3) dot(ctxM,x,MAIN_GY-1,DM);
+    STARS_M.forEach(([x,y],i)=>dot(ctxM,x,y+10,(fM+i*9)%28<20?DM:BG));
+    const t = departT, uy = 5;
+    const cr = charSprites().a;
+    const cX = Math.floor((W - cr[0].length)/2), cY = MAIN_GY - cr.length;
+    const drawBeam = ()=>{ for(let y=uy+9;y<MAIN_GY;y++) for(let x=cX+1;x<cX+cr[0].length-1;x++) if((x+y)%2===0) dot(ctxM,x,y,DM); };
+    const fleet = (p)=>{   // 3機の艦隊（中央大＋左右）
+      const ux = Math.round((W+4) + (17-(W+4))*p);
+      stamp(ctxM, UFO_SPR, ux, uy, NK);
+      stamp(ctxM, UFO_SPR, ux-16, uy+6, NK);
+      stamp(ctxM, UFO_SPR, ux+16, uy+6, NK);
+    };
+    if(t < 30){        // 艦隊が迎えに来る
+      fleet(t/30);
+      stamp(ctxM, cr, cX, cY, NK);
+    } else if(t < 60){ // キャラが跳ねて喜ぶ＋ハート
+      fleet(1);
+      stamp(ctxM, cr, cX, cY + ((t%8<4)?-2:0), NK);
+      if(t%10<7) stamp(ctxM, ICO_HEART, cX-6, cY-4, NK);
+    } else if(t < 85){ // ビームで昇っていく（手を振る＝小刻み揺れ）
+      fleet(1); drawBeam();
+      const p = (t-60)/25;
+      stamp(ctxM, cr, cX + ((t%4<2)?-1:1), Math.round(cY + (uy+9-cY)*p), NK);
+    } else if(t < 110){ // 艦隊が去る
+      const p = (t-85)/25;
+      const ux = Math.round(17 + (W+6-17)*p), uy2 = Math.round(uy - 12*p);
+      stamp(ctxM, UFO_SPR, ux, uy2, NK);
+      stamp(ctxM, UFO_SPR, ux-16, uy2+6, NK);
+      stamp(ctxM, UFO_SPR, ux+16, uy2+6, NK);
+    } else {           // 感謝のメッセージ
+      ctxM.font='7px "Press Start 2P"'; ctxM.fillStyle=NK;
+      ctxM.textAlign='center'; ctxM.textBaseline='top';
+      ctxM.fillText('THANK YOU!',(W*S)/2, 24*S);
+      if(departT%10<7) stamp(ctxM, ICO_HEART, Math.floor(W/2)-2, 34, NK);
+    }
+    departT++;
+    if(departT >= 160){   // 大団円 → 新しいたまごへ
+      try{ localStorage.removeItem(SAVE_KEY); }catch(e){}
+      pet = defaultPet(); nameBuf='';
+      departEnding = false; departT = 0;
+      showView('opening'); fO = 0; openingReady = false;
+    }
+  }
+
+  let fM=0;
+  function tickMain(){
+    advancePet();   // リアルタイム進行（1分単位で処理）
+    if(!debugMode) timeOfDay = getTimeOfDay();   // 実時刻に追従（DEBUG中はサイクル優先）
+    const col = getColors();
+    const BG  = col.bg, DM = col.dim, NK = col.on;
+    if(pet.departFlag && !departEnding && !pet.dead){ departEnding = true; departT = 0; }  // 旅立ちの日
+    if(departEnding){ drawDepartEnding(BG, DM, NK); return; }  // 旅立ちエンディング再生中
+    if(ufoEnding){ drawUfoEnding(BG, DM, NK); return; }   // 帰還エンディング再生中
+    if(pet.dead){ drawGhost(BG, DM, NK); return; }        // おばけ状態
+    // 睡眠判定（しかられて起きた直後は起きている。DEBUG中は表示時間帯に連動）
+    const asleep = effectiveAsleep();
+
+    ctxM.fillStyle = BG; ctxM.fillRect(0,0,W*S,H*S);
+
+    // 名前と日数（未命名時は NAME:???? の????を黒/薄緑で点滅。十字上で選択→Aで命名画面へ）
+    ctxM.font='6px "Press Start 2P"';
+    ctxM.textBaseline='top'; ctxM.textAlign='left';
+    if(pet.name){
+      ctxM.font=nameFont(6, pet.name); ctxM.fillStyle=NK; ctxM.fillText(pet.name, 2*S, 2*S);
+    } else if(nameSelActive){
+      // 選択中：黒塗り帯に白抜き（反転）で明示
+      for(let dx=1;dx<17;dx++) for(let dy=1;dy<5;dy++) dot(ctxM,dx,dy,NK);
+      ctxM.fillStyle=BG; ctxM.fillText('NAME:????', 2*S, 2*S);
+    } else {
+      ctxM.fillStyle=NK; ctxM.fillText('NAME:', 2*S, 2*S);
+      ctxM.fillStyle=(fM%10<5) ? NK : DM;
+      ctxM.fillText('????', 2*S + 30, 2*S);   // 'NAME:'=5文字×6px
+    }
+    ctxM.font='6px "Press Start 2P"';   // DAYカウントは常にピクセル字体（名前がかなでも影響させない）
+    ctxM.fillStyle=NK;
+    ctxM.textAlign='right'; ctxM.fillText(dayLabel(),  (W-2)*S, 2*S);
+    for(let x=0;x<W;x++) dot(ctxM,x,9,DM);
+
+    // ── 天体（右上） ──
+    if (timeOfDay==='night') {
+      STARS_M.forEach(([x,y],i)=>dot(ctxM,x,y+10,(fM+i*9)%28<20?DM:BG));
+      stamp(ctxM, MOON, W-10, 11, NK);
+    } else if (weather !== 'rain') {
+      stamp(ctxM, SUN, W-13, 10, NK);
+    }
+
+    // ── 天気エフェクト ──
+    if (weather === 'rain') {
+      updateRain(BG, DM);
+    } else if (weather === 'cloudy') {
+      // 雲がゆっくり流れる
+      cloudX = (cloudX + (fM%4===0?1:0)) % (W+8);
+      const cx = W - cloudX;
+      stamp(ctxM, CLOUD_A, cx,    11, DM);
+      stamp(ctxM, CLOUD_B, cx-14, 14, DM);
+    }
+
+    // 地面（下部お世話バーのぶん上げる）
+    for(let x=0;x<W;x++) dot(ctxM,x,MAIN_GY,NK);
+    for(let x=0;x<W;x+=3) dot(ctxM,x,MAIN_GY-1,DM);
+
+    // ── キャラクター（段階別スプライト。睡眠・衰弱・病気・天気で振る舞い変化） ──
+    const sp = charSprites();
+    let yOff=0, grid, bounceSpeed=30, bounceAmt=1;
+    let charCol = NK;
+    if (asleep) {
+      // 睡眠中：丸まって動かない（閉眼スプライト）
+      grid = sp.sleep;
+      yOff = 0;
+    } else if (isWeak()) {
+      // 衰弱：薄い色でぐったり動かない
+      grid = sp.rest; yOff = 0; charCol = DM;
+    } else if (pet.health === 'SICK') {
+      // 病気：丸まってゆっくり上下
+      grid = sp.rest;
+      yOff = (fM%40<20) ? 0 : 1;
+    } else if (weather==='rain') {
+      // 雨：動きが遅く、足縮め
+      bounceSpeed=60; bounceAmt=1;
+      grid = sp.rest;
+      yOff = (fM%bounceSpeed)<(bounceSpeed/2)?0:bounceAmt;
+    } else if (weather==='cloudy') {
+      // 曇り：少しゆっくり
+      bounceSpeed=40;
+      grid = (fM%50)<25?sp.a:sp.b;
+      yOff = (fM%bounceSpeed)<(bounceSpeed/2)?0:bounceAmt;
+    } else {
+      // 晴れ：元気よく歩く。連続バウンドはやめ、時々しゃがんでからポンと跳ねる（頻度控えめ）
+      grid = (fM%50)<25?sp.a:sp.b;
+      const bp = fM % 42;                                  // バウンド周期（従来25→42で頻度減）
+      if(bp < 3){ grid = squatFrame(grid); yOff = 0; }     // まず屈伸で溜め（足は接地）
+      else if(bp < 8){ yOff = -2; }                        // ポンと浮く
+      else { yOff = 0; }                                   // それ以外は接地して歩く
+    }
+
+    // ── リアクションによるポーズ上書き ──
+    let xOff=0;
+    let eatLvl = -1;   // 食事中の残量（3→2→1→0）
+    if(reactT > 0){
+      if(reactType==='eat'){
+        eatLvl = Math.max(0, 3 - Math.floor((EAT_T - reactT)/15));
+        if(eatLvl > 0){
+          grid = eatSprite();                                            // 目が皿の方（右）を向く
+          yOff = (fM%6<3) ? -1 : 0;                                      // 食べている間は小さく揺れる
+        } else { yOff = 0; }
+      }
+      else if(reactType==='refuse'||reactType==='anger'){ xOff=(fM%4<2)?-1:1; }  // 首振り/イヤイヤ
+      else if(reactType==='sad'){ grid = sp.rest; yOff = 0; }             // しゅん
+    }
+
+    // ── 移動AI：歩き回る・ジャンプ・浮遊（タコ）・ぴょんぴょん（インベーダー） ──
+    const gw = grid[0].length, gh = grid.length;
+    const minX = 1, maxX = W - gw - 1;
+    if(walkX === null) walkX = Math.floor((W - gw)/2);
+    walkX = Math.max(minX, Math.min(maxX, walkX));   // 進化でサイズが変わった時のクランプ
+    const moving = !(asleep || isWeak() || pet.health==='SICK' || reactT>0 || evoT>0);
+    let airOff = 0;   // ジャンプ/浮遊の上方向オフセット
+    if(moving){
+      const prof = moveProfile();
+      const wSpd = (weather==='rain') ? 0.35 : (weather==='cloudy' ? 0.7 : 1);
+      if(wiggleT > 0){
+        // その場モゾモゾ：傾きポーズを左右反転で高速切り替え（移動は停止・足は地面に固定）
+        wiggleT--; yOff = 0;
+        grid = (fM%8 < 4) ? sp.b : flipH(sp.b);
+      } else if(squatT > 0){
+        // その場屈伸：しゃがみ↔立ちを周期で切り替え（数回。足は地面に固定して跳ねの浮きを止める）
+        squatT--; yOff = 0;
+        if(Math.floor((42 - squatT) / 7) % 2 === 1) grid = squatFrame(grid);
+      } else {
+      if(walkTimer <= 0 && !squatWalkT && !preJumpT && !jumpT && !floatT){
+        // 次の行動を決める（実行中のアクションが終わってから）：左へ／右へ／ひとやすみ
+        const r = Math.random();
+        walkDir = r < 0.34 ? -1 : (r < 0.68 ? 1 : 0);
+        if(prof.wiggle && Math.random() < prof.wiggle){
+          wiggleT = 22; walkDir = 0;                                                    // 時々その場でモゾモゾ
+        } else if(prof.squat && Math.random() < prof.squat){
+          squatT = 42; walkDir = 0;                                                     // 時々その場で屈伸
+        } else if(prof.squatWalk && walkDir !== 0 && Math.random() < prof.squatWalk){
+          squatWalkT = 54;                                                              // 屈伸しながら横移動
+        } else if(weather !== 'rain'){
+          if(prof.float && Math.random() < prof.float) floatT = 44;                     // タコ：浮遊
+          else if(prof.jump && Math.random() < prof.jump && floatT === 0) preJumpT = 5; // ジャンプ（まずしゃがんで溜め）
+        }
+        walkTimer = 25 + Math.floor(Math.random()*35);
+      }
+      walkTimer--;
+      if(preJumpT > 0){
+        // ジャンプ前の溜め：しゃがんでから発射
+        preJumpT--; yOff = 0; grid = squatFrame(grid);
+        if(preJumpT === 0) jumpT = 10;
+      } else if(squatWalkT > 0){
+        // 屈伸しながら横移動（しゃがみ↔立ちを繰り返しつつ進む）
+        squatWalkT--; yOff = 0;
+        if(walkDir === 0) walkDir = 1;   // 念のため方向を確保
+        if(Math.floor((54 - squatWalkT)/6) % 2 === 1) grid = squatFrame(grid);
+        walkX += walkDir * prof.speed * 0.9 * wSpd;
+      } else if(floatT > 0){
+        // 浮遊：ふわっと上がり漂って降りる
+        floatT--;
+        const ft = 44 - floatT;
+        const lift = ft < 10 ? ft*0.4 : (floatT < 10 ? floatT*0.4 : 4 + Math.sin(fM/4));
+        airOff = Math.round(lift);
+        walkX += walkDir * prof.speed * 0.6 * wSpd;
+      } else if(jumpT > 0){
+        // ジャンプ：放物線（跳びながら進む）
+        jumpT--;
+        airOff = Math.round(Math.sin(Math.PI * (10-jumpT)/10) * prof.jumpH);
+        walkX += walkDir * prof.speed * 1.4 * wSpd;
+      } else if(walkDir !== 0){
+        if(prof.mode === 'hop'){
+          // インベーダー：跳ねて進む（着地中は進まない）
+          if(hopPause <= 0){ jumpT = 10; hopPause = 5 + Math.floor(Math.random()*6); }
+          else hopPause--;
+        } else {
+          walkX += walkDir * prof.speed * wSpd;
+        }
+      }
+      // 画面端＋オブジェクト（皿・うんち）を壁として扱い、重なりを回避
+      const segs = freeSegments(gw);
+      if(segs.length){
+        let seg = segs.find(([a,b]) => walkX >= a && walkX <= b);
+        if(seg){
+          if(walkX <= seg[0]){ walkX = seg[0]; walkDir = 1; }   // 区間の左端でバウンド
+          if(walkX >= seg[1]){ walkX = seg[1]; walkDir = -1; }  // 右端でバウンド
+        } else {
+          // 障害物に被っている（オブジェクトが足元に出た等）→ 最寄りの自由区間へ徐々に押し出す
+          const near = segs.reduce((best,s)=>{
+            const d  = walkX < s[0]  ? s[0]-walkX  : walkX-s[1];
+            const bd = walkX < best[0]? best[0]-walkX: walkX-best[1];
+            return d < bd ? s : best;
+          });
+          const target = walkX < near[0] ? near[0] : near[1];
+          walkX += Math.sign(target - walkX) * Math.min(0.8, Math.abs(target - walkX));
+        }
+      }
+      }   // ← モゾモゾ中でなければ歩行
+    }
+
+    let charX = Math.round(walkX);
+    const charY = MAIN_GY - grid.length;   // 屈伸で縮んだフレームでも足元を地面に据える
+    if(reactT > 0 && reactType === 'eat') charX = 36 - gw - 2;   // 皿の前に来て食べる
+
+    // 進化演出：点滅＋キラキラ
+    let hideChar = false;
+    if(evoT > 0){
+      evoT--;
+      if(evoT%6 < 3) hideChar = true;
+      for(let k=0;k<6;k++){
+        const sx = charX - 5 + ((fM*7 + k*11) % (gw+10));
+        const sy = charY - 5 + ((fM*5 + k*7)  % (gh+8));
+        dot(ctxM, sx, sy, DM);
+      }
+    }
+    if(!hideChar) stamp(ctxM, grid, charX+xOff, charY+yOff-airOff, charCol);
+
+    // 食事中の口パクパク（皿側に開けた口の穴が開閉する）
+    if(!hideChar && reactT > 0 && reactType === 'eat' && eatLvl > 0){
+      const m = EAT_MOUTH[eatKey()];
+      if(m){
+        dot(ctxM, charX+xOff+m[0], charY+yOff+m[1], BG);                  // 口（閉じ線）
+        if(fM%6 >= 3) dot(ctxM, charX+xOff+m[0], charY+yOff+m[1]+1, BG);  // 開いた口
+      }
+    }
+
+    // ── 皿・汚れオブジェクト ──
+    const plateX = 36;                              // 皿は固定位置（キャラが移動するため）
+    if(pet.plateSpoiled) drawSpoiledPlate(plateX, MAIN_GY-1, NK, DM);     // 食べ残し（崩れた盛り＋ハエ）
+    else if(pet.plateAt) drawFoodPlate(plateX, MAIN_GY-1, 3, NK, DM);     // 残った皿（満杯のまま）
+    else if(eatLvl >= 0) drawFoodPlate(plateX, MAIN_GY-1, eatLvl, NK, DM); // 食事中：3口で減って空皿に
+    for(let i=0;i<pet.W && i<POOP_X.length;i++) stamp(ctxM, POOP_SPR, POOP_X[i], MAIN_GY-5, NK);
+
+    // ── CLEAN：ほうきが左→右へ掃き、通過した汚れが消える ──
+    if(reactT > 0 && reactType === 'clean'){
+      const prog = (CLEAN_T - reactT) / CLEAN_T;
+      const bx = Math.round(-8 + prog * (W + 16));                  // 画面外左→画面外右
+      // まだ掃かれていない汚れ・皿を表示（ほうきの先端が届くまで）
+      for(let i=0;i<cleanSnapW && i<POOP_X.length;i++)
+        if(POOP_X[i] > bx + 4) stamp(ctxM, POOP_SPR, POOP_X[i], MAIN_GY-5, NK);
+      if(plateX > bx + 4){
+        if(cleanSnapSpoiled) drawSpoiledPlate(plateX, MAIN_GY-1, NK, DM);
+        else if(cleanSnapPlate) drawFoodPlate(plateX, MAIN_GY-1, 3, NK, DM);
+      }
+      // ほうき本体（上下に小さく揺れながら進む）
+      const by = MAIN_GY - 10 + ((fM%6<3) ? 0 : 1);
+      stamp(ctxM, BROOM_SPR, bx, by, NK);
+    }
+
+    // ── 感情アイコン（リアクション優先 → 状態駆動。移動に追従し画面内にクランプ） ──
+    // 感情アイコン位置：通常はキャラ左上。左に余白が無い（左端）ときはキャラの右側へ回してキャラとの接触を避ける
+    // アイコンごとに幅が違う（Zzz・…は8ドット、！は2ドット）ので、
+    // 固定オフセットではなくスプライト幅から右端を揃えて一定の隙間を確保する
+    const EMO_GAP = 2;                                        // キャラとの隙間（ドット）
+    const iconY = charY + yOff - airOff - 3;
+    function emo(spr){
+      const w = spr[0].length;
+      // 通常はキャラの左。左に余白が足りない（画面左端）ときは右側へ回す
+      let x = (charX - EMO_GAP - w >= 1) ? (charX - EMO_GAP - w) : (charX + gw + EMO_GAP);
+      x = Math.max(1, Math.min(W - w, x));                    // 画面内にクランプ
+      stamp(ctxM, spr, x, iconY, NK);
+    }
+    // 演出アイコンを出すか（quiet時は出さず、下の状態アイコン＝Zzzなどに任せる）
+    const showReact = reactT > 0 && !reactQuiet;
+    if (reactT > 0) {
+      const blink = (fM%8)<5;
+      if(blink && showReact){
+        if(reactType==='eat'||reactType==='clean')            emo(ICO_NOTE);
+        else if(reactType==='heart'||reactType==='cured')     emo(ICO_HEART);
+        else if(reactType==='anger'||reactType==='refuse')    emo(ICO_ANGER);
+        else if(reactType==='nothing'||reactType==='sad')     emo(ICO_DOTS);
+        else if(reactType==='hungry')                         emo(ICO_EXCL);
+        else if(reactType==='sick')                           emo(ICO_DROP);
+      }
+      reactT--;
+      // 食事が終わったら、食べる前の位置ではなく画面中央から歩き再開
+      if(reactT === 0 && reactType === 'eat'){ walkX = Math.floor((W - gw)/2); walkDir = Math.random()<0.5?-1:1; walkTimer = 0; }
+    }
+    if (showReact) {
+      /* 演出アイコンは上で描画済み */
+    } else if (asleep) {
+      // 睡眠中：Zzz
+      if((fM%30)<24) emo(ICO_ZZZ);
+    } else if (isWeak()) {
+      // 衰弱：！を速く点滅（SOS）
+      if((fM%8)<5) emo(ICO_EXCL);
+    } else if (pet.health === 'SICK') {
+      // 病気：汗しずく
+      if((fM%16)<10) emo(ICO_DROP);
+    } else if (pet.hunger <= 1) {
+      // 空腹：！を点滅（世話の催促）
+      if((fM%16)<10) emo(ICO_EXCL);
+    } else if (isEstranged()) {
+      // 疎遠期：無表情（何も出さない）
+    } else if (pet.mood >= 3) {
+      // ごきげん：ハートと音符を交互に
+      const cyc=Math.floor(fM/90)%2;
+      if(cyc===0&&(fM%90)<75) emo(ICO_HEART);
+      if(cyc===1&&(fM%90)<75) emo(ICO_NOTE);
+    } else if (pet.mood <= 1) {
+      // 退屈：…をゆっくり点滅
+      if((fM%40)<28) emo(ICO_DOTS);
+    }
+
+    fM++;
+  }
+  setInterval(tickMain, 100);
+
+  function btnAnim(el,ty=1,sc=0.95){ el.style.transform=`translateY(${ty}px) scale(${sc})`; el.style.filter='brightness(0.7)'; setTimeout(()=>{el.style.transform='';el.style.filter='';},120); }
+  function dpadAnim(el){ el.style.transform='translateY(2px) scale(0.88)'; el.style.filter='brightness(2.5)'; setTimeout(()=>{el.style.transform='';el.style.filter='';},120); }
+
+  onPress(document.getElementById('mmenu'),()=>{ playClick(); btnAnim(document.getElementById('mmenu'),1,0.93); menuSel=0; menuScroll=0; inSettings=false; inPlay=false; inStatus=false; confirmReset=false; playSel=0; showView('menu'); });
+  onPress(document.getElementById('mb'),()=>{ playClick(); btnAnim(document.getElementById('mb')); nameSelActive=false; });
+  // お世話アクションはMENU内のアイコングリッドへ移動
+  // 未命名時：十字上で「NAME:????」を選択（黒塗り反転）→ Aで命名画面へ。下/Bで選択解除
+  onPress(document.getElementById('ma'),()=>{
+    playClick(1400); btnAnim(document.getElementById('ma'));
+    if(!pet.name && nameSelActive){
+      nameSelActive=false; startNaming(); showView('naming');
+    }
+  });
+  document.querySelectorAll('#view-main .dpad-arrow').forEach(el=>{
+    onPress(el,()=>{
+      playClick(900); dpadAnim(el);
+      if(!pet.name){
+        if(el.classList.contains('up'))   nameSelActive = true;
+        if(el.classList.contains('down')) nameSelActive = false;
+      }
+    });
+  });
+
+  // ════════════════════════════════════════
+  // MENU  (interval: 80ms、元モックと同一)
+  // ════════════════════════════════════════
+  const ctxN = initCanvas('lcd-n');
+  const MENU_ITEMS=['STATUS','STORY','SETTINGS'];   // FEED/PLAY/CLEANはアクションバーに移管済み（遷移判定用）
+  const MENU_KEYS =['status','story','settings'];   // 表示用（言語辞書キー・MENU_ITEMSと同順）
+  const PLAY_ITEMS=['SPACEWALK','SHOOTING STAR','ABDUCTION'];
+  const PLAY_FILES={'SPACEWALK':'spacewalk_game.html','SHOOTING STAR':'shootingstar_game.html','ABDUCTION':'abduction_game.html'};
+  let playSel=0;
+  let menuSel=0, fN=0;
+  let menuScroll=0;   // メニューの表示開始位置（選択追従スクロール）
+
+  // settings state
+  let soundOn = true;
+  try{ if(localStorage.getItem('myvader_sound') === 'off') soundOn = false; }catch(e){}
+  function setSound(on){ soundOn = on; try{ localStorage.setItem('myvader_sound', on?'on':'off'); }catch(e){} }
+  // ボディカラー（面：明るめ / 側面ボタン：やや暗め）
+  const BODY_COLORS  = ['#e8e3d8','#272727','#9ed0d8','#c8b8e0','#e8a89a','#98d0b0'];
+  const BODY_SHELLS  = ['#ccc8bc','#383838','#7ec0c8','#b8a8d0','#d89888','#82bf9e'];
+  const BODY_LABELS  = ['IVORY','ONYX','AQUA','LILAC','CORAL','MINT'];
+  let bodyColorIdx = 1; // デフォルト: ONYX（黒）
+  // 保存済みのBODY COLORを復元（ミニゲームとも共有）
+  try{ const b = localStorage.getItem('myvader_bodycolor'); if(b !== null) bodyColorIdx = Math.min(BODY_COLORS.length-1, Math.max(0, Number(b)||0)); }catch(e){}
+  let inSettings = false;
+  let inPlay = false;
+  let inStatus = false;
+  let settingsSel = 0;
+  let confirmReset = false;   // ALL RESETの確認ダイアログ表示中
+  // 項目はキーで管理（表示ラベルは言語辞書、値は各キーで分岐）
+  const SETTINGS_KEYS = ['sound','language','bodycolor','location','debug','reset'];
+
+  function applyBodyColor() {
+    const bg = BODY_COLORS[bodyColorIdx];
+    const isDark = bodyColorIdx === 1; // ONYX
+    // 背景
+    // 実機モードのレターボックス（画面比の差で生じる余白）もシェル色で塗り、黒帯を出さない
+    document.documentElement.style.setProperty('--body-bg', bg);
+    document.querySelector('.screen-area').style.background = bg;
+    const app = document.querySelector('.app');
+    app.style.background = bg;
+    // ボタン影：暗いボディでは濃く、明るいボディでは薄く
+    app.style.setProperty('--shadow-hard', isDark ? 'rgba(0,0,0,0.88)' : 'rgba(0,0,0,0.28)');
+    app.style.setProperty('--shadow-soft', isDark ? 'rgba(0,0,0,0.72)' : 'rgba(0,0,0,0.16)');
+    // ボタン下ラベルの色
+    document.querySelectorAll('.btn-name').forEach(el=>{
+      el.style.color = isDark ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.22)';
+    });
+    // ホームバー
+    document.querySelector('.home-bar').style.background =
+      isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.18)';
+    // 設定を保存（ミニゲーム側でも同じ色を適用するため）
+    try{ localStorage.setItem('myvader_bodycolor', String(bodyColorIdx)); }catch(e){}
+  }
+  applyBodyColor(); // 起動時に即適用
+
+  function tickMenu(){
+    ctxN.fillStyle=OFF; ctxN.fillRect(0,0,W*S,H*S);
+    // 名前と日数
+    ctxN.font='6px "Press Start 2P"';
+    ctxN.textBaseline='top'; ctxN.fillStyle=ON;
+    ctxN.font=nameFont(6, pet.name); ctxN.textAlign='left';  ctxN.fillText(pet.name||'????', 2*S, 2*S); ctxN.font='6px "Press Start 2P"';
+    ctxN.textAlign='right'; ctxN.fillText(dayLabel(),  (W-2)*S, 2*S);
+    for(let x=0;x<W;x++) dot(ctxN,x,9,DIM);
+
+    if (inSettings) {
+      // ── SETTINGS サブ画面 ──
+      ctxN.font=uiFont(7);
+      ctxN.fillStyle=ON; ctxN.textAlign='center'; ctxN.textBaseline='top';
+      ctxN.fillText(T('settings'),(W*S)/2,11*S);
+      for(let x=1;x<W-1;x++) dot(ctxN,x,18,DIM);
+
+      if(confirmReset){
+        // ── ALL RESET 確認ダイアログ ──
+        ctxN.font=uiFont(7);
+        ctxN.fillStyle='#7a3a3a'; ctxN.textAlign='center'; ctxN.textBaseline='top';
+        ctxN.fillText(T('reset'),(W*S)/2, 24*S);
+        ctxN.fillStyle=ON;
+        ctxN.fillText(T('sure'),(W*S)/2, 34*S);
+        ctxN.font=uiFont(6);
+        if((fN%14)<9) ctxN.fillText(T('yesno'),(W*S)/2, 48*S);
+        fN++;
+        return;   // リスト描画をスキップ（tickMenu内のこの分岐のみ）
+      }
+      // 6項目を1画面に収める（y=19起点・間隔8で最下段y=59まで＝画面高65内）
+      const ITEM_H = 8;
+      SETTINGS_KEYS.forEach((key,i)=>{
+        const y = 19 + i * ITEM_H;
+        const isSel = i === settingsSel;
+        if(isSel){ for(let dx=1;dx<W-1;dx++) for(let dy=0;dy<7;dy++) dot(ctxN,dx,y+dy,DIM); }
+        ctxN.font=uiFont(6); ctxN.fillStyle=ON; ctxN.textAlign='left';
+        if(isSel) ctxN.fillText('>',2*S,(y+1)*S);
+        ctxN.fillText(T(key), 7*S, (y+1)*S);
+        ctxN.font=uiFont(6); ctxN.textAlign='right'; ctxN.fillStyle=ON;
+        if(key==='sound')     ctxN.fillText(soundOn?T('on'):T('off'), (W-2)*S, (y+1)*S);
+        if(key==='language')  ctxN.fillText(T('langval'), (W-2)*S, (y+1)*S);
+        if(key==='bodycolor') ctxN.fillText(BODY_LABELS[bodyColorIdx], (W-2)*S, (y+1)*S);
+        if(key==='location')  ctxN.fillText(locationOn?T('on'):T('off'), (W-2)*S, (y+1)*S);
+        if(key==='debug')   { ctxN.fillStyle=debugMode?ON:'#7a7660'; ctxN.fillText(debugMode?T('on'):T('off'), (W-2)*S, (y+1)*S); }
+        if(key==='reset')   { ctxN.fillStyle='#7a3a3a'; ctxN.fillText(T('exec'), (W-2)*S, (y+1)*S); }
+      });
+
+    } else if (inStatus) {
+      // ── STATUS サブ画面 ──
+      ctxN.font=uiFont(7);
+      ctxN.fillStyle=ON; ctxN.textAlign='center'; ctxN.textBaseline='top';
+      ctxN.fillText(T('status'),(W*S)/2,11*S);
+      for(let x=1;x<W-1;x++) dot(ctxN,x,18,DIM);
+
+      const bodyVal = pet.dead ? T('dead') : (isWeak() ? T('weak') : (pet.health==='SICK'?T('sick'):T('good')));
+      const rows=[
+        {label:T('hungry'), type:'icons', grid:ICO_HEART, val:pet.hunger},
+        {label:T('mood'),   type:'icons', grid:ICO_NOTE,  val:pet.mood},
+        {label:T('body'),   type:'text',  val:bodyVal},
+        {label:T('stage'),  type:'text',  val:stageLabel()},
+        {label:T('ptype'),  type:'text',  val:typeLabel()},
+      ];
+      rows.forEach((r,i)=>{
+        const y = 22 + i*9;
+        ctxN.font=uiFont(6); ctxN.fillStyle=ON; ctxN.textAlign='left';
+        ctxN.fillText(r.label, 2*S, y*S);
+        if(r.type==='icons'){
+          // ハートが7幅になったため間隔8で再配置
+          for(let k=0;k<4;k++) stamp(ctxN, r.grid, 22+k*8, y-1, k<r.val?ON:DIM);
+        } else {
+          ctxN.textAlign='right'; ctxN.fillText(r.val, (W-2)*S, y*S);
+        }
+      });
+
+    } else if (inPlay) {
+      // ── PLAY サブ画面（ミニゲーム選択）──
+      ctxN.font=uiFont(7);
+      ctxN.fillStyle=ON; ctxN.textAlign='center'; ctxN.textBaseline='top';
+      ctxN.fillText(T('play'),(W*S)/2,11*S);
+      for(let x=1;x<W-1;x++) dot(ctxN,x,18,DIM);
+
+      const ITEM_H = 12;
+      PLAY_ITEMS.forEach((label,i)=>{
+        const y = 22 + i * ITEM_H;
+        const isSel = i === playSel;
+        if(isSel){ for(let dx=1;dx<W-1;dx++) for(let dy=0;dy<10;dy++) dot(ctxN,dx,y+dy,DIM); }
+        // 長い項目名はサイズ7、それ以外8（ゲーム名は共通で英語表記）
+        const fsz = (label.length>9) ? 7 : 8;
+        ctxN.font=fsz+'px "Press Start 2P"'; ctxN.fillStyle=ON; ctxN.textAlign='left';
+        if(isSel) ctxN.fillText('>',2*S,(y+2)*S);
+        ctxN.fillText(label, 8*S, (y+2)*S);
+      });
+
+    } else {
+      // ── メインメニュー：お世話アイコングリッド(2段×3列) ＋ サブ項目 ──
+      // menuSel: 0..5=アイコン, 6..8=STATUS/STORY/SETTINGS
+      const HS = S/2;
+      const GY0 = 12, CELL_W = 18, CELL_H = 11;
+      for(let i=0;i<6;i++){
+        const r = Math.floor(i/3), c = i%3;
+        const cx0 = c*CELL_W, cy0 = GY0 + r*CELL_H;
+        const isSel = (menuSel === i);
+        if(isSel){
+          // 選択中：薄色(DIM)の四角枠で囲う
+          for(let dx=0;dx<CELL_W;dx++){ dot(ctxN, cx0+dx, cy0, DIM); dot(ctxN, cx0+dx, cy0+CELL_H-1, DIM); }
+          for(let dy=0;dy<CELL_H;dy++){ dot(ctxN, cx0, cy0+dy, DIM); dot(ctxN, cx0+CELL_W-1, cy0+dy, DIM); }
+        }
+        const grid = CARE_ICONS[CARE_ORDER[i]];
+        const ox = cx0*S + (CELL_W*S - 13*HS)/2;
+        const oy = cy0*S + (CELL_H*S - 12*HS)/2;
+        for(let y=0;y<12;y++) for(let x=0;x<13;x++){
+          const v = grid[y][x]; if(!v) continue;
+          ctxN.fillStyle = (v===2?ON:DIM);
+          ctxN.fillRect(ox+x*HS, oy+y*HS, HS, HS);
+        }
+      }
+      // 選択中アクション名ラベル
+      ctxN.font=uiFont(6);
+      ctxN.fillStyle=ON; ctxN.textAlign='center'; ctxN.textBaseline='top';
+      if(menuSel < 6) ctxN.fillText(T(CARE_ORDER[menuSel].toLowerCase()), (W*S)/2, 36*S);
+      for(let x=1;x<W-1;x++) dot(ctxN,x,40,DIM);
+
+      // サブ項目（STATUS/STORY/SETTINGS）
+      MENU_KEYS.forEach((key,i)=>{
+        const y = 43 + i*7;
+        const isSel = (menuSel === 6+i);
+        if(isSel){ for(let dx=1;dx<W-1;dx++) for(let dy=0;dy<7;dy++) dot(ctxN,dx,y+dy,DIM); }
+        ctxN.font=uiFont(7); ctxN.fillStyle=ON; ctxN.textAlign='left';
+        if(isSel) ctxN.fillText('>',2*S,(y+1)*S);
+        ctxN.fillText(T(key), 8*S, (y+1)*S);
+      });
+    }
+
+    fN++;
+  }
+  setInterval(tickMenu, 80);
+
+  document.querySelectorAll('#view-menu .dpad-arrow').forEach(el=>{
+    onPress(el,()=>{
+      playClick(900); dpadAnim(el);
+      if(inSettings){
+        if(confirmReset) return;   // 確認ダイアログ中は移動不可（A/Bのみ）
+        if(el.classList.contains('up'))   settingsSel=Math.max(0, settingsSel-1);
+        if(el.classList.contains('down')) settingsSel=Math.min(SETTINGS_KEYS.length-1, settingsSel+1);
+        // 左右で値変更
+        if(el.classList.contains('left')||el.classList.contains('right')){
+          const key = SETTINGS_KEYS[settingsSel], right = el.classList.contains('right');
+          if(key==='sound')     setSound(!soundOn);
+          if(key==='language')  toggleLang();
+          if(key==='bodycolor'){ bodyColorIdx=(right?bodyColorIdx+1:bodyColorIdx-1+BODY_COLORS.length)%BODY_COLORS.length; applyBodyColor(); }
+          if(key==='location')  setLocation(!locationOn);
+        }
+      } else if(inStatus){
+        // STATUSに選択項目なし
+      } else if(inPlay){
+        if(el.classList.contains('up'))   playSel=Math.max(0, playSel-1);
+        if(el.classList.contains('down')) playSel=Math.min(PLAY_ITEMS.length-1, playSel+1);
+      } else {
+        // アイコングリッド(0..5) ⇔ サブ項目(6..8) のナビゲーション
+        const dir = el.classList.contains('up')?'up' : el.classList.contains('down')?'down'
+                  : el.classList.contains('left')?'left' : 'right';
+        if(menuSel < 6){
+          const r = Math.floor(menuSel/3);
+          // 左右は6アイコンを一列としてループ（くすり→ほめる、ゲーム→ごはん）
+          if(dir==='left')  menuSel = (menuSel+5)%6;
+          if(dir==='right') menuSel = (menuSel+1)%6;
+          // 上下もループ：上段から上でSETTINGS(8)へ、下段から下でサブ項目へ
+          if(dir==='up')    menuSel = (r===1) ? menuSel-3 : 8;
+          if(dir==='down')  menuSel = (r===0) ? menuSel+3 : 6;
+        } else {
+          if(dir==='up')   menuSel = (menuSel===6) ? 4 : menuSel-1;  // STATUSから上でグリッド下段中央へ
+          if(dir==='down') menuSel = (menuSel===8) ? 0 : menuSel+1;  // SETTINGSから下で先頭アイコンへループ
+        }
+      }
+    });
+  });
+
+  // A: 決定
+  onPress(document.getElementById('na'),()=>{
+    playClick(900); btnAnim(document.getElementById('na'));
+    if(inSettings){
+      const key = SETTINGS_KEYS[settingsSel];
+      if(key==='sound') setSound(!soundOn);
+      if(key==='language') toggleLang();
+      if(key==='bodycolor'){ bodyColorIdx=(bodyColorIdx+1)%BODY_COLORS.length; applyBodyColor(); }
+      if(key==='location') setLocation(!locationOn);
+      if(key==='debug'){
+        debugMode=!debugMode;
+        if(debugMode){
+          debugTimer=setInterval(cycleDebug, DEBUG_INTERVAL);
+        } else {
+          clearInterval(debugTimer);
+          timeOfDay=getTimeOfDay();
+        }
+      }
+      if(key==='reset'){
+        if(!confirmReset){
+          confirmReset = true;             // まず確認ダイアログを表示
+        } else {
+          // 確認中のA = 実行
+          confirmReset = false;
+          menuSel=0; menuScroll=0; settingsSel=0; inSettings=false; inPlay=false; inStatus=false; bodyColorIdx=1; setSound(true);  // カラーはデフォルトのONYX（黒）
+          weatherFetched=false; weather='clear'; debugMode=false;
+          setLocation(false);
+          clearInterval(debugTimer);
+          timeOfDay=getTimeOfDay();
+          try{ localStorage.removeItem(SAVE_KEY); }catch(e){}
+          pet = defaultPet(); nameBuf='';
+          ufoEnding = false; ufoT = 0; departEnding = false; departT = 0; evoT = 0;
+          applyBodyColor(); showView('opening'); fO=0; openingReady=false;
+        }
+      }
+    } else if(inStatus){
+      // STATUSでは決定操作なし
+    } else if(inPlay){
+      // ミニゲームは同一ページ内のフルスクリーンiframeで開く
+      // （ホーム画面アプリでページ遷移するとSafariのUI付き表示に抜け出してしまうため）
+      const game = PLAY_ITEMS[playSel];
+      const file = PLAY_FILES[game];
+      if(file) openMiniGame(file);
+    } else {
+      if(menuSel < 6){
+        // お世話アクション実行 → 育成画面に戻ってリアクション表示
+        const act = CARE_ORDER[menuSel];
+        if(act==='GAME'){
+          // 入口制御：おばけ・睡眠・病気・空腹・疎遠期・わがままは遊べない
+          // （たまご段階でも遊べる：ミニゲームのデフォルメ6種にeggが含まれる設計）
+          if(pet.dead || departEnding || ufoEnding){ /* 操作不可 */ }
+          else if(!pet.name){ showView('main'); }   // 命名前は遊べない（点滅する名前欄へ誘導）
+          else if(effectiveAsleep()){ showView('main'); }
+          else if(pet.health==='SICK'){ setReaction('sick'); showView('main'); }
+          else if(pet.hunger <= 1){ setReaction('hungry'); showView('main'); }
+          else if(isEstranged()){ setReaction('nothing'); showView('main'); }
+          else if(pet.tantrumAt || rollTantrum('game')){ setReaction('refuse'); showView('main'); savePet(); }
+          else { inPlay=true; playSel=0; }
+        }
+        else if(pet.dead){ /* おばけ：世話不可 */ }
+        else { doCare(act); showView('main'); }
+      } else {
+        const sel = MENU_ITEMS[menuSel-6];
+        if(sel==='SETTINGS'){ inSettings=true; settingsSel=0; }
+        else if(pet.dead){ /* おばけ：SETTINGS以外は操作不可 */ }
+        else if(sel==='STATUS'){ inStatus=true; }
+        else if(sel==='STORY'){ storyScrollY=H*S; showView('story'); }
+      }
+    }
+  });
+  // B: 戻る
+  onPress(document.getElementById('nb'),()=>{
+    playClick(); btnAnim(document.getElementById('nb'));
+    if(inSettings){
+      if(confirmReset){ confirmReset=false; }   // 確認ダイアログをキャンセル
+      else inSettings=false;
+    }
+    else if(inStatus){ inStatus=false; }
+    else if(inPlay){ inPlay=false; }  // MENUのGAMEアイコンから入るためグリッドへ戻る
+    else showView('main');
+  });
+  onPress(document.getElementById('nmenu'),()=>{
+    playClick(); btnAnim(document.getElementById('nmenu'),1,0.93);
+    inSettings=false; inPlay=false; inStatus=false; confirmReset=false; showView('main');
+  });
+
+  // ════════════════════════════════════════
+  // STORY
+  // ════════════════════════════════════════
+  const ctxS = initCanvas('lcd-s');
+  // {t:本文, st:'title'|''}。タイトルは言語に関わらず英語表記
+  const T_ = (t,st)=>({t, st:st||''});
+  const STORY_EN = [
+    T_(''),T_(''),T_('My Little Invader','title'),T_(''),T_(''),
+    T_('One day,'),T_('a tiny creature'),T_('fell from the sky.'),T_(''),
+    T_('Nothing like the armies'),T_('that once invaded Earth.'),T_(''),
+    T_('Frail,'),T_('without a hint of malice'),T_('it gazes at me'),T_('with innocent eyes.'),T_(''),
+    T_('That gaze'),T_('captured my heart.'),T_(''),
+    T_('Yes, this little one'),T_('is the invader'),T_('of my heart.'),T_(''),T_(''),T_(''),
+  ];
+  // 日本語版（LCD幅に収まるよう短く改行）
+  const STORY_JA = [
+    T_(''),T_(''),T_('My Little Invader','title'),T_(''),T_(''),
+    T_('ある日、空から'),T_('小さな生き物が'),T_('落ちてきた。'),T_(''),
+    T_('それは、かつて'),T_('侵略のため大軍を成して'),T_('地球に攻め込んできた'),T_('"やつら"とは、'),T_('似ても似つかない。'),T_(''),
+    T_('か弱く、敵意の'),T_('かけらもないそれは、'),T_('つぶらな瞳で'),T_('私を見つめる。'),T_(''),
+    T_('その眼差しに、'),T_('私の心は奪われた。'),T_(''),
+    T_('そう、この子は、'),T_('私の心の"インベーダー"'),T_(''),T_(''),T_(''),
+  ];
+  function storyData(){ return lang==='ja' ? STORY_JA : STORY_EN; }
+  const S_LINE_H = 14;
+
+  function tickStory(){
+    if(scene!=='story') return;
+    const lines = storyData();
+    ctxS.fillStyle=OFF; ctxS.fillRect(0,0,W*S,H*S);
+    ctxS.save();
+    ctxS.beginPath(); ctxS.rect(0,0,W*S,H*S); ctxS.clip();
+    ctxS.textAlign='center'; ctxS.textBaseline='top';
+    lines.forEach((line,i)=>{
+      const y = storyScrollY + i * S_LINE_H;
+      if(y < -S_LINE_H || y > H*S) return;
+      // タイトルは英語ピクセル字体、本文は英語=ピクセル/日本語=大きめゴシック
+      ctxS.font = (line.st==='title') ? '9px "Press Start 2P"'
+                : (lang==='ja' ? '10px '+JP_FONT : '6px "Press Start 2P"');
+      ctxS.fillStyle = ON;
+      ctxS.fillText(line.t,(W*S)/2,y);
+    });
+    ctxS.restore();
+    if(!storyDone){ storyScrollY-=0.8; if(storyScrollY < -(lines.length*S_LINE_H)){ storyDone=true; setTimeout(()=>{ showView('menu'); }, 500); } }
+  }
+  setInterval(tickStory, 80);
+
+  onPress(document.getElementById('sa'),()=>{ playClick(); btnAnim(document.getElementById('sa')); showView('menu'); });
+  onPress(document.getElementById('sb'),()=>{ playClick(); btnAnim(document.getElementById('sb')); showView('menu'); });
+  onPress(document.getElementById('smenu'),()=>{ playClick(); btnAnim(document.getElementById('smenu'),1,0.93); showView('menu'); });
+
+})();
+</script>
+
+<script>
+// iPhone実機表示：ゲーム機シェルを画面サイズに合わせて拡大（デザイン比率は維持）
+
+  // 実機（ホーム画面アプリ / iOS Safari）ではモックのiPhone外装を消す
+  (function(){
+    var standalone = window.navigator.standalone === true ||
+                     (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches);
+    var touchPhone = /iPhone|iPod|Android/i.test(navigator.userAgent);
+    if(standalone || touchPhone) document.body.classList.add("device");
+  })();
+(function(){
+  function fit(){
+    var el=document.querySelector(".iphone"); if(!el) return;
+    el.style.transform="none";
+    var r=el.getBoundingClientRect();
+    var w=r.width||280, h=r.height||600;
+    var s=Math.min(window.innerWidth*0.995/w, window.innerHeight*0.995/h);
+    el.style.transformOrigin="center center";
+    el.style.transform="scale("+s+")";
+    // ステータスバー領域まで描画を広げているので、電源LEDだけセーフエリア分だけ下げて重なりを避ける
+    var led=document.querySelector(".power-led");
+    if(led && document.body.classList.contains("device")){
+      var p=document.createElement("div");
+      p.style.cssText="position:fixed;top:0;left:0;width:1px;height:env(safe-area-inset-top);";
+      document.body.appendChild(p);
+      var sat=p.getBoundingClientRect().height; p.remove();
+      led.style.top=(12+sat/s)+"px";
+    }
+  }
+  window.addEventListener("resize",fit);
+  window.addEventListener("orientationchange",function(){setTimeout(fit,300);});
+  window.addEventListener("load",fit);
+  document.addEventListener("DOMContentLoaded",fit);
+})();
+</script>
+</body>
+</html>
