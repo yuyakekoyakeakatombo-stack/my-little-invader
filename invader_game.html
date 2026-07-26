@@ -12,8 +12,13 @@
 <title>My Little Invader</title>
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
 <style>
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-  body { background:#111; display:flex; justify-content:center; align-items:center; min-height:100vh; }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0;
+    /* ボタン長押しでテキスト選択・コピーメニューが出て操作の邪魔になるのを防ぐ。
+       iOS Safariは -webkit- 付きのみ有効。テキスト入力欄は無い（命名画面もcanvas描画）ので全体に適用してよい */
+    -webkit-user-select:none; user-select:none;
+    -webkit-touch-callout:none; -webkit-tap-highlight-color:transparent; }
+  body { background:#111; display:flex; justify-content:center; align-items:center; min-height:100vh;
+    touch-action:manipulation; }
 
   /* ── iPhoneシェル（開発プレビュー用コンテナ） ── */
   .iphone {
@@ -402,7 +407,10 @@
     el.addEventListener('click',fn);
   }
 
-  // ── 電源LED：端末バッテリーが20%未満で赤く点灯（Battery Status API対応ブラウザのみ）──
+  // ── 電源LED：端末バッテリーが20%未満で赤く点灯 ──
+  // 注意：iOS/iPadOSのSafariはBattery Status API（navigator.getBattery）に非対応のため、
+  // iPhoneでは常に緑のまま（この分岐に入らない）。Android Chrome等では動作する。
+  // 仕様としては採用済みで、Swift版で UIDevice.batteryLevel を使って実装する（企画書§12-2参照）。
   function updatePowerLed(level){
     const el = document.querySelector('.power-led'); if(!el) return;
     const low = (typeof level === 'number') && level < 0.20;
@@ -2539,32 +2547,69 @@
     if(standalone || touchPhone) document.body.classList.add("device");
   })();
 (function(){
+  // セーフエリアの各辺を実測（env()はCSSでしか読めないので、探り用の要素を挿して測る）
+  function safeInset(side){
+    var p=document.createElement("div");
+    p.style.cssText="position:fixed;top:0;left:0;width:1px;height:env(safe-area-inset-"+side+");";
+    document.body.appendChild(p);
+    var v=p.getBoundingClientRect().height; p.remove();
+    return v;
+  }
   function fit(){
     var el=document.querySelector(".iphone"); if(!el) return;
     el.style.transform="none";
+    // 計測は必ず通常フローの状態で行う（横向き時のfixed指定が残っていると幅が変わるため）
+    el.style.position=""; el.style.left=""; el.style.top="";
     var r=el.getBoundingClientRect();
     var w=r.width||280, h=r.height||600;
-    var s=Math.min(window.innerWidth*0.995/w, window.innerHeight*0.995/h);
+    var vw=window.innerWidth, vh=window.innerHeight;
+    var device=document.body.classList.contains("device");
+    // 端末を横に倒しても縦画面のまま見せる（回転させない）。
+    // iOS Safariはマニフェストのorientation指定もscreen.orientation.lock()も非対応のため、
+    // 横向きを検知して中身を90度カウンター回転させることで縦表示を維持する。
+    var landscape = device && vw > vh;
+    // 回転後の外接矩形は (h×s) × (w×s) になるので、幅と高さを入れ替えて収める
+    var s = landscape ? Math.min(vw*0.995/h, vh*0.995/w)
+                      : Math.min(vw*0.995/w, vh*0.995/h);
     el.style.transformOrigin="center center";
-    el.style.transform="scale("+s+")";
-    placeLed(s);
+    // どちら向きに倒したかで必要な回転方向が変わるため、OSが報告する角度の逆ぶんだけ戻す
+    var angle=0;
+    if(window.screen && screen.orientation && typeof screen.orientation.angle==="number") angle=screen.orientation.angle;
+    else if(typeof window.orientation==="number") angle=window.orientation;
+    if(landscape && angle%180===0) angle=90;   // 角度が取得できない環境では時計回り90°とみなす
+    // 横向き時は通常フローの高さ(545px)が画面高を超えて中央がずれるため、fixedで確実にセンタリングする
+    if(landscape){ el.style.position="fixed"; el.style.left="50%"; el.style.top="50%"; }
+    el.style.transform=(landscape ? "translate(-50%,-50%) rotate("+(-angle)+"deg) " : "")+"scale("+s+")";
+    // 実機ではステータスバー分だけ中身（LCD・十字ボタン・A/B/MENU）を下げ、
+    // 上部にLEDの余白を確保する。ステータスバーへの被りも避けられる。
+    var app=document.querySelector(".app");
+    if(app){
+      var pad=0;
+      if(device){
+        // 回転時は画面の左右どちらかにノッチが来る（どちら向きに倒したかで変わる）ので大きい方を使う
+        var sat = landscape ? Math.max(safeInset("left"), safeInset("right")) : safeInset("top");
+        pad=(sat/s)+6;   // セーフエリア分＋少し余白
+      }
+      app.style.paddingTop=pad+"px";
+    }
+    placeLed();
   }
   // 電源LEDを、現在表示中のLCDパネルの上端すぐ上（機種のセーフエリアに依存しない位置）へ置く。
   // 以前はステータスバー分を一律で足しており、Dynamic Island機種などLCDに被ることがあった。
-  function placeLed(s){
+  // 座標はレイアウト値(offsetTop)で求める：getBoundingClientRectは拡大・回転の影響を受けるため。
+  function placeLed(){
     var led=document.querySelector(".power-led"); if(!led) return;
-    var host=document.querySelector(".iphone");
     var parent=led.offsetParent || document.querySelector(".app");
     var active=document.querySelector(".view.active");
     var lcd=active && active.querySelector(".lcd-wrap");
-    if(!host || !parent || !lcd) return;
-    if(typeof s!=="number" || !s){ s=host.getBoundingClientRect().width/(host.offsetWidth||1); }
-    var lr=lcd.getBoundingClientRect(), pr=parent.getBoundingClientRect();
+    if(!parent || !lcd) return;
+    var lcdTop=0, node=lcd;
+    while(node && node!==parent){ lcdTop+=node.offsetTop; node=node.offsetParent; }
     var ledH=led.offsetHeight||5;
-    // .lcd-wrap の外周ベゼルは box-shadow(0 0 0 7px) で描かれ、getBoundingClientRect には含まれない。
+    // .lcd-wrap の外周ベゼルは box-shadow(0 0 0 7px) で描かれ、レイアウト上の高さに含まれない。
     // そのぶん上に張り出しているので、ベゼル分を差し引いた位置に置かないと実機で被る。
-    var BEZEL=7, GAP=3;
-    var top=(lr.top-pr.top)/s - ledH - BEZEL - GAP;
+    var BEZEL=7, GAP=8;   // GAP=LEDとLCDベゼルの間隔
+    var top=lcdTop - ledH - BEZEL - GAP;
     if(top<2) top=2;
     led.style.top=top+"px";
   }

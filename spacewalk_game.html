@@ -12,8 +12,11 @@
 <title>SPACEWALK — my Vader</title>
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
 <style>
-  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-  body{background:#111;display:flex;justify-content:center;align-items:center;min-height:100vh}
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;
+    /* ボタン長押しでテキスト選択・コピーメニューが出て操作の邪魔になるのを防ぐ（iOS Safariは -webkit- 付きのみ有効） */
+    -webkit-user-select:none;user-select:none;
+    -webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
+  body{background:#111;display:flex;justify-content:center;align-items:center;min-height:100vh;touch-action:manipulation}
   /* ── iPhoneシェル（invader_game.html と同一デザイン） ── */
   .iphone{width:280px;background:#2a2a2a;border-radius:44px;padding:14px;border:1px solid #444;
     box-shadow:0 0 0 1px #111,inset 0 1px 0 #555,0 40px 80px rgba(0,0,0,0.8);position:relative}
@@ -569,8 +572,10 @@
     for(let x=0;x<W;x+=2) d(x,GBOT+1,DIM);
   }
   function drawHud(){
-    txt('SCORE '+score,1,H-6,5,DIM);
-    txt('ST'+(stage+1),(W-11),H-6,5,DIM);
+    // スコアは視認性優先で大きく濃く（DIM→ON、5px→7px）。
+    // y=59 はフィールド下端の区切り線(GBOT+1=58)の直下。これより上げると線に食い込む。
+    txt('SCORE '+score,1,59,7,ON);
+    txt('ST'+(stage+1),(W-7),59,7,ON);
   }
   function drawPlayer(){
     const flashing=hitCooldown>0 && Math.floor(hitCooldown/2)%2===0;
@@ -594,14 +599,15 @@
     }
     if(state===STATE.HELP){
       ct.fillStyle=OFF; ct.fillRect(0,0,W*S,H*S);
-      txtC('HOW TO PLAY',5,6,ON);
-      hl(15,ON);
-      txt('MOVE',3,20,5,ON); txt('< > ^ v',26,20,5,ON);
-      hl(30,ON);
-      txt('DODGE DEBRIS',3,34,5,ON);
-      txt('UFO BOSS 30s',3,42,5,ON);
-      txt('5 MISS = OVER',3,50,5,ON);
-      if(Math.floor(Date.now()/450)%2===0) txtC('A/B : BACK',64,5,ON);
+      // 本文は視認性優先で 5px → 7px。行間も広げて再レイアウト
+      txtC('HOW TO PLAY',4,7,ON);
+      hl(14,ON);
+      txt('MOVE',2,18,7,ON); txt('< > ^ v',22,18,7,ON);
+      hl(28,ON);
+      txt('DODGE DEBRIS',2,32,7,ON);
+      txt('UFO BOSS 30s',2,41,7,ON);
+      txt('5 MISS = OVER',2,50,7,ON);
+      if(Math.floor(Date.now()/450)%2===0) txtC('A/B : BACK',60,6,ON);
       return;
     }
     if(state===STATE.PLAY){
@@ -651,7 +657,7 @@
       stamp(UFO, W/2-5, 10, ON);
       txtC('GAME',22,8,ON);
       txtC('OVER',32,8,ON);
-      txtC('SCORE',44,6,DIM);
+      txtC('SCORE',44,7,ON);   // 薄くて読みにくかったので濃く・大きく
       txtC((''+score).padStart(5,'0'),53,8,ON);
       if(Math.floor(Date.now()/450)%2===0) txtC('PRESS A',64,5,DIM);
       return;
@@ -733,20 +739,59 @@
   function fit(){
     var el=document.querySelector(".iphone"); if(!el) return;
     el.style.transform="none";
+    // 計測は必ず通常フローの状態で行う（横向き時のfixed指定が残っていると幅が変わるため）
+    el.style.position=""; el.style.left=""; el.style.top="";
     var r=el.getBoundingClientRect();
     var w=r.width||280, h=r.height||600;
-    var s=Math.min(window.innerWidth*0.995/w, window.innerHeight*0.995/h);
+    var vw=window.innerWidth, vh=window.innerHeight;
+    var device=document.body.classList.contains("device");
+    // 端末を横に倒しても縦画面のまま見せる（回転させない）。
+    // iOS Safariはマニフェストのorientation指定もscreen.orientation.lock()も非対応のため、
+    // 横向きを検知して中身を90度カウンター回転させることで縦表示を維持する。
+    var landscape = device && vw > vh;
+    // 回転後の外接矩形は (h×s) × (w×s) になるので、幅と高さを入れ替えて収める
+    var s = landscape ? Math.min(vw*0.995/h, vh*0.995/w)
+                      : Math.min(vw*0.995/w, vh*0.995/h);
     el.style.transformOrigin="center center";
-    el.style.transform="scale("+s+")";
+    // どちら向きに倒したかで必要な回転方向が変わるため、OSが報告する角度の逆ぶんだけ戻す
+    var angle=0;
+    if(window.screen && screen.orientation && typeof screen.orientation.angle==="number") angle=screen.orientation.angle;
+    else if(typeof window.orientation==="number") angle=window.orientation;
+    if(landscape && angle%180===0) angle=90;   // 角度が取得できない環境では時計回り90°とみなす
+    // 横向き時は通常フローの高さ(545px)が画面高を超えて中央がずれるため、fixedで確実にセンタリングする
+    if(landscape){ el.style.position="fixed"; el.style.left="50%"; el.style.top="50%"; }
+    el.style.transform=(landscape ? "translate(-50%,-50%) rotate("+(-angle)+"deg) " : "")+"scale("+s+")";
+    // 実機ではステータスバー分だけ中身（LCD・十字ボタン・A/B/MENU）を下げ、上部にLEDの余白を確保する
+    var app=document.querySelector(".app");
+    if(app){
+      var pad=0;
+      if(device){
+        // 回転時は画面の左右どちらかにノッチが来るので大きい方を使う
+        var sat = landscape ? Math.max(safeInset("left"), safeInset("right")) : safeInset("top");
+        pad=(sat/s)+6;
+      }
+      app.style.paddingTop=pad+"px";
+    }
     // 電源LEDをLCDパネル上端の少し上へ（機種のセーフエリアに依存させない）。
-    // .lcd-wrap の外周ベゼルは box-shadow(0 0 0 7px) で描かれ getBoundingClientRect に含まれないため、その分を差し引く。
+    // 座標はレイアウト値(offsetTop)で求める：getBoundingClientRectは拡大・回転の影響を受けるため。
+    // .lcd-wrap の外周ベゼルは box-shadow(0 0 0 7px) で描かれ、レイアウト上の高さに含まれないので差し引く。
     var led=document.querySelector(".power-led"), lcd=document.querySelector(".lcd-wrap"), parent=(led&&led.offsetParent)||document.querySelector(".app");
     if(led && lcd && parent){
-      var lr=lcd.getBoundingClientRect(), pr=parent.getBoundingClientRect(), ledH=led.offsetHeight||5, BEZEL=7, GAP=3;
-      var top=(lr.top-pr.top)/s - ledH - BEZEL - GAP;
+      var lcdTop=0, node=lcd;
+      while(node && node!==parent){ lcdTop+=node.offsetTop; node=node.offsetParent; }
+      var ledH=led.offsetHeight||5, BEZEL=7, GAP=8;
+      var top=lcdTop - ledH - BEZEL - GAP;
       if(top<2) top=2;
       led.style.top=top+"px";
     }
+  }
+  // セーフエリアの各辺を実測（env()はCSSでしか読めないので、探り用の要素を挿して測る）
+  function safeInset(side){
+    var p=document.createElement("div");
+    p.style.cssText="position:fixed;top:0;left:0;width:1px;height:env(safe-area-inset-"+side+");";
+    document.body.appendChild(p);
+    var v=p.getBoundingClientRect().height; p.remove();
+    return v;
   }
   window.addEventListener("resize",fit);
   window.addEventListener("orientationchange",function(){setTimeout(fit,300);});
