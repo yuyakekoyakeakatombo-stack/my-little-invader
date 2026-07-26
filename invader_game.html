@@ -786,7 +786,7 @@
       const dirtN = pet.W + (pet.plateSpoiled ? 1 : 0);   // 汚れ総数（うんち＋食べ残し）
       // 年齢と進化ポイント（睡眠減速なし。EPは1日=1.0＋天気補正）
       pet.ageMin += mult;
-      const wb = weatherFetched ? (weather==='clear' ? 0.2 : weather==='rain' ? -0.2 : 0) : 0;
+      const wb = weatherFetched ? (weather==='clear' ? 0.2 : isBadWeather() ? -0.2 : 0) : 0;
       // NEWBORN期は世話の充実度（機嫌）でも進化速度が少し増減
       const careF = (pet.stage==='egg') ? (pet.mood>=3 ? 1.15 : (pet.mood<=1 ? 0.85 : 1)) : 1;
       pet.EP += mult / 1440 * (1 + wb) * careF;
@@ -1098,10 +1098,12 @@
   // ════════════════════════════════════════
   // 天気・時刻システム
   // ════════════════════════════════════════
-  // weather: 'clear' | 'cloudy' | 'rain'
+  // weather: 'clear' | 'cloudy' | 'rain' | 'snow'
   // timeOfDay: 'day' | 'night'
   let weather = 'clear';
   let timeOfDay = 'day';
+  // 雪は見た目だけ雨と別で、キャラの振る舞い・移動速度・EP補正は雨と同じ扱いにする
+  function isBadWeather(){ return weather === 'rain' || weather === 'snow'; }
 
   function getTimeOfDay() {
     const h = new Date().getHours();
@@ -1112,6 +1114,8 @@
   function codeToWeather(code) {
     if ([0,1].includes(code))                          return 'clear';
     if ([2,3,45,48].includes(code))                    return 'cloudy';
+    // 雪・にわか雪・着氷性の霧雨は雪扱い（雨より先に判定しないと code>=51 に飲まれる）
+    if ([56,57,66,67,71,73,75,77,85,86].includes(code)) return 'snow';
     if (code >= 51)                                    return 'rain';
     return 'clear';
   }
@@ -1140,6 +1144,8 @@
     { weather:'cloudy', timeOfDay:'night' },
     { weather:'rain',   timeOfDay:'day'   },
     { weather:'rain',   timeOfDay:'night' },
+    { weather:'snow',   timeOfDay:'day'   },
+    { weather:'snow',   timeOfDay:'night' },
   ];
   let debugIdx = 0;
   let debugMode = false; // 通常OFF。SETTINGS→DEBUGでON（天気/時間帯サイクル＋時間進行60倍）
@@ -1214,6 +1220,24 @@
       dot(ctxM, d.x, Math.round(d.y)+2, DM);
       d.y += d.speed;
       if(d.y >= MAIN_GY-1){ d.y=10; d.x=Math.random()*W|0; }
+    });
+  }
+
+  // 雪の粒（雨より数が多くゆっくり、左右に揺れながら落ちる。1ドットで描く）
+  const snowFlakes = Array.from({length:16},()=>({
+    x: Math.random()*54,
+    y: (Math.random()*65)|0,
+    speed: 0.18 + Math.random()*0.22,
+    sway: 0.6 + Math.random()*0.8,          // 横揺れの幅
+    phase: Math.random()*Math.PI*2,         // 揺れの位相（粒ごとにバラす）
+  }));
+  function updateSnow(BG, DM, NK) {
+    snowFlakes.forEach(f=>{
+      const sx = f.x + Math.sin(f.phase + f.y*0.25) * f.sway;
+      // 手前の粒は濃く、奥の粒は薄く（速度で奥行きを出す）
+      dot(ctxM, Math.round(sx), Math.round(f.y), f.speed > 0.3 ? NK : DM);
+      f.y += f.speed;
+      if(f.y >= MAIN_GY-1){ f.y = 10; f.x = Math.random()*W; }
     });
   }
 
@@ -1589,6 +1613,30 @@
 
   const STARS_M = [[4,3],[14,6],[28,2],[38,5],[50,4],[9,11],[44,10],[22,8]];
 
+  // ── 流れ星（晴れた夜だけ、まれに右上→左下へ流れる） ──
+  // 特別感を出すため頻度は控えめ。1フレーム80msなので、平均で数分に1回ほど出る確率にしてある
+  const SHOOT_CHANCE = 0.00013;  // 毎フレームの出現確率（≒10分に1回。特別感を出すため控えめ）
+  const SHOOT_LEN = 4;           // 尾の長さ（ドット）
+  let shootStar = null;          // {x,y,vx,vy} 流れている間だけ入る
+  function updateShootingStar(NK, DM){
+    if(!shootStar){
+      if(Math.random() < SHOOT_CHANCE){
+        // 画面上部の右寄りから出て、左下へ斜めに流れる
+        shootStar = { x: W*0.45 + Math.random()*W*0.5, y: 1 + Math.random()*6, vx: -1.1, vy: 0.55 };
+      }
+      return;
+    }
+    // 頭を濃く、尾を薄く描いて流れる向きを見せる
+    const hx = Math.round(shootStar.x), hy = Math.round(shootStar.y);
+    dot(ctxM, hx, hy, NK);
+    for(let i=1;i<=SHOOT_LEN;i++){
+      dot(ctxM, Math.round(shootStar.x - shootStar.vx*i), Math.round(shootStar.y - shootStar.vy*i), DM);
+    }
+    shootStar.x += shootStar.vx; shootStar.y += shootStar.vy;
+    // 画面外／地平線に届いたら消す
+    if(shootStar.x < -SHOOT_LEN || shootStar.y > MAIN_GY-3) shootStar = null;
+  }
+
   // 雲のx座標（ゆっくり流れる）
   let cloudX = 30;
 
@@ -1941,13 +1989,17 @@
     if (timeOfDay==='night') {
       STARS_M.forEach(([x,y],i)=>dot(ctxM,x,y+10,(fM+i*9)%28<20?DM:BG));
       stamp(ctxM, MOON, W-10, 11, NK);
-    } else if (weather !== 'rain') {
+      // 晴れた夜だけ、まれに流れ星（曇り・雨の夜は星が見えない想定なので出さない）
+      if (weather === 'clear') updateShootingStar(NK, DM);
+    } else if (!isBadWeather()) {
       stamp(ctxM, SUN, W-13, 10, NK);
     }
 
     // ── 天気エフェクト ──
     if (weather === 'rain') {
       updateRain(BG, DM);
+    } else if (weather === 'snow') {
+      updateSnow(BG, DM, NK);
     } else if (weather === 'cloudy') {
       // 雲がゆっくり流れる
       cloudX = (cloudX + (fM%4===0?1:0)) % (W+8);
@@ -1975,8 +2027,8 @@
       // 病気：丸まってゆっくり上下
       grid = sp.rest;
       yOff = (fM%40<20) ? 0 : 1;
-    } else if (weather==='rain') {
-      // 雨：動きが遅く、足縮め
+    } else if (isBadWeather()) {
+      // 雨・雪：動きが遅く、足縮め
       bounceSpeed=60; bounceAmt=1;
       grid = sp.rest;
       yOff = (fM%bounceSpeed)<(bounceSpeed/2)?0:bounceAmt;
@@ -2018,7 +2070,7 @@
     let airOff = 0;   // ジャンプ/浮遊の上方向オフセット
     if(moving){
       const prof = moveProfile();
-      const wSpd = (weather==='rain') ? 0.35 : (weather==='cloudy' ? 0.7 : 1);
+      const wSpd = isBadWeather() ? 0.35 : (weather==='cloudy' ? 0.7 : 1);
       if(wiggleT > 0){
         // その場モゾモゾ：傾きポーズを左右反転で高速切り替え（移動は停止・足は地面に固定）
         wiggleT--; yOff = 0;
@@ -2038,7 +2090,7 @@
           squatT = 42; walkDir = 0;                                                     // 時々その場で屈伸
         } else if(prof.squatWalk && walkDir !== 0 && Math.random() < prof.squatWalk){
           squatWalkT = 54;                                                              // 屈伸しながら横移動
-        } else if(weather !== 'rain'){
+        } else if(!isBadWeather()){
           if(prof.float && Math.random() < prof.float) floatT = 44;                     // タコ：浮遊
           else if(prof.jump && Math.random() < prof.jump && floatT === 0) preJumpT = 5; // ジャンプ（まずしゃがんで溜め）
         }
