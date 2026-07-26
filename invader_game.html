@@ -864,19 +864,49 @@
     ['い','き','し','ち','に','ひ','み',null,'り','を'],
     ['う','く','す','つ','ぬ','ふ','む','ゆ','る','ん'],
     ['え','け','せ','て','ね','へ','め',null,'れ','ー'],
-    ['お','こ','そ','と','の','ほ','も','よ','ろ',null],
-    ['ぁ','ぃ','ぅ','ぇ','ぉ','っ','ゃ','ゅ','ょ',null],
+    ['お','こ','そ','と','の','ほ','も','よ','ろ','゛'],
+    ['ぁ','ぃ','ぅ','ぇ','ぉ','っ','ゃ','ゅ','ょ','゜'],
   ];
   const KATA_ROWS = [
     ['ア','カ','サ','タ','ナ','ハ','マ','ヤ','ラ','ワ'],
     ['イ','キ','シ','チ','ニ','ヒ','ミ',null,'リ','ヲ'],
     ['ウ','ク','ス','ツ','ヌ','フ','ム','ユ','ル','ン'],
     ['エ','ケ','セ','テ','ネ','ヘ','メ',null,'レ','ー'],
-    ['オ','コ','ソ','ト','ノ','ホ','モ','ヨ','ロ',null],
-    ['ァ','ィ','ゥ','ェ','ォ','ッ','ャ','ュ','ョ',null],
+    ['オ','コ','ソ','ト','ノ','ホ','モ','ヨ','ロ','゛'],
+    ['ァ','ィ','ゥ','ェ','ォ','ッ','ャ','ュ','ョ','゜'],
   ];
   // 五十音表の伝統的な並び（あ行を右端）にするため各段の列を反転
   [HIRA_ROWS, KATA_ROWS].forEach(rows=>rows.forEach(r=>r.reverse()));
+  // ── 濁点(゛)／半濁点(゜)：直前に打った文字（編集中はカーソル位置の文字）に付け外しする ──
+  const MARK_DAKU = '゛', MARK_HANDAKU = '゜';
+  const DAKU = {
+    'か':'が','き':'ぎ','く':'ぐ','け':'げ','こ':'ご','さ':'ざ','し':'じ','す':'ず','せ':'ぜ','そ':'ぞ',
+    'た':'だ','ち':'ぢ','つ':'づ','て':'で','と':'ど','は':'ば','ひ':'び','ふ':'ぶ','へ':'べ','ほ':'ぼ','う':'ゔ',
+    'カ':'ガ','キ':'ギ','ク':'グ','ケ':'ゲ','コ':'ゴ','サ':'ザ','シ':'ジ','ス':'ズ','セ':'ゼ','ソ':'ゾ',
+    'タ':'ダ','チ':'ヂ','ツ':'ヅ','テ':'デ','ト':'ド','ハ':'バ','ヒ':'ビ','フ':'ブ','ヘ':'ベ','ホ':'ボ','ウ':'ヴ',
+  };
+  const HANDAKU = {
+    'は':'ぱ','ひ':'ぴ','ふ':'ぷ','へ':'ぺ','ほ':'ぽ',
+    'ハ':'パ','ヒ':'ピ','フ':'プ','ヘ':'ペ','ホ':'ポ',
+  };
+  const DAKU_REV = {}, HANDAKU_REV = {};
+  for(const k in DAKU)    DAKU_REV[DAKU[k]] = k;
+  for(const k in HANDAKU) HANDAKU_REV[HANDAKU[k]] = k;
+  // 濁点・半濁点を外した素の文字（が→か、ぱ→は）
+  function kanaBase(ch){ return DAKU_REV[ch] || HANDAKU_REV[ch] || ch; }
+  // 対象位置：編集中ならカーソル位置、末尾（追記位置）なら直前に打った文字
+  function markTargetIndex(){ return (nameCur < nameBuf.length) ? nameCur : nameCur - 1; }
+  function applyMark(mark){
+    const i = markTargetIndex();
+    if(i < 0 || i >= nameBuf.length) return false;
+    const ch = nameBuf[i], base = kanaBase(ch);
+    const table = (mark === MARK_DAKU) ? DAKU : HANDAKU;
+    // 同じ記号をもう一度押したら外す（トグル）。付けられない文字なら何もしない
+    const out = (table[base] === ch) ? base : table[base];
+    if(!out) return false;
+    nameBuf = nameBuf.slice(0,i) + out + nameBuf.slice(i+1);
+    return true;
+  }
   const NAME_MODES = ['abc','hira','kata'];
   const MODE_TAG = {abc:'ABC', hira:'ひらがな', kata:'カタカナ'};   // 切替ボタンの表示（語で切替）
   let nameMode = 'abc';
@@ -937,6 +967,17 @@
         // 網掛けの高さ：文字に合わせて短く（下に伸びすぎるのを防ぐ）。かな6/英数5
         const hlH = L.kana ? 6 : 5;
         if(isSel){ for(let dx=0;dx<L.cellW;dx++) for(let dy=0;dy<hlH;dy++) dot(ctxG, x+dx, y+dy, DIM); }
+        // 濁点・半濁点はフォントの記号だと極小で見分けづらいため、ドット絵で大きく描く
+        if(ch === MARK_DAKU){          // ゛＝縦2本のチョン
+          for(const cx of [1,3]) { dot(ctxG, x+cx, y+2, ON); dot(ctxG, x+cx, y+3, ON); }
+          continue;
+        }
+        if(ch === MARK_HANDAKU){       // ゜＝丸（穴を大きく取らないと塗りつぶしに見えるのでセル幅いっぱいに描く）
+          for(const cx of [1,2,3]) { dot(ctxG, x+cx, y+1, ON); dot(ctxG, x+cx, y+4, ON); }
+          dot(ctxG, x+0, y+2, ON); dot(ctxG, x+4, y+2, ON);
+          dot(ctxG, x+0, y+3, ON); dot(ctxG, x+4, y+3, ON);
+          continue;
+        }
         // かなは言語設定に依らず常にゴシック体・同一サイズ（ひらがな/カタカナで統一）
         ctxG.font = L.kana ? ('9px ' + JP_FONT) : '7px "Press Start 2P"';
         ctxG.fillStyle = ON; ctxG.textAlign = 'center'; ctxG.textBaseline = 'middle';
@@ -1019,6 +1060,11 @@
       } else { playClick(300); }
     } else {
       const ch = nameLayout().cells[nameR][nameC];
+      if(ch === MARK_DAKU || ch === MARK_HANDAKU){
+        // 濁点・半濁点は文字を増やさず、対象の文字を差し替える（カーソルは動かさない）
+        playClick(applyMark(ch) ? 1100 : 300);
+        return;
+      }
       if(ch){
         const append = (nameCur >= nameBuf.length);
         if(append && nameBuf.length >= NAME_MAX){ playClick(300); return; }   // 満杯で追記位置なし
