@@ -857,13 +857,15 @@
   // ABC：6×6グリッド
   const ABC_ROWS = (()=>{ const s='ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789', rows=[];
     for(let r=0;r<6;r++){ const row=[]; for(let c=0;c<6;c++) row.push(s[r*6+c]||null); rows.push(row);} return rows; })();
-  // 五十音表（5段×10行。空欄はnull。末尾列に を/ん/ー）※定義は左=あ行で書き、下で列を反転してあ行を右端に
+  // 五十音表（6段×10行。空欄はnull。末尾列に を/ん/ー）※定義は左=あ行で書き、下で列を反転してあ行を右端に
+  // 6段目は小書き文字：促音(っ)・拗音(ゃゅょ)・小書き母音。撥音(ん)と長音(ー)は3段目/4段目の末尾列にある
   const HIRA_ROWS = [
     ['あ','か','さ','た','な','は','ま','や','ら','わ'],
     ['い','き','し','ち','に','ひ','み',null,'り','を'],
     ['う','く','す','つ','ぬ','ふ','む','ゆ','る','ん'],
     ['え','け','せ','て','ね','へ','め',null,'れ','ー'],
     ['お','こ','そ','と','の','ほ','も','よ','ろ',null],
+    ['ぁ','ぃ','ぅ','ぇ','ぉ','っ','ゃ','ゅ','ょ',null],
   ];
   const KATA_ROWS = [
     ['ア','カ','サ','タ','ナ','ハ','マ','ヤ','ラ','ワ'],
@@ -871,6 +873,7 @@
     ['ウ','ク','ス','ツ','ヌ','フ','ム','ユ','ル','ン'],
     ['エ','ケ','セ','テ','ネ','ヘ','メ',null,'レ','ー'],
     ['オ','コ','ソ','ト','ノ','ホ','モ','ヨ','ロ',null],
+    ['ァ','ィ','ゥ','ェ','ォ','ッ','ャ','ュ','ョ',null],
   ];
   // 五十音表の伝統的な並び（あ行を右端）にするため各段の列を反転
   [HIRA_ROWS, KATA_ROWS].forEach(rows=>rows.forEach(r=>r.reverse()));
@@ -878,16 +881,21 @@
   const MODE_TAG = {abc:'ABC', hira:'ひらがな', kata:'カタカナ'};   // 切替ボタンの表示（語で切替）
   let nameMode = 'abc';
   let nameBuf = '', nameR = 0, nameC = 0, onDone = false, onSwitch = false;
+  let nameCur = 0;          // 編集中のスロット位置（0..NAME_MAX-1）。ここに文字を書き込む
+  let onSlots = false;      // 名前スロット行を選択中（左右でカーソル移動＝打った文字の修正）
+  // カーソルが取りうる最大位置：末尾の追記位置まで（文字を飛ばして空きを作らせない）
+  function nameCurMax(){ return Math.min(nameBuf.length, NAME_MAX-1); }
   let nameSelActive = false;     // 育成画面で「NAME:????」を選択中（黒塗り反転表示。Aで命名画面へ）
   let fG = 0;
 
   function nameLayout(){
     if(nameMode==='abc') return {cells:ABC_ROWS, cellW:8, rowH:6, gx0:3, gy0:17, kana:false};
-    return {cells:(nameMode==='hira'?HIRA_ROWS:KATA_ROWS), cellW:5, rowH:8, gx0:2, gy0:16, kana:true};
+    // かなは6段（小書き文字の段を追加）。下部ボタン列(y58〜)に掛からないよう行高を7・開始を15に詰めてある
+    return {cells:(nameMode==='hira'?HIRA_ROWS:KATA_ROWS), cellW:5, rowH:7, gx0:2, gy0:15, kana:true};
   }
   function setNameMode(m){ nameMode = m; nameR=0; nameC = (m==='abc') ? 0 : 9; }  // かなは「あ」（右端）から
   function cycleNameMode(){ setNameMode(NAME_MODES[(NAME_MODES.indexOf(nameMode)+1)%NAME_MODES.length]); }
-  function startNaming(){ setNameMode((lang==='ja')?'hira':'abc'); nameBuf=''; onDone=false; onSwitch=false; }
+  function startNaming(){ setNameMode((lang==='ja')?'hira':'abc'); nameBuf=''; nameCur=0; onDone=false; onSwitch=false; onSlots=false; }
 
   function tickNaming(){
     if(scene !== 'naming') return;
@@ -904,11 +912,15 @@
     for(let i=0;i<NAME_MAX;i++){
       const cx = startX + i*slotW;
       const ch = nameBuf[i];
+      const cursorHere = (i === nameCur);
+      // スロット行を選択中は、編集対象の枠を網掛けで示す（文字より先に塗る）
+      if(onSlots && cursorHere){
+        for(let dx=0;dx<slotW;dx++) for(let dy=0;dy<7;dy++) dot(ctxG, cx+dx, 5+dy, DIM);
+      }
       if(ch){
         ctxG.font = nameFont(8, ch); ctxG.fillStyle = ON; ctxG.textAlign = 'center';
         ctxG.fillText(ch, (cx + slotW/2)*S, 6*S);
       }
-      const cursorHere = (i === nameBuf.length);
       const blink = Math.floor(fG/4)%2===0;
       const lineCol = cursorHere ? (blink?ON:DIM) : DIM;
       for(let dx=0;dx<5;dx++) dot(ctxG, cx+1+dx, 11, lineCol);
@@ -957,12 +969,21 @@
 
   function nameMove(dir){
     const L = nameLayout(), R = L.cells.length, C = L.cells[0].length;
+    if(onSlots){   // 名前スロット行：左右でカーソル移動（打った文字の修正）、下でグリッドへ
+      if(dir==='left')  nameCur = Math.max(0, nameCur-1);
+      if(dir==='right') nameCur = Math.min(nameCurMax(), nameCur+1);
+      if(dir==='down'){ onSlots=false; nameR=0; }
+      if(dir==='up'){   onSlots=false; onSwitch=true; }   // 上で下部ボタン列へ（縦方向のループ）
+      return;
+    }
     if(onSwitch || onDone){   // 下部ボタン列：左=切替ボタン / 右=DONE、上でグリッドへ戻る
       if(dir==='left'){  onSwitch=true;  onDone=false; }
       if(dir==='right'){ onSwitch=false; onDone=true;  }
       if(dir==='up'){ onSwitch=false; onDone=false; nameR=R-1; nameC=Math.min(nameC,C-1); if(L.cells[nameR][nameC]===null) nameMove('left'); }
+      if(dir==='down'){ onSwitch=false; onDone=false; onSlots=true; nameCur=Math.min(nameCur, nameCurMax()); }   // 下でスロット行へ（ループ）
       return;
     }
+    if(dir==='up' && nameR===0){ onSlots=true; nameCur=Math.min(nameCur, nameCurMax()); return; }   // 最上段から上でスロット行へ（修正用）
     if(dir==='down' && nameR===R-1){ onSwitch=true; return; }   // 最下段から下で下部ボタンへ（まず切替ボタン）
     let nr=nameR, nc=nameC;
     for(let k=0;k<R*C;k++){
@@ -984,6 +1005,7 @@
   });
   onPress(document.getElementById('ga'),()=>{
     btnAnim(document.getElementById('ga'));
+    if(onSlots){ playClick(900); onSlots=false; nameR=0; return; }   // スロットを選んだら文字グリッドへ
     if(onSwitch){ playClick(1100); cycleNameMode(); return; }   // 切替ボタン選択中のA＝文字種を循環
     if(onDone){
       if(nameBuf.length >= 1){
@@ -995,19 +1017,30 @@
         savePet();
         showView('main');
       } else { playClick(300); }
-    } else if(nameBuf.length < NAME_MAX){
+    } else {
       const ch = nameLayout().cells[nameR][nameC];
       if(ch){
+        const append = (nameCur >= nameBuf.length);
+        if(append && nameBuf.length >= NAME_MAX){ playClick(300); return; }   // 満杯で追記位置なし
         playClick(900);
-        nameBuf += ch;
-        if(nameBuf.length === NAME_MAX) onDone = true;   // 満杯でDONEへ
+        // カーソル位置に書き込む：既存文字の上なら差し替え（＝打った文字の修正）、末尾なら追記
+        nameBuf = append ? (nameBuf + ch)
+                         : (nameBuf.slice(0,nameCur) + ch + nameBuf.slice(nameCur+1));
+        if(nameCur < NAME_MAX-1) nameCur++;
+        else if(append) onDone = true;   // 末尾まで埋め切ったときだけDONEへ送る
       }
-    } else { playClick(300); }
+    }
   });
   onPress(document.getElementById('gb'),()=>{
     playClick(); btnAnim(document.getElementById('gb'));
-    if(nameBuf.length){ nameBuf = nameBuf.slice(0,-1); }   // 1文字削除
-    else { showView('main'); }                             // 空なら育成画面へ戻る（後で命名できる）
+    if(nameCur < nameBuf.length){
+      nameBuf = nameBuf.slice(0,nameCur) + nameBuf.slice(nameCur+1);   // カーソル位置の文字を削除
+    } else if(nameCur > 0){
+      nameCur--;                                                       // 末尾では手前の文字を削除
+      nameBuf = nameBuf.slice(0,nameCur) + nameBuf.slice(nameCur+1);
+    } else { showView('main'); return; }                               // 空なら育成画面へ戻る（後で命名できる）
+    nameCur = Math.min(nameCur, nameCurMax());
+    if(nameBuf.length < NAME_MAX) onDone = false;                      // 空きができたらDONE選択を解除
   });
   // MENUボタン：文字種切替のショートカット（A → あ → ア → A）
   onPress(document.getElementById('gmenu'),()=>{
@@ -1770,7 +1803,7 @@
     ufoT++;
     if(ufoT >= 130){   // 終了 → セーブ消去 → オープニング（新しいたまご）へ
       try{ localStorage.removeItem(SAVE_KEY); }catch(e){}
-      pet = defaultPet(); nameBuf='';
+      pet = defaultPet(); nameBuf=''; nameCur=0; onSlots=false;
       ufoEnding = false; ufoT = 0;
       showView('opening'); fO = 0; openingReady = false;
     }
@@ -1818,7 +1851,7 @@
     departT++;
     if(departT >= 160){   // 大団円 → 新しいたまごへ
       try{ localStorage.removeItem(SAVE_KEY); }catch(e){}
-      pet = defaultPet(); nameBuf='';
+      pet = defaultPet(); nameBuf=''; nameCur=0; onSlots=false;
       departEnding = false; departT = 0;
       showView('opening'); fO = 0; openingReady = false;
     }
@@ -2425,7 +2458,7 @@
           clearInterval(debugTimer);
           timeOfDay=getTimeOfDay();
           try{ localStorage.removeItem(SAVE_KEY); }catch(e){}
-          pet = defaultPet(); nameBuf='';
+          pet = defaultPet(); nameBuf=''; nameCur=0; onSlots=false;
           ufoEnding = false; ufoT = 0; departEnding = false; departT = 0; evoT = 0;
           applyBodyColor(); showView('opening'); fO=0; openingReady=false;
         }
