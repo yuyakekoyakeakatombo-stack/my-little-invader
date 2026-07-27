@@ -1231,11 +1231,10 @@
     sway: 0.6 + Math.random()*0.8,          // 横揺れの幅
     phase: Math.random()*Math.PI*2,         // 揺れの位相（粒ごとにバラす）
   }));
-  function updateSnow(BG, DM, NK) {
+  function updateSnow(BG, DM) {
     snowFlakes.forEach(f=>{
       const sx = f.x + Math.sin(f.phase + f.y*0.25) * f.sway;
-      // 手前の粒は濃く、奥の粒は薄く（速度で奥行きを出す）
-      dot(ctxM, Math.round(sx), Math.round(f.y), f.speed > 0.3 ? NK : DM);
+      dot(ctxM, Math.round(sx), Math.round(f.y), DM);   // 淡い色で統一（濃淡はつけない）
       f.y += f.speed;
       if(f.y >= MAIN_GY-1){ f.y = 10; f.x = Math.random()*W; }
     });
@@ -1999,7 +1998,7 @@
     if (weather === 'rain') {
       updateRain(BG, DM);
     } else if (weather === 'snow') {
-      updateSnow(BG, DM, NK);
+      updateSnow(BG, DM);
     } else if (weather === 'cloudy') {
       // 雲がゆっくり流れる
       cloudX = (cloudX + (fM%4===0?1:0)) % (W+8);
