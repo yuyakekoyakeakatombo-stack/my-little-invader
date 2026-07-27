@@ -1479,15 +1479,6 @@
     [0,0,1,1,1,0,0],
     [0,0,0,1,0,0,0],
   ];
-  const ICO_STAR=[           // ★ 7×7（STATUSのけんこう度に使用）
-    [0,0,0,1,0,0,0],
-    [0,0,1,1,1,0,0],
-    [1,1,1,1,1,1,1],
-    [0,1,1,1,1,1,0],
-    [0,0,1,1,1,0,0],
-    [0,1,1,0,1,1,0],
-    [1,1,0,0,0,1,1],
-  ];
   const ICO_EXCL=[           // ！ 2×6（2列幅で太く）
     [1,1],
     [1,1],
@@ -2417,9 +2408,9 @@
         : pet.hunger===0          ? 3    // 空腹が続いている（このままだと衰弱）
         :                           4;   // げんき
       const rows=[
-        {label:T('hungry'), type:'icons', grid:ICO_HEART, val:pet.hunger},
-        {label:T('mood'),   type:'icons', grid:ICO_NOTE,  val:pet.mood},
-        {label:T('health'), type:'icons', grid:ICO_STAR,  val:healthVal},
+        {label:T('hungry'), type:'bar', val:pet.hunger},
+        {label:T('mood'),   type:'bar', val:pet.mood},
+        {label:T('health'), type:'bar', val:healthVal},
         {label:T('stage'),  type:'text',  val:stageLabel()},
         {label:T('ptype'),  type:'text',  val:typeLabel()},
       ];
@@ -2427,9 +2418,13 @@
         const y = 22 + i*9;
         ctxN.font=uiFont(6); ctxN.fillStyle=ON; ctxN.textAlign='left';
         ctxN.fillText(r.label, 2*S, y*S);
-        if(r.type==='icons'){
-          // ハートが7幅になったため間隔8で再配置
-          for(let k=0;k<4;k++) stamp(ctxN, r.grid, 22+k*8, y-1, k<r.val?ON:DIM);
+        if(r.type==='bar'){
+          // 4段階のバー：枠をDIMで描き、中身をONで val/4 ぶん塗る（内側28ドット＝1段階7ドット）
+          const BX=22, BW=30, BH=5, by=y-1;
+          for(let dx=0;dx<BW;dx++){ dot(ctxN, BX+dx, by, DIM); dot(ctxN, BX+dx, by+BH-1, DIM); }
+          for(let dy=0;dy<BH;dy++){ dot(ctxN, BX, by+dy, DIM); dot(ctxN, BX+BW-1, by+dy, DIM); }
+          const fill = Math.round((BW-2) * r.val / 4);
+          for(let dx=0;dx<fill;dx++) for(let dy=1;dy<BH-1;dy++) dot(ctxN, BX+1+dx, by+dy, ON);
         } else {
           ctxN.textAlign='right'; ctxN.fillText(r.val, (W-2)*S, y*S);
         }
