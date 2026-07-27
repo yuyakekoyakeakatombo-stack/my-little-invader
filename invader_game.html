@@ -566,6 +566,14 @@
     nightPlays:0,                         // 夜更かしプレイ回数（22時以降。i3条件）
     best:{sw:0,ss:0,ab:0},                // ミニゲーム自己ベスト（g3条件）
     tantrumAt:0, tantrumType:'',          // わがまま拒否中（Stage2まで。正当なしかるで解消）
+    // ── かまい度システム（甘やかし↔放置。進化分岐と帰還判定に使う）──
+    A:0,                                  // かまい度の累積（＋甘やかし／−放置）
+    praiseCount:0, scoldBadCount:0,       // ほめた回数／理不尽・睡眠妨害のしかる回数
+    plays:{sw:0,ss:0,ab:0},               // ミニゲームのプレイ回数（進化の傾向づけ）
+    touchedToday:false, noTouchDays:0,    // 今日ふれあったか／ふれあいゼロの連続日数
+    estrangedDays:0,                      // 疎遠期の連続日数（帰還までの猶予）
+    larvaAt:0, snapL:null,                // 幼体到達時刻とスナップショット（帰還判定の起点）
+    lineageAt:0, snapA:null,              // 成体到達時刻とスナップショット（Stage4形態判定の起点）
   }; }
   let pet = defaultPet();
   try { const sv = JSON.parse(localStorage.getItem(SAVE_KEY)); if(sv && sv.name) pet = Object.assign(defaultPet(), sv); } catch(e){}
@@ -598,7 +606,8 @@
   // UFO帰還エンディング：トリガー確定後、次回起動時に発火（企画書§8 E3）
   let ufoEnding = !!(pet.ufoFlag && !pet.dead), ufoT = 0;
   // 疎遠期：なつき度<20が3日以上続くと反応が消える（帰還の前兆・挽回可能）
-  function isEstranged(){ return pet.lowBDays >= 3 && pet.B < 20; }
+  // 疎遠期：帰還の兆候が続いている状態。キャラが反応しなくなり、プレイヤーへの警告になる
+  function isEstranged(){ return (pet.estrangedDays||0) >= 1 || (pet.lowBDays >= 3 && pet.B < 20); }
   // 衰弱：空腹MAXを18時間（起床換算）放置
   function isWeak(){ return !pet.dead && pet.starveAcc >= 1080; }
 
@@ -607,6 +616,90 @@
   //  EP: 1日=1.0＋天気補正(晴れ+0.2/雨-0.2)。DEBUG中は60倍で貯まる
   //  たまご→(約30h±5h・EPで判定)→中間体→(EP1)→幼体→(EP4)→成体[P分岐]→(EP11)→最終形態[C×D+特殊]
   // ════════════════════════════════════════
+  // ════════════════════════════════════════
+  // かまい度システム（甘やかし↔放置）
+  //  進化の系統・形態の分岐と、早期の帰還エンディング判定に使う。
+  //  数値はここに集約してあるので、バランス調整はこのブロックだけで完結する。
+  // ════════════════════════════════════════
+  const A_ADJ = {                 // 行動ごとのかまい度増減
+    feedFull:   +3,               // 満腹なのにごはん＝甘やかし
+    feedHungry: +1,               // 空腹時のごはん＝適切な世話
+    praise:     +2,
+    clean:      +1,
+    med:        +1,
+    play:       +1,
+    scoldFair:   0,               // 正当なしつけ（わがまま中）は甘やかしでも放置でもない
+    scoldBad:   -3,               // 理不尽なしかる／寝ているのを起こすしかる
+    noTouchDay: -8,               // ふれあいゼロの日
+    starveHour: -1,               // 空腹MAXの放置（1時間ごと）
+    dirtHour:   -1,               // 汚れの放置（1時間ごと）
+  };
+  const A_SPOIL_SCALE   = 30;     // 1日あたりのAがこの値で「甘やかし度100」
+  const A_NEGLECT_SCALE = 15;     // 1日あたりの−Aがこの値で「放置度100」
+  const PLAY_WEIGHT     = 25;     // ミニゲーム傾向の重み（世話スタイルが主・ゲームは従）
+  // 帰還エンディング（幼体到達を起点に判定）
+  const RET_GRACE_DAYS  = 3;      // 幼体到達からこの日数は判定しない（猶予）
+  const RET_ESTR_DAYS   = 3;      // 疎遠期がこの日数続くと帰還
+  const RET_PRAISE_RATE = 0.1;    // ほめる回数／日 がこれ未満で兆候（10日に1回未満＝極端に少ない）
+  const RET_PLAY_RATE   = 0.1;    // ミニゲーム回数／日 がこれ未満で兆候（10日に1回未満）
+  const RET_SCOLD_RATE  = 2.0;    // 理不尽なしかる／日 がこれ超で兆候
+  const RET_NOTOUCH_DAYS= 5;      // ふれあいゼロがこの日数続くと兆候
+
+  function addA(n){ pet.A = Math.max(-9999, Math.min(9999, (pet.A||0) + n)); }
+
+  // 帰還の兆候があるか（幼体到達後の接し方だけを見る）。1日1回、日付が変わった時に判定
+  //  生命維持の怠り（空腹・病気）は「死亡」ルートなのでここでは見ない。
+  //  ここで見るのは「ごはんは与えているが構ってやらない」という情緒的な放置。
+  function returnSigns(){
+    if(!pet.larvaAt || !pet.snapL) return [];                // 幼体前は判定しない
+    const days = daysSince(pet.larvaAt);
+    if(days < RET_GRACE_DAYS) return [];                     // 到達直後の猶予期間
+    const p = pet.plays || {sw:0,ss:0,ab:0};
+    const praise = (pet.praiseCount||0)   - (pet.snapL.praise||0);
+    const bad    = (pet.scoldBadCount||0) - (pet.snapL.bad||0);
+    const plays  = (p.sw||0)+(p.ss||0)+(p.ab||0) - (pet.snapL.plays||0);
+    const sg = [];
+    if((pet.noTouchDays||0) >= RET_NOTOUCH_DAYS)       sg.push('notouch'); // ごはんしか与えていない日が続く
+    if(praise < days * RET_PRAISE_RATE)                sg.push('praise');  // ほめる回数が極端に少ない
+    if(plays  < days * RET_PLAY_RATE)                  sg.push('play');    // 遊ぶ回数が極端に少ない
+    if(bad > days * RET_SCOLD_RATE && bad > praise*3)  sg.push('scold');   // 理不尽なしかるが多すぎる
+    if(pet.lowBDays >= 5)                              sg.push('lowB');    // なつき度が低いまま続いた
+    return sg;
+  }
+  // 兆候が重なった時だけ疎遠期に入り、続けば帰還が確定する（途中で持ち直せば解除）。
+  //  1項目だけ欠けている程度（例：よく褒めるがゲームはしない）では帰還させない。
+  //  ただし「ふれあいゼロが続く」は単独でも明確な放置なので成立させる。
+  function checkReturn(){
+    if(pet.dead || pet.ufoFlag) return;
+    const sg = returnSigns();
+    const bad = sg.includes('notouch') || sg.length >= 2;
+    if(bad){
+      pet.estrangedDays = (pet.estrangedDays||0) + 1;
+      if(pet.estrangedDays >= RET_ESTR_DAYS) pet.ufoFlag = true;
+    } else {
+      pet.estrangedDays = 0;                                 // 持ち直したら解除
+    }
+  }
+  // ごはん以外の世話（ほめる・遊ぶ・そうじ・くすり）に触れた印。1日1回でも触れれば放置ではない
+  function markTouch(){ pet.touchedToday = true; }
+  const DAY_MS = 86400000;
+  function daysSince(ts){ return ts ? Math.max(0, (Date.now()-ts)/DAY_MS) : 0; }
+
+  // 世話スタイルを3方向のスコアに変換（0〜100）
+  function careStyle(aPerDay){
+    const spoil   = Math.max(0, Math.min(1,  aPerDay / A_SPOIL_SCALE))   * 100;
+    const neglect = Math.max(0, Math.min(1, -aPerDay / A_NEGLECT_SCALE)) * 100;
+    return { spoil, neglect, balance: 100 - Math.max(spoil, neglect) };
+  }
+  // ミニゲームのプレイ比率（合計0なら全て0＝補正なし）
+  function playRatio(p){
+    const t = (p.sw||0)+(p.ss||0)+(p.ab||0);
+    return t ? {sw:p.sw/t, ss:p.ss/t, ab:p.ab/t} : {sw:0, ss:0, ab:0};
+  }
+  function bestOf(scores){   // {key:点数} から最高点のキーを返す
+    return Object.keys(scores).reduce((a,b)=> scores[b] > scores[a] ? b : a);
+  }
+
   // NEWBORN→BABY：30時間±5時間。他段階と同じEP（天気補正付きの累積）で判定し、機嫌でも増減
   const EGG_H_BASE = 30, EGG_H_JITTER = 5;
   function rollEggTarget(){ return (EGG_H_BASE + (Math.random()*2-1)*EGG_H_JITTER) / 24; }  // 時間→EP(1日=1.0)
@@ -614,15 +707,37 @@
   let departEnding = !!(pet.departFlag && !pet.dead), departT = 0;   // 旅立ちエンド（E4）
 
   function evolveTo(st){ pet.stage = st; evoT = 36; savePet(); }
+
+  // Stage3 系統分岐：全期間の世話スタイル＋ミニゲーム傾向
+  //   甘やかす→タコ ／ バランス→インベーダー ／ 放置気味→グレイ
+  function pickLineage(){
+    const days = Math.max(1, daysSince(pet.birth));
+    const st = careStyle((pet.A||0) / days);
+    const r  = playRatio(pet.plays || {});
+    return bestOf({
+      tako: st.spoil   + r.sw * PLAY_WEIGHT,   // SPACEWALK をよく遊ぶとタコ寄り
+      inv:  st.balance + r.ss * PLAY_WEIGHT,   // SHOOTING STAR でインベーダー寄り
+      grey: st.neglect + r.ab * PLAY_WEIGHT,   // ABDUCTION でグレイ寄り
+    });
+  }
+  // Stage4 形態分岐：成体になってからの行動だけで判定（前半と後半で育て方を変えられる）
+  //   甘やかす→まるっと(1) ／ バランス→バランス(2) ／ 放置気味→やんちゃ(3)
   function pickForm(){
     const L = pet.lineage;
     // 特殊条件（隠し進化）を優先
     if(L==='tako' && pet.fullFeeds >= 10 && pet.sickCount >= 1) return 't3';   // クラーケン：大食いルート
     if(L==='grey' && pet.best.sw >= 250 && pet.best.ss >= 100 && pet.best.ab >= 400) return 'g3';  // オールラウンダー
     if(L==='inv'  && pet.nightPlays >= 7 && pet.D >= 50) return 'i3';          // ワイルド（夜更かしだが悪い子ではない）
-    const good = pet.C >= 70 && pet.D >= 60;
-    const bad  = pet.C < 40 || pet.D < 30;
-    const n = good ? 1 : (bad ? 3 : 2);
+    const s = pet.snapA || {A:0, sw:0, ss:0, ab:0};
+    const days = Math.max(1, daysSince(pet.lineageAt));
+    const st = careStyle(((pet.A||0) - (s.A||0)) / days);
+    const p  = pet.plays || {sw:0,ss:0,ab:0};
+    const r  = playRatio({ sw:(p.sw||0)-(s.sw||0), ss:(p.ss||0)-(s.ss||0), ab:(p.ab||0)-(s.ab||0) });
+    const n = bestOf({
+      1: st.spoil   + r.sw * PLAY_WEIGHT,   // まるっと ← SPACEWALK
+      2: st.balance + r.ab * PLAY_WEIGHT,   // バランス ← ABDUCTION
+      3: st.neglect + r.ss * PLAY_WEIGHT,   // やんちゃ ← SHOOTING STAR
+    });
     return (L==='grey'?'g':L==='tako'?'t':'i') + n;
   }
   function maybeEvolve(){
@@ -633,13 +748,25 @@
       if(pet.EP >= pet.eggTargetEP){ pet.EP = 0; return evolveTo('mid'); }
       return;
     }
-    if(pet.stage==='mid'   && pet.EP >= 1)      return evolveTo('larva');
+    if(pet.stage==='mid'   && pet.EP >= 1){
+      // 幼体到達＝帰還判定の起点。ここからの接し方を見る（それ以前の放置は持ち越さない）
+      pet.larvaAt = Date.now();
+      const p = pet.plays || {sw:0,ss:0,ab:0};
+      pet.snapL = { praise: pet.praiseCount||0, bad: pet.scoldBadCount||0,
+                    plays: (p.sw||0)+(p.ss||0)+(p.ab||0) };
+      pet.noTouchDays = 0; pet.estrangedDays = 0;
+      return evolveTo('larva');
+    }
     if(pet.stage==='larva' && pet.EP >= 4){
-      pet.lineage = pet.P >= 30 ? 'inv' : (pet.P <= -30 ? 'tako' : 'grey');   // 性格で系統決定
+      pet.lineage = pickLineage();                // 世話スタイル×ミニゲーム傾向で系統決定
+      // 成体到達＝形態判定の起点。ここからの行動だけで最終形態が決まる
+      pet.lineageAt = Date.now();
+      const p = pet.plays || {sw:0,ss:0,ab:0};
+      pet.snapA = { A: pet.A||0, sw:p.sw||0, ss:p.ss||0, ab:p.ab||0 };
       return evolveTo('adult');
     }
     if(pet.stage==='adult' && pet.EP >= 11){
-      pet.form = pickForm();                      // ケア×しつけ＋特殊条件で形態決定
+      pet.form = pickForm();                      // 成体以降の世話スタイル＋特殊条件で形態決定
       pet.finalAt = Date.now();
       return evolveTo('final');
     }
@@ -659,9 +786,11 @@
       gainB(2);
       const h = new Date(r.at).getHours();
       if(h >= 22 || h < 4){ pet.nightPlays++; pet.P = Math.min(100, pet.P + 2); }   // 夜更かし
-      if(r.game==='spacewalk'){    pet.best.sw = Math.max(pet.best.sw, r.score); if(r.score >= 250) pet.P = Math.max(-100, pet.P - 2); }
-      if(r.game==='shootingstar'){ pet.best.ss = Math.max(pet.best.ss, r.score); if(r.score >= 100) pet.P = Math.min(100, pet.P + 2); }
-      if(r.game==='abduction'){    pet.best.ab = Math.max(pet.best.ab, r.score); if(r.score >= 400) pet.C = Math.min(100, pet.C + 2); }
+      if(!pet.plays) pet.plays = {sw:0,ss:0,ab:0};
+      if(r.game==='spacewalk'){    pet.best.sw = Math.max(pet.best.sw, r.score); pet.plays.sw++; if(r.score >= 250) pet.P = Math.max(-100, pet.P - 2); }
+      if(r.game==='shootingstar'){ pet.best.ss = Math.max(pet.best.ss, r.score); pet.plays.ss++; if(r.score >= 100) pet.P = Math.min(100, pet.P + 2); }
+      if(r.game==='abduction'){    pet.best.ab = Math.max(pet.best.ab, r.score); pet.plays.ab++; if(r.score >= 400) pet.C = Math.min(100, pet.C + 2); }
+      addA(A_ADJ.play); markTouch();                // 遊んであげた＝ふれあい
       pet.C = Math.min(100, pet.C + 1);           // 遊んであげたケア加点
       savePet();
     } catch(e){}
@@ -816,8 +945,10 @@
       // 空腹MAX → 衰弱(18時間) → 死(さらに12時間)
       if(pet.hunger === 0){
         pet.starveAcc += gameMin;
+        addA(A_ADJ.starveHour * gameMin / 60);      // 空腹MAXの放置＝放置寄り
         if(pet.starveAcc >= 1800){ pet.dead = 'starve'; break; }
       } else pet.starveAcc = 0;
+      if(pet.W >= 2) addA(A_ADJ.dirtHour * gameMin / 60);   // 汚れの放置＝放置寄り
     }
     pet.lastTick = now - remain;
 
@@ -834,14 +965,18 @@
       pet.D = Math.max(0, pet.D - 3);
     }
 
-    // 日次処理：なつき度が低い日が続くとUFO帰還へ（3日で疎遠期、5日でトリガー確定）
+    // ── 日次処理：日付が変わった時に1回だけ ──
     const tk = todayKey();
     if(pet.calDay !== tk){
       if(pet.calDay){
+        // ふれあい（ごはん以外の世話）が無い日が続くと、少しずつ心が離れる
+        if(pet.touchedToday){ pet.noTouchDays = 0; }
+        else { pet.noTouchDays = (pet.noTouchDays||0) + 1; addA(A_ADJ.noTouchDay); pet.B = Math.max(0, pet.B - 5); }
         pet.lowBDays = (pet.B < 20) ? pet.lowBDays + 1 : 0;
-        if(pet.lowBDays >= 5) pet.ufoFlag = true;
+        checkReturn();                                  // 帰還の兆候（疎遠期）と確定を判定
       }
       pet.calDay = tk;
+      pet.touchedToday = false;
     }
     // 旅立ちエンド（E4）：最終形態から14日・なつき度60以上・健康
     if(pet.stage==='final' && pet.finalAt && !pet.departFlag &&
@@ -1800,13 +1935,14 @@
         else if(pet.tantrumAt || rollTantrum('feed')){ setReaction('refuse'); }  // わがまま：食べない（しかると従う）
         else if(pet.hunger >= 4){
           if(pet.P <= -30){                                         // まるっと傾向：満腹でも食べてしまう
-            pet.fullFeeds++; pet.P = Math.max(-100, pet.P - 1);
+            pet.fullFeeds++; pet.P = Math.max(-100, pet.P - 1); addA(A_ADJ.feedFull);
             if(pet.health === 'GOOD' && Math.random() < 0.05) pet.health = 'SICK';  // 食べ過ぎ病気リスク
             schedulePoop(); setReaction('eat', EAT_T);
           } else { pet.plateAt = Date.now(); setReaction('refuse'); }  // 拒否、皿が残る
         }
         else {
           if(pet.hunger <= 1) gainB(1);                             // 空腹時に食べさせるとなつく
+          addA(A_ADJ.feedHungry);
           pet.hunger++; schedulePoop(); setReaction('eat', EAT_T);  // 3口で減っていく食事アニメ
         }
         break;
@@ -1815,37 +1951,49 @@
           cleanSnapW = pet.W; cleanSnapPlate = !!pet.plateAt; cleanSnapSpoiled = !!pet.plateSpoiled;  // 見た目用に退避
           pet.W = 0; pet.plateAt = 0; pet.plateSpoiled = false;
           if(pet.mood < 4) pet.mood++;
+          addA(A_ADJ.clean); markTouch();
           setReaction('clean', CLEAN_T, asleep);                    // ほうき掃きアニメ（睡眠中は音符を出さない）
         } else setReaction('nothing');                              // 空振り（…）
         break;
       case 'MED':
         if(pet.health === 'SICK'){
           pet.health = 'GOOD'; pet.sickAcc = 0; pet.sickCount++;    // 治療（回数は進化条件に使用）
+          addA(A_ADJ.med); markTouch();
           setReaction('cured');
         }
         else { if(pet.mood > 0) pet.mood--; setReaction('anger'); } // 健康時は嫌がる
         break;
       case 'PET':  // PRAISE（褒める）
         if(asleep){ /* 睡眠中は無反応（起こさない・効果なし） */ }
-        else if(isEstranged()){ setReaction('nothing'); }           // 疎遠期：反応しない（…）
-        else { if(pet.mood < 4) pet.mood++; gainB(1); setReaction('heart'); }
+        else {
+          // 疎遠期は見た目そっけないが、褒めた事実は記録する（続ければ持ち直せるようにするため）
+          pet.praiseCount = (pet.praiseCount||0) + 1;
+          addA(A_ADJ.praise); markTouch();
+          if(isEstranged()){ setReaction('nothing'); }              // 疎遠期：反応しない（…）
+          else { if(pet.mood < 4) pet.mood++; gainB(1); setReaction('heart'); }
+        }
         break;
       case 'SCOLD':
         if(asleep){                                                 // 起こしてしまう
           pet.wokeUntil = Date.now() + (debugMode ? 30000 : 600000);
           pet.mood = Math.max(0, pet.mood - 2);
           pet.P = Math.min(100, pet.P + 2);                         // 夜更かし癖（やんちゃ化）
+          pet.scoldBadCount = (pet.scoldBadCount||0) + 1;            // 寝ているのを起こす＝理不尽なしかる
+          addA(A_ADJ.scoldBad);
           setReaction('anger');
         } else if(pet.tantrumAt){                                   // 正当なしかる：しゅんとして従う（わがまま解消）
           pet.tantrumAt = 0; pet.tantrumType = '';
           pet.D = Math.min(100, pet.D + 5);
           if(pet.mood > 0) pet.mood--;
+          addA(A_ADJ.scoldFair); markTouch();                        // しつけは甘やかしでも放置でもない（ふれあいには数える）
           setReaction('sad');                                       // 食事は出さない。改めてごはんをあげれば食べる
         } else {                                                    // 不当なしかる
           pet.mood = Math.max(0, pet.mood - 2);
           pet.B = Math.max(0, pet.B - 2);
           pet.D = Math.max(0, pet.D - 4);
           pet.P = Math.min(100, pet.P + 1);
+          pet.scoldBadCount = (pet.scoldBadCount||0) + 1;
+          addA(A_ADJ.scoldBad);
           setReaction('sad');
         }
         break;
@@ -2662,7 +2810,6 @@
           else if(effectiveAsleep()){ showView('main'); }
           else if(pet.health==='SICK'){ setReaction('sick'); showView('main'); }
           else if(pet.hunger <= 1){ setReaction('hungry'); showView('main'); }
-          else if(isEstranged()){ setReaction('nothing'); showView('main'); }
           else if(pet.tantrumAt || rollTantrum('game')){ setReaction('refuse'); showView('main'); savePet(); }
           else { inPlay=true; playSel=0; }
         }
