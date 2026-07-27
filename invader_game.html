@@ -321,7 +321,7 @@
       sound:'SOUND', bodycolor:'BODY COLOR', location:'LOCATION', language:'LANGUAGE', debug:'DEBUG', reset:'ALL RESET',
       on:'ON', off:'OFF', exec:'EXEC', sure:'SURE?', yesno:'A:YES  B:NO',
       locn1:'USE LOCATION', locn2:'ONLY TO SHOW', locn3:'IN-GAME WEATHER', locok:'A:OK  B:CANCEL',
-      hungry:'HUNGRY', mood:'MOOD', body:'BODY', stage:'STAGE', ptype:'TYPE',
+      hungry:'HUNGRY', mood:'MOOD', health:'HEALTH', stage:'STAGE', ptype:'TYPE',
       good:'GOOD', sick:'SICK', weak:'WEAK', dead:'DEAD',
       newborn:'NEWBORN', baby:'BABY', child:'CHILD', adult:'ADULT', finalst:'FINAL',
       gray:'GRAY', martian:'MARTIAN', alien:'ALIEN',
@@ -333,7 +333,7 @@
       sound:'サウンド', bodycolor:'カラー', location:'ロケーション', language:'げんご', debug:'デバッグ', reset:'リセット',
       on:'オン', off:'オフ', exec:'じっこう', sure:'ほんとうに？', yesno:'A:はい B:いいえ',
       locn1:'いちじょうほうは', locn2:'ゲームの天気に', locn3:'のみつかいます', locok:'A:OK  B:キャンセル',
-      hungry:'おなか', mood:'きげん', body:'からだ', stage:'せいちょう', ptype:'タイプ',
+      hungry:'おなか', mood:'きげん', health:'けんこう', stage:'せいちょう', ptype:'タイプ',
       good:'げんき', sick:'びょうき', weak:'よわり', dead:'おばけ',
       newborn:'うまれたて', baby:'あかちゃん', child:'こども', adult:'おとな', finalst:'さいしゅう',
       gray:'グレイ', martian:'マーシャン', alien:'エイリアン',
@@ -1479,6 +1479,15 @@
     [0,0,1,1,1,0,0],
     [0,0,0,1,0,0,0],
   ];
+  const ICO_STAR=[           // ★ 7×7（STATUSのけんこう度に使用）
+    [0,0,0,1,0,0,0],
+    [0,0,1,1,1,0,0],
+    [1,1,1,1,1,1,1],
+    [0,1,1,1,1,1,0],
+    [0,0,1,1,1,0,0],
+    [0,1,1,0,1,1,0],
+    [1,1,0,0,0,1,1],
+  ];
   const ICO_EXCL=[           // ！ 2×6（2列幅で太く）
     [1,1],
     [1,1],
@@ -2399,11 +2408,18 @@
       ctxN.fillText(T('status'),(W*S)/2,11*S);
       for(let x=1;x<W-1;x++) dot(ctxN,x,18,DIM);
 
-      const bodyVal = pet.dead ? T('dead') : (isWeak() ? T('weak') : (pet.health==='SICK'?T('sick'):T('good')));
+      // けんこう度（★0〜4）：おなか・きげんと同じ4段階表示に揃える。
+      // 状態が悪化する順に星が減り、手遅れになる前に気づけるようにしてある
+      const healthVal =
+          pet.dead                ? 0    // おばけ
+        : isWeak()                ? 1    // 衰弱（空腹18時間超。あと12時間で死）
+        : pet.health==='SICK'     ? 2    // 病気（放置36時間で死）
+        : pet.hunger===0          ? 3    // 空腹が続いている（このままだと衰弱）
+        :                           4;   // げんき
       const rows=[
         {label:T('hungry'), type:'icons', grid:ICO_HEART, val:pet.hunger},
         {label:T('mood'),   type:'icons', grid:ICO_NOTE,  val:pet.mood},
-        {label:T('body'),   type:'text',  val:bodyVal},
+        {label:T('health'), type:'icons', grid:ICO_STAR,  val:healthVal},
         {label:T('stage'),  type:'text',  val:stageLabel()},
         {label:T('ptype'),  type:'text',  val:typeLabel()},
       ];
