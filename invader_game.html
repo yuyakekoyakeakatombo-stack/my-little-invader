@@ -1537,7 +1537,8 @@
   function withRows(g, repl){ const c = g.map(r=>[...r]); for(const [i,row] of repl) c[i]=row; return c; }
   function lie(g, n){ return n ? g.slice(0, g.length - n) : g; }
   const MID_SLEEP   = lie(withRows(MID_A,      [[3,[1,1,1,1,0,0,1,1,1,0]]]), 1);            // 足を畳む
-  const LARVA_SLEEP = withRows(LARVA_RAIN, [[3,[0,1,1,1,1,1,1,1,1,1,0]]]);                  // 目の穴を埋めて閉眼に（元々足縮めポーズ）
+  // 就寝：起きている時の目（1ドットの穴）を左右に広げて横線にする＝閉じた目（元々足縮めポーズ）
+  const LARVA_SLEEP = withRows(LARVA_RAIN, [[3,[0,1,0,0,1,1,1,0,0,1,0]]]);
   const S3_SLEEP = {
     grey: lie(withRows(S3_SPR.grey, [[4,[1,1,1,0,0,0,1,1,1]]]), 2),
     tako: lie(withRows(S3_SPR.tako, [[5,[1,1,1,0,0,0,1,1,1]]]), 2),
