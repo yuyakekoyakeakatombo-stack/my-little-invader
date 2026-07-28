@@ -551,7 +551,7 @@
     hungerAcc:0, moodAcc:0,               // 進行タイマー（分）
     P:0, D:50, C:50, B:50, W:0,           // 隠しパラメータ（性格/しつけ/ケア/なつき/汚れ）
     plateAt:0, plateSpoiled:false,        // 残った皿（放置で食べ残し汚れ化＝plateSpoiled）
-    poopAt:0,                             // 次のうんち発生時刻
+    poopAt:0, poopSince:0,                // 次のうんち発生時刻／最初のうんちが出た時刻（放置でハエ）
     wokeUntil:0,                          // しかられて起きている期限
     dayKey:'', bGainToday:0,              // なつき度の日次獲得上限管理
     dirtAcc:0,                            // 汚れ放置時間（分・病気抽選用）
@@ -956,7 +956,7 @@
     const PLATE_MS = debugMode ? 120000 : 7200000;
     if(pet.plateAt && !pet.plateSpoiled && now - pet.plateAt >= PLATE_MS){ pet.plateSpoiled = true; }
     // うんち発生
-    if(pet.poopAt && now >= pet.poopAt){ pet.poopAt = 0; pet.W = Math.min(4, pet.W + 1); }
+    if(pet.poopAt && now >= pet.poopAt){ pet.poopAt = 0; pet.W = Math.min(4, pet.W + 1); if(!pet.poopSince) pet.poopSince = now; }
 
     // わがまま拒否の放置（60分。DEBUG中は60秒）→ しつけ低下
     const TANTRUM_MS = debugMode ? 60000 : 3600000;
@@ -1695,18 +1695,24 @@
     [0,0,0,1,1,0,1,1,0,0,0],   // なだらかな2つのコブ
     [0,0,1,1,1,1,1,1,1,0,0],   // 丸い裾
   ];
+  // ハエ1匹（汚れのすぐ上を小さく舞う・羽ばたきで点滅）。傷んだ皿とうんちで共用
+  function drawFly(bx, by, k, NK, DM){
+    const fx = bx + Math.round(Math.sin((fM+k*13)/5)*2);
+    const fy = by + Math.round(Math.cos((fM+k*7)/4));   // 上下±1で舞う
+    dot(ctxM, fx, fy, NK);                              // 体
+    if(fM%4<2){ dot(ctxM, fx-1, fy, DM); dot(ctxM, fx+1, fy, DM); }  // 羽ばたき
+  }
   function drawSpoiledPlate(px, baseY, NK, DM){
     stamp(ctxM, FOOD_PLATE_BASE, px, baseY,   DM);
     stamp(ctxM, FOOD_PLATE_RIM,  px, baseY-1, NK);
     stamp(ctxM, SPOIL_LUMP,      px, baseY-3, NK);
-    // ハエ2匹（傷んだご飯のすぐ上を小さく舞う・羽ばたきで点滅）
-    const flies=[[3,-4],[8,-5]];
-    flies.forEach(([ox,oy],k)=>{
-      const fx = px + ox + Math.round(Math.sin((fM+k*13)/5)*2);
-      const fy = baseY + oy + Math.round(Math.cos((fM+k*7)/4));   // 上下±1で盛りの上を舞う
-      dot(ctxM, fx, fy, NK);                       // 体
-      if(fM%4<2){ dot(ctxM, fx-1, fy, DM); dot(ctxM, fx+1, fy, DM); }  // 羽ばたき
-    });
+    drawFly(px+3, baseY-4, 0, NK, DM);
+    drawFly(px+8, baseY-5, 1, NK, DM);
+  }
+  // うんちを放置するとハエがたかる（傷んだ皿と同じ2時間。DEBUG中は2分）
+  function poopHasFlies(){
+    if(!pet.W || !pet.poopSince) return false;
+    return Date.now() - pet.poopSince >= (debugMode ? 120000 : 7200000);
   }
   const EAT_T = 60;          // 食事アニメの長さ（15tickごとに1口＝3口で空に）
   const POOP_X=[6,48,12,1];  // 汚れの表示位置（発生順。皿の位置と重ならない配置）
@@ -1748,7 +1754,7 @@
     [1,0,1,0,1,0,0],
   ];
   const CLEAN_T = 36;        // 掃除アニメの長さ
-  let cleanSnapW = 0, cleanSnapPlate = false, cleanSnapSpoiled = false;   // 掃除開始時点の汚れの見た目スナップショット
+  let cleanSnapW = 0, cleanSnapPlate = false, cleanSnapSpoiled = false, cleanSnapPoopFly = false;   // 掃除開始時点の汚れの見た目スナップショット
 
   const STARS_M = [[4,3],[14,6],[28,2],[38,5],[50,4],[9,11],[44,10],[22,8]];
 
@@ -1949,8 +1955,8 @@
         break;
       case 'CLEAN':
         if(pet.W > 0 || pet.plateAt || pet.plateSpoiled){
-          cleanSnapW = pet.W; cleanSnapPlate = !!pet.plateAt; cleanSnapSpoiled = !!pet.plateSpoiled;  // 見た目用に退避
-          pet.W = 0; pet.plateAt = 0; pet.plateSpoiled = false;
+          cleanSnapW = pet.W; cleanSnapPlate = !!pet.plateAt; cleanSnapSpoiled = !!pet.plateSpoiled; cleanSnapPoopFly = poopHasFlies();  // 見た目用に退避
+          pet.W = 0; pet.plateAt = 0; pet.plateSpoiled = false; pet.poopSince = 0;
           if(pet.mood < 4) pet.mood++;
           addA(A_ADJ.clean); markTouch();
           setReaction('clean', CLEAN_T, asleep);                    // ほうき掃きアニメ（睡眠中は音符を出さない）
@@ -2397,7 +2403,11 @@
     if(pet.plateSpoiled) drawSpoiledPlate(plateX, MAIN_GY-1, NK, DM);     // 食べ残し（崩れた盛り＋ハエ）
     else if(pet.plateAt) drawFoodPlate(plateX, MAIN_GY-1, 3, NK, DM);     // 残った皿（満杯のまま）
     else if(eatLvl >= 0) drawFoodPlate(plateX, MAIN_GY-1, eatLvl, NK, DM); // 食事中：3口で減って空皿に
-    for(let i=0;i<pet.W && i<POOP_X.length;i++) stamp(ctxM, POOP_SPR, POOP_X[i], MAIN_GY-5, NK);
+    const poopFly = poopHasFlies();
+    for(let i=0;i<pet.W && i<POOP_X.length;i++){
+      stamp(ctxM, POOP_SPR, POOP_X[i], MAIN_GY-4, NK);          // 足元を地面に接地させる
+      if(poopFly) drawFly(POOP_X[i]+2, MAIN_GY-6, i, NK, DM);   // 放置中はハエがたかる
+    }
 
     // ── CLEAN：ほうきが左→右へ掃き、通過した汚れが消える ──
     if(reactT > 0 && reactType === 'clean'){
@@ -2405,7 +2415,10 @@
       const bx = Math.round(-8 + prog * (W + 16));                  // 画面外左→画面外右
       // まだ掃かれていない汚れ・皿を表示（ほうきの先端が届くまで）
       for(let i=0;i<cleanSnapW && i<POOP_X.length;i++)
-        if(POOP_X[i] > bx + 4) stamp(ctxM, POOP_SPR, POOP_X[i], MAIN_GY-5, NK);
+        if(POOP_X[i] > bx + 4){
+          stamp(ctxM, POOP_SPR, POOP_X[i], MAIN_GY-4, NK);
+          if(cleanSnapPoopFly) drawFly(POOP_X[i]+2, MAIN_GY-6, i, NK, DM);
+        }
       if(plateX > bx + 4){
         if(cleanSnapSpoiled) drawSpoiledPlate(plateX, MAIN_GY-1, NK, DM);
         else if(cleanSnapPlate) drawFoodPlate(plateX, MAIN_GY-1, 3, NK, DM);
