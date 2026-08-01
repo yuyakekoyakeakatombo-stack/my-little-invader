@@ -157,34 +157,34 @@
     // STAGE1〜2（系統未分化）
     egg:[
       [0,0,0,0,0,0,0,0,0],
-      [0,0,1,1,1,1,1,0,0],
-      [0,1,1,1,1,1,1,1,0],
-      [0,1,0,1,1,1,0,1,0],
-      [0,1,1,1,1,1,1,1,0],
-      [0,1,1,1,1,1,1,1,0],
-      [0,0,1,1,1,1,1,0,0],
+      [0,0,1,1,1,1,0,0,0],
+      [0,1,1,1,1,1,1,0,0],
+      [1,1,0,1,1,0,1,1,0],
+      [1,1,1,1,1,1,1,1,0],
+      [0,1,1,1,1,1,1,0,0],
+      [0,0,1,1,1,1,0,0,0],
       [0,0,0,0,0,0,0,0,0],
     ],
     mid:[
-      [0,0,1,0,0,0,1,0,0],
+      [0,0,0,0,0,0,0,0,0],
+      [0,0,0,1,0,1,0,0,0],
       [0,0,1,1,1,1,1,0,0],
-      [0,1,1,1,1,1,1,1,0],
-      [0,1,0,1,1,1,0,1,0],
-      [0,1,1,1,1,1,1,1,0],
-      [0,0,1,1,1,1,1,0,0],
-      [0,0,1,0,0,0,1,0,0],
-      [0,1,1,0,0,0,1,1,0],
-    ],
-    // 幼体：アプリアイコンと同じ形（本体の11×8を左右1列詰めて9×8に収めた）
-    larva:[
-      [1,0,0,0,0,0,0,0,1],
-      [0,1,0,0,0,0,0,1,0],
       [0,1,1,1,1,1,1,1,0],
       [1,1,0,1,1,1,0,1,1],
       [1,1,1,1,1,1,1,1,1],
       [0,1,1,1,1,1,1,1,0],
       [0,0,1,0,0,0,1,0,0],
-      [0,1,1,0,0,0,1,1,0],
+    ],
+    // 幼体：アプリアイコンと同じ形（本体の9×7を9×8に収めた）
+    larva:[
+      [0,0,0,0,0,0,0,0,0],
+      [0,0,1,0,0,0,1,0,0],
+      [0,1,1,1,1,1,1,1,0],
+      [1,1,0,1,1,1,0,1,1],
+      [1,1,1,1,1,1,1,1,1],
+      [0,1,1,1,1,1,1,1,0],
+      [0,0,1,0,0,0,1,0,0],
+      [0,1,0,0,0,0,0,1,0],
     ],
     // STAGE3〜4（系統別）
     grey:[
@@ -304,6 +304,19 @@
 
   // ボスUFO
   let bx,by,bvx,bvy;
+  // ── ボスの行動パターン ──
+  //  chase     : まっすぐ追いかける
+  //  tail      : 背後に回り込んで追い回す
+  //  intercept : プレイヤーの進行方向に先回りする
+  //  zigzag    : 上下に振れながらじりじり近づく
+  //  charge    : いったん離れて狙いを固定し、直線的に突進する
+  // どのパターンも「動き続けていれば避けられる」ことを守る：
+  //  ・追尾系の速度は必ずプレイヤー（1.3/軸）より遅い
+  //  ・突進だけは速いが、撃つ前に狙いを固定するので横に逃げれば当たらない
+  const BOSS_PATS=['chase','tail','intercept','zigzag','charge'];
+  let bossPat='chase', bossPatT=0, bossSub='', bossSubT=0;
+  let bossAimX=0, bossAimY=0, bossWave=0;
+  let plyPX=0, plyPY=0, plyVX=0, plyVY=0;   // 先回り用にプレイヤーの速度を覚えておく
 
   // 入力
   const keys={left:false,right:false,up:false,down:false};
@@ -313,7 +326,8 @@
     return {
       scrollSpeed: Math.min(0.8 + stage*0.25, 2.4),   // 障害物の流れる速さ
       spawnGap:    Math.max(22 - stage*2.5, 9),        // スポーン間隔（フレーム）小さいほど密
-      bossSpeed:   Math.min(0.5 + stage*0.12, 1.2),    // ボスUFOの追尾速度（少し遅く）
+      bossSpeed:   Math.min(0.5 + stage*0.12, 1.2),    // ボスUFOの追尾速度（プレイヤー1.3より必ず遅い）
+      bossDash:    Math.min(1.3 + stage*0.10, 1.8),    // 突進の速度（直線・狙い固定なので横に避けられる）
     };
   }
 
@@ -408,11 +422,22 @@
     // UFOは画面右外から登場
     bx=W+2; by=GTOP+2; bvx=0; bvy=0;
   }
+  // 次の行動パターンを選ぶ。同じパターンが続かないようにする
+  function pickBossPat(){
+    const cand = BOSS_PATS.filter(p=>p!==bossPat);
+    bossPat = cand[Math.floor(Math.random()*cand.length)];
+    bossPatT = Math.round((2.0 + Math.random()*1.2)*FPS);
+    if(bossPat==='charge'){ bossSub='back'; bossSubT=Math.round(0.7*FPS); bossPatT=Math.round(3.2*FPS); }
+  }
   function startBoss(){
     state=STATE.BOSS; phaseTimer=BOSS_TIME*FPS;
     objs=[];
     // bx,by はイントロから引き継ぐ（既に画面内へ入っている）
     bvx=0; bvy=0;
+    // 最初は素直な追尾から入り、様子を見せてからパターンを混ぜる
+    bossPat='chase'; bossPatT=Math.round(1.8*FPS);
+    bossSub=''; bossSubT=0; bossWave=0;
+    plyVX=0; plyVY=0;
   }
   function endBoss(){
     state=STATE.BOSS_CLEAR; clearTimer=Math.round(1.2*FPS);
@@ -532,23 +557,87 @@
       if(hitCooldown>0) hitCooldown--;
       const D=diff();
 
+      const px0=plyX, py0=plyY;
       movePlayer();
+      // プレイヤーの速度（先回りの狙いに使う。急な方向転換に振り回されないようならす）
+      plyVX = plyVX*0.7 + (plyX-px0)*0.3;
+      plyVY = plyVY*0.7 + (plyY-py0)*0.3;
 
-      // ボスUFOがプレイヤーを追尾（なめらかに）
-      // 衝突後は離れる（hitCooldown中は逃げる方向へ）
-      let tx, ty;
+      const pcx=plyX+CH_W/2, pcy=plyY+CH_H/2;   // プレイヤー中心
+      const bcx=bx+UFO_W/2,  bcy=by+UFO_H/2;    // ボス中心
+      let sp=D.bossSpeed, tx, ty;
+
       if(hitCooldown>0){
-        // プレイヤーと反対方向へ
-        tx = (plyX+CH_W/2 > bx+UFO_W/2) ? 0 : W-UFO_W;
-        ty = (plyY+CH_H/2 > by+UFO_H/2) ? GTOP : GBOT-UFO_H;
+        // 衝突直後は必ず離れる。パターンも仕切り直す
+        tx = (pcx > bcx) ? 0 : W-UFO_W;
+        ty = (pcy > bcy) ? GTOP : GBOT-UFO_H;
+        bossPatT = 0;
       } else {
-        tx=plyX+CH_W/2-UFO_W/2; ty=plyY+CH_H/2-UFO_H/2;
+        if(bossPatT<=0) pickBossPat();
+        bossPatT--;
+        bossWave++;
+        switch(bossPat){
+          case 'tail': {
+            // 背後（プレイヤーの進行方向の反対側）へ回り込んでから追う
+            const dir = (plyVX < -0.05) ? 1 : (plyVX > 0.05 ? -1 : (pcx < W/2 ? 1 : -1));
+            tx = pcx - UFO_W/2 + dir*10;
+            ty = pcy - UFO_H/2;
+            break;
+          }
+          case 'intercept': {
+            // 進路の先を狙う。読みが外れれば置いていかれる程度の先読み量に留める
+            const LEAD = 14;
+            tx = pcx - UFO_W/2 + plyVX*LEAD;
+            ty = pcy - UFO_H/2 + plyVY*LEAD;
+            break;
+          }
+          case 'zigzag': {
+            // 上下に振れながらじりじり寄る。振れている分だけ前進は遅い
+            tx = pcx - UFO_W/2;
+            ty = pcy - UFO_H/2 + Math.sin(bossWave*0.16)*9;
+            sp *= 0.9;
+            break;
+          }
+          case 'charge': {
+            bossSubT--;
+            if(bossSub==='back'){
+              // いったん距離をとる（溜めの時間＝プレイヤーへの予告になる）
+              tx = pcx - UFO_W/2 - Math.sign(pcx-bcx)*26;
+              ty = pcy - UFO_H/2 - Math.sign(pcy-bcy)*10;
+              sp *= 1.1;
+              const far = Math.abs(pcx-bcx) > 22;
+              if((far && bossSubT<=0) || bossSubT<=-Math.round(0.6*FPS)){
+                bossSub='lock'; bossSubT=Math.round(0.35*FPS);
+                bossAimX=pcx; bossAimY=pcy;          // ここで狙いを固定する
+              }
+            } else if(bossSub==='lock'){
+              // 狙いを定めてためる。ボスはほぼ止まる
+              tx=bx; ty=by; sp*=0.25;
+              if(bossSubT<=0){ bossSub='go'; bossSubT=Math.round(1.4*FPS); beep(360,0.08,'square'); }
+            } else {
+              // 固定した狙いへ直線的に突進。追尾しないので横に避ければかわせる
+              const dx=bossAimX-bcx, dy=bossAimY-bcy, len=Math.hypot(dx,dy)||1;
+              bvx=dx/len*D.bossDash; bvy=dy/len*D.bossDash;
+              tx=null;
+              if(bossSubT<=0) bossPatT=0;            // 撃ち終わったら次のパターンへ
+            }
+            break;
+          }
+          default:   // chase
+            tx = pcx - UFO_W/2;
+            ty = pcy - UFO_H/2;
+        }
       }
-      bvx += Math.sign(tx-bx)*0.12; bvy += Math.sign(ty-by)*0.12;
-      bvx*=0.92; bvy*=0.92;
-      const sp=D.bossSpeed;
-      bvx=Math.max(-sp,Math.min(sp,bvx)); bvy=Math.max(-sp,Math.min(sp,bvy));
+
+      if(tx !== null){
+        bvx += Math.sign(tx-bx)*0.12; bvy += Math.sign(ty-by)*0.12;
+        bvx*=0.92; bvy*=0.92;
+        bvx=Math.max(-sp,Math.min(sp,bvx)); bvy=Math.max(-sp,Math.min(sp,bvy));
+      }
       bx+=bvx; by+=bvy;
+      // 画面端で止まったら勢いも殺す（端に張り付いて震えないように）
+      if(bx<0||bx>W-UFO_W) bvx=0;
+      if(by<GTOP||by>GBOT-UFO_H) bvy=0;
       bx=Math.max(0,Math.min(W-UFO_W,bx)); by=Math.max(GTOP,Math.min(GBOT-UFO_H,by));
 
       if(hitCooldown<=0 && hitsBoss()) loseLife();

@@ -162,17 +162,29 @@
   ];
   const CHARS={
     egg:[
-      [0,0,0,0,0,0,0,0,0],[0,0,1,1,1,1,1,0,0],[0,1,1,1,1,1,1,1,0],[0,1,0,1,1,1,0,1,0],
-      [0,1,1,1,1,1,1,1,0],[0,1,1,1,1,1,1,1,0],[0,0,1,1,1,1,1,0,0],[0,0,0,0,0,0,0,0,0],
+      [0,0,0,0,0,0,0,0,0],
+      [0,0,1,1,1,1,0,0,0],
+      [0,1,1,1,1,1,1,0,0],
+      [1,1,0,1,1,0,1,1,0],
+      [1,1,1,1,1,1,1,1,0],
+      [0,1,1,1,1,1,1,0,0],
+      [0,0,1,1,1,1,0,0,0],
+      [0,0,0,0,0,0,0,0,0],
     ],
     mid:[
-      [0,0,1,0,0,0,1,0,0],[0,0,1,1,1,1,1,0,0],[0,1,1,1,1,1,1,1,0],[0,1,0,1,1,1,0,1,0],
-      [0,1,1,1,1,1,1,1,0],[0,0,1,1,1,1,1,0,0],[0,0,1,0,0,0,1,0,0],[0,1,1,0,0,0,1,1,0],
+      [0,0,0,0,0,0,0,0,0],
+      [0,0,0,1,0,1,0,0,0],
+      [0,0,1,1,1,1,1,0,0],
+      [0,1,1,1,1,1,1,1,0],
+      [1,1,0,1,1,1,0,1,1],
+      [1,1,1,1,1,1,1,1,1],
+      [0,1,1,1,1,1,1,1,0],
+      [0,0,1,0,0,0,1,0,0],
     ],
-    // 幼体：アプリアイコンと同じ形（本体の11×8を左右1列詰めて9×8に収めた）
+    // 幼体：アプリアイコンと同じ形（本体の9×7を9×8に収めた）
     larva:[
-      [1,0,0,0,0,0,0,0,1],[0,1,0,0,0,0,0,1,0],[0,1,1,1,1,1,1,1,0],[1,1,0,1,1,1,0,1,1],
-      [1,1,1,1,1,1,1,1,1],[0,1,1,1,1,1,1,1,0],[0,0,1,0,0,0,1,0,0],[0,1,1,0,0,0,1,1,0],
+      [0,0,0,0,0,0,0,0,0],[0,0,1,0,0,0,1,0,0],[0,1,1,1,1,1,1,1,0],[1,1,0,1,1,1,0,1,1],
+      [1,1,1,1,1,1,1,1,1],[0,1,1,1,1,1,1,1,0],[0,0,1,0,0,0,1,0,0],[0,1,0,0,0,0,0,1,0],
     ],
     grey:[
       [0,0,1,1,1,1,1,0,0],[0,1,1,1,1,1,1,1,0],[1,1,1,1,1,1,1,1,1],[1,0,1,1,1,1,1,0,1],
@@ -239,7 +251,8 @@
       beamHalf: Math.min(3 + Math.floor(t/5), 9),
       canCharge: t>=12,                          // 12秒以降から突進が出る
       chargeSpeed: Math.min(1.4 + (t-12)*0.05, 2.6),
-      chargeChance: Math.min(0.4 + (t-12)*0.02, 0.8), // 降下後に突進する確率
+      chargeChance: Math.min(0.22 + (t-12)*0.01, 0.45), // 降下後に突進する確率
+      chargeCD: Math.max(110 - (t-12)*0.8, 70),  // 突進後はこのフレーム数あける（難易度が上がっても最低3.5秒）
     };
   }
 
@@ -261,6 +274,9 @@
   let ufoX, ufoDir, ufoY, ufoYtarget;
   let mode, modeTimer, beamX;
   let chargeDir=1;
+  // 体当たりの間隔制御：突進のあとは必ず休みを入れ、続けざまに突っ込んでこないようにする
+  let chargeCD=0;          // 次の突進までのクールダウン（フレーム）
+  let forceBeamNext=false; // 突進の直後は必ずビーム回にする
   let graceFrames=0;
   let caughtTimer=0;
   let caughtX=0;
@@ -270,6 +286,12 @@
   const keys={left:false,right:false};
 
   function ufoCenter(){ return ufoX+5; }
+  // 突進を終えて上空へ戻る。クールダウンを張り、次はビーム回にする
+  function endCharge(D){
+    mode='recover'; modeTimer=0;
+    chargeCD = D.chargeCD;
+    forceBeamNext = true;
+  }
   function beamEdge(y){
     const y0=Math.round(ufoY)+UFO_H, y1=GY-1;
     if(y1<=y0) return 0;
@@ -280,6 +302,7 @@
     plyX=W/2-CH_W/2; plyY=GROUND_Y; vy=0; jumping=false;
     ufoX=21; ufoDir=1; ufoY=UFO_HIGH; ufoYtarget=UFO_HIGH;
     mode='safe'; modeTimer=0; beamX=ufoCenter();
+    chargeCD=0; forceBeamNext=false;
     graceFrames=6;
     score=0; elapsed=0; hitCount=0; hitCooldown=0;
     state=STATE.PLAY;
@@ -341,6 +364,7 @@
     modeTimer++;
     elapsed++;
     if(hitCooldown>0) hitCooldown--;
+    if(chargeCD>0) chargeCD--;
 
     // 生存加点
     score = Math.floor(elapsed/FPS*SCORE_PER_SEC) - hitCount*PENALTY_HIT;
@@ -352,8 +376,9 @@
       if(ufoX<=1){ufoX=1;ufoDir=1;} if(ufoX>=W-UFO_W-1){ufoX=W-UFO_W-1;ufoDir=-1;}
       if(modeTimer>D.safeDur){
         modeTimer=0;
-        if(Math.random()<D.diveChance){ mode='dive'; ufoYtarget=GROUND_Y; }
-        else { mode='warn'; beamX=ufoCenter(); }
+        // 突進の直後は必ずビーム回を挟む（体当たりが連続しないように）
+        if(!forceBeamNext && Math.random()<D.diveChance){ mode='dive'; ufoYtarget=GROUND_Y; }
+        else { forceBeamNext=false; mode='warn'; beamX=ufoCenter(); }
       }
     } else if(mode==='warn'){
       if(modeTimer>4){ modeTimer=0; mode='beam'; beep(300,0.12); }
@@ -364,8 +389,8 @@
       if(ufoX<=1){ufoX=1;ufoDir=1;} if(ufoX>=W-UFO_W-1){ufoX=W-UFO_W-1;ufoDir=-1;}
       if(modeTimer>22){
         modeTimer=0;
-        // 難易度が上がっていれば突進へ、そうでなければ通常復帰
-        if(D.canCharge && Math.random()<D.chargeChance){
+        // 突進はクールダウンが明けている時だけ。明けていなければ通常復帰
+        if(D.canCharge && chargeCD<=0 && Math.random()<D.chargeChance){
           mode='charge';
           // キャラのいる方向を向く
           chargeDir = (plyX+CH_W/2 > ufoCenter()) ? 1 : -1;
@@ -377,10 +402,16 @@
       // 地面の高さを保ったままキャラへ向かってスライド
       ufoYtarget=GROUND_Y;
       ufoX += chargeDir*D.chargeSpeed;
-      // 端に達するか、画面を横切ったら終了
-      if(ufoX<=1){ ufoX=1; mode='safe'; modeTimer=0; }
-      else if(ufoX>=W-UFO_W-1){ ufoX=W-UFO_W-1; mode='safe'; modeTimer=0; }
-      else if(modeTimer>40){ mode='safe'; modeTimer=0; }
+      // 端に達するか、画面を横切ったら終了 → 上空へ戻ってひと呼吸おく
+      if(ufoX<=1){ ufoX=1; endCharge(D); }
+      else if(ufoX>=W-UFO_W-1){ ufoX=W-UFO_W-1; endCharge(D); }
+      else if(modeTimer>40){ endCharge(D); }
+    } else if(mode==='recover'){
+      // 突進のあとは通常高度まで上がりきってから再開する（続けざまの体当たりを防ぐ）
+      ufoYtarget=UFO_HIGH;
+      ufoX+=ufoDir*D.ufoSpeed*0.6;
+      if(ufoX<=1){ufoX=1;ufoDir=1;} if(ufoX>=W-UFO_W-1){ufoX=W-UFO_W-1;ufoDir=-1;}
+      if(ufoY<=UFO_HIGH && modeTimer>12){ mode='safe'; modeTimer=0; }
     }
     if(ufoY<ufoYtarget) ufoY=Math.min(ufoY+2,ufoYtarget);
     else if(ufoY>ufoYtarget) ufoY=Math.max(ufoY-2,ufoYtarget);
