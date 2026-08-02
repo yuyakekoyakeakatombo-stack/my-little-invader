@@ -317,10 +317,10 @@
   const I18N = {
     en: {
       feed:'FEED', clean:'CLEAN', med:'MEDICINE', pet:'PRAISE', scold:'SCOLD', game:'MINI GAME',
-      meal:'MEAL', snack:'SNACK',
+      meal:'MEAL', snack:'TREAT',
       status:'STATUS', story:'STORY', settings:'SETTINGS', play:'PLAY',
       sound:'SOUND', bodycolor:'BODY COLOR', location:'LOCATION', language:'LANGUAGE', debug:'DEBUG', reset:'ALL RESET',
-      on:'ON', off:'OFF', exec:'EXEC', sure:'SURE?', yesno:'A:YES  B:NO',
+      on:'ON', off:'OFF', sure:'SURE?', yesno:'A:YES  B:NO',
       locn1:'USE LOCATION', locn2:'ONLY TO SHOW', locn3:'IN-GAME WEATHER', locok:'A:OK  B:CANCEL',
       hungry:'HUNGRY', mood:'MOOD', health:'HEALTH', stage:'STAGE', ptype:'TYPE',
       good:'GOOD', sick:'SICK', weak:'WEAK', dead:'DEAD',
@@ -333,7 +333,7 @@
       meal:'ごはん', snack:'おやつ',
       status:'ステータス', story:'ストーリー', settings:'せってい', play:'あそぶ',
       sound:'サウンド', bodycolor:'カラー', location:'ロケーション', language:'げんご', debug:'デバッグ', reset:'リセット',
-      on:'オン', off:'オフ', exec:'じっこう', sure:'ほんとうに？', yesno:'A:はい B:いいえ',
+      on:'オン', off:'オフ', sure:'ほんとうに？', yesno:'A:はい B:いいえ',
       locn1:'いちじょうほうは', locn2:'ゲームの天気に', locn3:'のみつかいます', locok:'A:OK  B:キャンセル',
       hungry:'おなか', mood:'きげん', health:'けんこう', stage:'せいちょう', ptype:'タイプ',
       good:'げんき', sick:'びょうき', weak:'よわり', dead:'おばけ',
@@ -888,7 +888,7 @@
     const days = Math.round((startOfDay(Date.now()) - startOfDay(pet.birth)) / 86400000);
     return Math.min(99, days + 1);   // 誕生日=DAY01、次の0:00でDAY02
   }
-  function dayLabel(){ return 'DAY' + String(petDay()).padStart(2,'0'); }
+  function dayLabel(){ return 'DAY : ' + String(petDay()).padStart(2,'0'); }
 
   // ── 時間進行（企画書§4 ドラフト値）──
   const HUNGER_MIN = 180;   // 3時間でおなか♥1減（幼体）
@@ -2899,7 +2899,6 @@
         if(key==='bodycolor') ctxN.fillText(BODY_LABELS[bodyColorIdx], (W-2)*S, cy);
         if(key==='location')  ctxN.fillText(locationOn?T('on'):T('off'), (W-2)*S, cy);
         if(key==='debug')   { ctxN.fillStyle=debugMode?ON:'#7a7660'; ctxN.fillText(debugMode?T('on'):T('off'), (W-2)*S, cy); }
-        if(key==='reset')   { ctxN.fillStyle='#7a3a3a'; ctxN.fillText(T('exec'), (W-2)*S, cy); }
         ctxN.textBaseline='top';
       });
 
@@ -2948,15 +2947,17 @@
       ctxN.fillText(T('feed'),(W*S)/2,11*S);
       for(let x=1;x<W-1;x++) dot(ctxN,x,18,DIM);
 
-      const ROW_H = 16;
+      const ROW_H = 16, FOOD_ICON_CX = 10;   // アイコンを揃える中心x
       FEED_ITEMS.forEach((key,i)=>{
         const y = 22 + i*ROW_H;
         const isSel = i === feedSel;
         const HL_H = 14, cy = (y + HL_H/2)*S;                // 文字もドット絵も網掛けの上下中央に置く
         if(isSel){ for(let dx=1;dx<W-1;dx++) for(let dy=0;dy<HL_H;dy++) dot(ctxN,dx,y+dy,DIM); }
-        // 実物のドット絵を並べて、どちらを選んでいるか一目で分かるようにする
+        // 実物のドット絵を並べて、どちらを選んでいるか一目で分かるようにする。
+        // ごはん11幅・おやつ9幅と幅が違うので、左端ではなく中心を揃えて置く
         const g = foodSet(key)[3];
-        stamp2(ctxN, g, 5, y + Math.round((HL_H - g.length)/2), ON, isSel ? OFF : DIM);  // 選択中は反転地なのでDIM部分をOFFで抜く
+        const gx = FOOD_ICON_CX - (g[0].length >> 1);
+        stamp2(ctxN, g, gx, y + Math.round((HL_H - g.length)/2), ON, isSel ? OFF : DIM);  // 選択中は反転地なのでDIM部分をOFFで抜く
         ctxN.font=uiFont(7); ctxN.fillStyle=ON; ctxN.textAlign='left'; ctxN.textBaseline='middle';
         if(isSel) ctxN.fillText('>', 1*S, cy);
         ctxN.fillText(T(key), 20*S, cy);
