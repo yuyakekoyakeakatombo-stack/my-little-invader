@@ -275,6 +275,26 @@
           </div>
         </div>
 
+        <!-- LETTER（キャラからの手紙） -->
+        <div class="view" id="view-letter">
+          <div class="lcd-wrap" style="margin-top:48px;"><canvas id="lcd-t"></canvas></div>
+          <div class="controller-wrap">
+            <div class="controller-row">
+              <div class="dpad">
+                <div class="dpad-h"></div><div class="dpad-v"></div><div class="dpad-center"></div>
+                <div class="dpad-arrow up">▲</div><div class="dpad-arrow down">▼</div>
+                <div class="dpad-arrow left">◀</div><div class="dpad-arrow right">▶</div>
+              </div>
+              <div class="btns"><div class="btn-row">
+                <div class="btns-wrap btn-b"><div class="action-btn" id="tb"><span class="btn-lbl lbl-b">B</span></div></div>
+                <div class="btns-wrap"><div class="action-btn" id="ta"><span class="btn-lbl lbl-a">A</span></div></div>
+              </div></div>
+            </div>
+            <div class="menu-btn" id="tmenu"><span class="menu-btn-lbl">MENU</span></div>
+          </div>
+          <div class="speaker-grille"></div>
+        </div>
+
         <!-- STORY -->
         <div class="view" id="view-story">
           <div class="lcd-wrap" style="margin-top:48px;"><canvas id="lcd-s"></canvas></div>
@@ -577,6 +597,8 @@
     plays:{sw:0,ss:0,ab:0},               // ミニゲームのプレイ回数（進化の傾向づけ）
     touchedToday:false, noTouchDays:0,    // 今日ふれあったか／ふれあいゼロの連続日数
     estrangedDays:0,                      // 疎遠期の連続日数（帰還までの猶予）
+    // ── 手紙 ──
+    diary:{}, letter:null, letterAt:0, letterDay:'',   // その日の出来事／未読の手紙／届いた時刻／最後に出した日
     larvaAt:0, snapL:null,                // 幼体到達時刻とスナップショット（帰還判定の起点）
     lineageAt:0, snapA:null,              // 成体到達時刻とスナップショット（Stage4形態判定の起点）
   }; }
@@ -636,6 +658,7 @@
     med:        +1,
     play:       +1,
     scoldFair:   0,               // 正当なしつけ（わがまま中）は甘やかしでも放置でもない
+    tantrumIgnored: +4,           // わがままを叱らずに時間で流した＝甘やかし
     scoldBad:   -3,               // 理不尽なしかる／寝ているのを起こすしかる
     noTouchDay: -8,               // ふれあいゼロの日
     starveHour: -1,               // 空腹MAXの放置（1時間ごと）
@@ -653,6 +676,11 @@
   const RET_NOTOUCH_DAYS= 5;      // ふれあいゼロがこの日数続くと兆候
 
   function addA(n){ pet.A = Math.max(-9999, Math.min(9999, (pet.A||0) + n)); }
+  // しつけの増減。グレイは覚えが早いぶん、すさむのも早い（変化が1.5倍）
+  function addD(n){
+    const k = (pet.lineage==='grey') ? 1.5 : 1;
+    pet.D = Math.max(0, Math.min(100, (pet.D||50) + Math.round(n * k)));
+  }
 
   // ════════════════════════════════════════
   // おやつバランス
@@ -759,19 +787,22 @@
   let evoT = 0;                                   // 進化演出フレーム
   let departEnding = !!(pet.departFlag && !pet.dead), departT = 0;   // 旅立ちエンド（E4）
 
-  function evolveTo(st){ pet.stage = st; evoT = 36; savePet(); }
+  function evolveTo(st){ pet.stage = st; evoT = 36; note('evolved'); savePet(); }
 
   // Stage3 系統分岐：全期間の世話スタイル＋ミニゲーム傾向
   //   甘やかす→タコ ／ バランス→インベーダー ／ 放置気味→グレイ
+  // 層1：系統＝「何を一緒に遊んだか」だけで決まる。世話の仕方とは独立させてある。
+  //  3種のゲームが3系統に対称に対応するので、構造として優劣がつかない。
+  //  ほとんど遊ばせていない／どれも均等なら、基準のインベーダーになる。
+  const LINEAGE_MIN_PLAYS = 3;    // これ未満のプレイ回数では偏りを見ない
+  const LINEAGE_BIAS      = 0.4;  // 一番遊んだゲームがこの比率を超えて初めて偏りとみなす
   function pickLineage(){
-    const days = Math.max(1, daysSince(pet.birth));
-    const st = careStyle((pet.A||0) / days);
-    const r  = playRatio(pet.plays || {});
-    return bestOf({
-      tako: st.spoil   + r.sw * PLAY_WEIGHT,   // SPACEWALK をよく遊ぶとタコ寄り
-      inv:  st.balance + r.ss * PLAY_WEIGHT,   // SHOOTING STAR でインベーダー寄り
-      grey: st.neglect + r.ab * PLAY_WEIGHT,   // ABDUCTION でグレイ寄り
-    });
+    const p = pet.plays || {sw:0,ss:0,ab:0};
+    const total = (p.sw||0)+(p.ss||0)+(p.ab||0);
+    if(total < LINEAGE_MIN_PLAYS) return 'inv';
+    const top = bestOf({tako:p.sw||0, inv:p.ss||0, grey:p.ab||0});
+    const cnt = {tako:p.sw||0, inv:p.ss||0, grey:p.ab||0}[top];
+    return (cnt / total > LINEAGE_BIAS) ? top : 'inv';
   }
   // Stage4 形態分岐：成体になってからの行動だけで判定（前半と後半で育て方を変えられる）
   //   甘やかす→まるっと(1) ／ バランス→バランス(2) ／ 放置気味→やんちゃ(3)
@@ -781,16 +812,9 @@
     if(L==='tako' && pet.fullFeeds >= 10 && pet.sickCount >= 1) return 't3';   // クラーケン：大食いルート
     if(L==='grey' && pet.best.sw >= 250 && pet.best.ss >= 100 && pet.best.ab >= 400) return 'g3';  // オールラウンダー
     if(L==='inv'  && pet.nightPlays >= 7 && pet.D >= 50) return 'i3';          // ワイルド（夜更かしだが悪い子ではない）
-    const s = pet.snapA || {A:0, sw:0, ss:0, ab:0};
-    const days = Math.max(1, daysSince(pet.lineageAt));
-    const st = careStyle(((pet.A||0) - (s.A||0)) / days);
-    const p  = pet.plays || {sw:0,ss:0,ab:0};
-    const r  = playRatio({ sw:(p.sw||0)-(s.sw||0), ss:(p.ss||0)-(s.ss||0), ab:(p.ab||0)-(s.ab||0) });
-    const n = bestOf({
-      1: st.spoil   + r.sw * PLAY_WEIGHT,   // まるっと ← SPACEWALK
-      2: st.balance + r.ab * PLAY_WEIGHT,   // バランス ← ABDUCTION
-      3: st.neglect + r.ss * PLAY_WEIGHT,   // やんちゃ ← SHOOTING STAR
-    });
+    // 層3：体型＝ケアの丁寧さ（C）。丁寧に育てるほど"大事にされた体つき"になり、
+    //  雑に育てると荒れた見た目（ワイルド）になる。ここは意図的に優劣がある。
+    const n = (pet.C >= C_FORM_GOOD) ? 1 : (pet.C < C_FORM_BAD ? 3 : 2);
     return (L==='grey'?'g':L==='tako'?'t':'i') + n;
   }
   function maybeEvolve(){
@@ -838,11 +862,12 @@
       raiseMood();                                // 遊んで楽しかった（汚れ・病気があるうちはMAXにならない）
       gainB(2);
       const h = new Date(r.at).getHours();
-      if(h >= 22 || h < 4){ pet.nightPlays++; pet.P = Math.min(100, pet.P + 2); }   // 夜更かし
+      if(h >= 22 || h < 4){ pet.nightPlays++; addP(P_ADJ.nightPlay); }   // 夜更かしは生活リズムの話なのでPに効く
       if(!pet.plays) pet.plays = {sw:0,ss:0,ab:0};
-      if(r.game==='spacewalk'){    pet.best.sw = Math.max(pet.best.sw, r.score); pet.plays.sw++; if(r.score >= 250) pet.P = Math.max(-100, pet.P - 2); }
-      if(r.game==='shootingstar'){ pet.best.ss = Math.max(pet.best.ss, r.score); pet.plays.ss++; if(r.score >= 100) pet.P = Math.min(100, pet.P + 2); }
-      if(r.game==='abduction'){    pet.best.ab = Math.max(pet.best.ab, r.score); pet.plays.ab++; if(r.score >= 400) pet.C = Math.min(100, pet.C + 2); }
+      // スコアはPに影響させない（遊ぶゲームの種類＝系統 と 性格 を独立させるため）
+      if(r.game==='spacewalk'){    note('playSw'); pet.best.sw = Math.max(pet.best.sw, r.score); pet.plays.sw++; }
+      if(r.game==='shootingstar'){ note('playSs'); pet.best.ss = Math.max(pet.best.ss, r.score); pet.plays.ss++; }
+      if(r.game==='abduction'){    note('playAb'); pet.best.ab = Math.max(pet.best.ab, r.score); pet.plays.ab++; if(r.score >= 400) pet.C = Math.min(100, pet.C + 2); }
       addA(A_ADJ.play); markTouch();                // 遊んであげた＝ふれあい
       pet.C = Math.min(100, pet.C + 1);           // 遊んであげたケア加点
       savePet();
@@ -890,6 +915,104 @@
   }
   function dayLabel(){ return 'DAY : ' + String(petDay()).padStart(2,'0'); }
 
+
+  // ════════════════════════════════════════
+  // 手紙システム
+  //  その日の出来事を diary に貯め、日付が変わったときに材料の中から
+  //  印象の強いものを選んで手紙にする。定型文の抽選ではなく「実際に起きたこと」の報告。
+  //  文面は言語ごとに持ち、表示時に組み立てる（後から端末内AIの生成に差し替えられるよう、
+  //  材料（タグと回数）と文面を分けてある）。
+  // ════════════════════════════════════════
+  function note(tag, n){ const d = pet.diary || (pet.diary = {}); d[tag] = (d[tag]||0) + (n||1); }
+
+  // 材料 → 文面（2行以内に収まる長さで用意する。LCD幅に収まるよう改行済み）
+  const LETTER_LINES = {
+    hungry:   { ja:['きのう ずっと','おなかが すいてた'],      en:['I WAS HUNGRY','ALL DAY'] },
+    fed:      { ja:['ごはん おいしかった'],                    en:['THE FOOD WAS GOOD'] },
+    snack:    { ja:['おやつ うれしかった'],                    en:['THE TREAT WAS NICE'] },
+    snackMany:{ ja:['おやつ ばっかりで','おなかが へん'],      en:['TOO MANY TREATS.','MY TUMMY IS ODD'] },
+    dirty:    { ja:['おそうじ して','ほしかった'],             en:['I WANTED IT','TO BE CLEAN'] },
+    cleaned:  { ja:['きれいに なって','うれしかった'],         en:['IT GOT CLEAN.','THAT MADE ME GLAD'] },
+    praised:  { ja:['ほめて もらえた'],                        en:['YOU SAID I WAS GOOD'] },
+    lonely:   { ja:['きょうは だれも','こなかった'],           en:['NOBODY CAME','TO SEE ME'] },
+    scolded:  { ja:['なんで おこられたのか','わからない'],     en:['I DO NOT KNOW','WHY YOU WERE MAD'] },
+    woken:    { ja:['ゆうべ おこされた のは','いやだった'],    en:['YOU WOKE ME UP.','I DID NOT LIKE IT'] },
+    playSw:   { ja:['スペースウォーク','また やりたい'],       en:['I WANT TO PLAY','SPACEWALK AGAIN'] },
+    playSs:   { ja:['シューティングスター','たのしかった'],    en:['SHOOTING STAR','WAS FUN'] },
+    playAb:   { ja:['アブダクション','こわいけど すき'],       en:['ABDUCTION IS SCARY','BUT I LIKE IT'] },
+    noPlay:   { ja:['たまには あそびたいな'],                  en:['I WANT TO PLAY','SOMETIME'] },
+    clear:    { ja:['いい てんき だった'],                     en:['THE SKY WAS NICE'] },
+    rain:     { ja:['あめの ひは','たいくつ'],                 en:['RAINY DAYS','ARE BORING'] },
+    snow:     { ja:['ゆきが きれいだった'],                    en:['THE SNOW WAS PRETTY'] },
+    sick:     { ja:['ぐあいが わるかった'],                    en:['I FELT BAD'] },
+    cured:    { ja:['くすり にがかった','ありがとう'],         en:['THE MEDICINE WAS','BITTER. THANK YOU'] },
+    tantrum:  { ja:['わがまま いって','ごめんね'],             en:['SORRY I WAS','DIFFICULT'] },
+    evolved:  { ja:['からだが おおきく','なった みたい'],      en:['I THINK MY BODY','GOT BIGGER'] },
+    slept:    { ja:['よく ねむれた'],                          en:['I SLEPT WELL'] },
+  };
+  // 印象の強い順。上から拾って最大3つ載せる
+  const LETTER_PRIORITY = ['evolved','sick','cured','hungry','lonely','woken','scolded','dirty',
+                           'snackMany','tantrum','cleaned','praised','playSw','playSs','playAb',
+                           'snack','fed','noPlay','rain','snow','clear','slept'];
+
+  // 前日の diary から手紙を作る（材料が無ければ出さない）
+  function buildLetter(d){
+    const picked = LETTER_PRIORITY.filter(t => d[t] > 0).slice(0, 3);
+    return picked.length ? {tags: picked, at: Date.now()} : null;
+  }
+  function letterBody(){
+    if(!pet.letter) return [];
+    const parts = pet.letter.tags
+      .map(t => { const m = LETTER_LINES[t]; return m ? (lang==='ja' ? m.ja : m.en) : null; })
+      .filter(Boolean);
+    const total = parts.reduce((a,b)=>a+b.length, 0);
+    const out = [];
+    parts.forEach((lines,i)=>{
+      if(i && total <= 5) out.push('');        // 行数が少ないときだけ段落を空ける
+      lines.forEach(l=>out.push(l));
+    });
+    return out;
+  }
+  function hasLetter(){ return !!pet.letter; }
+
+
+  // ════════════════════════════════════════
+  // C（ケア充実度）：世話の「丁寧さ」を毎日0〜100で採点し、移動平均で持つ。
+  //  かまい度A（どれだけ構ったか）とは別の軸で、体型＝最終形態を決める。
+  // ════════════════════════════════════════
+  const C_FORM_GOOD = 70;   // これ以上なら「プチ」（大事に育てられた体つき）
+  const C_FORM_BAD  = 40;   // これ未満なら「ワイルド」（荒れた見た目）
+  const C_SMOOTH    = 0.3;  // その日の点数を取り込む割合（移動平均）
+  function dailyCareScore(d){
+    let v = 100;
+    if(d.hungry) v -= 30;                              // 空腹を長く放置した
+    if(d.dirty)  v -= 25;                              // 汚れを長く放置した
+    if(d.sick)   v -= 25;                              // 病気にさせた
+    if(d.woken)  v -= 10;                              // 睡眠を邪魔した
+    if(!(d.playSw || d.playSs || d.playAb)) v -= 10;   // 一度も遊ばなかった
+    if(d.cured)  v += 10;                              // 病気をちゃんと治した
+    return Math.max(0, Math.min(100, v));
+  }
+
+  // ════════════════════════════════════════
+  // P（性格）：やんちゃ(+) ↔ おっとり(−)。系統とは独立した軸。
+  //  接し方と生活リズムだけで動かす（ミニゲームの種類には влиять させない）。
+  //  移動の速さ・跳ね方・睡眠時間・食事量に効く。
+  // ════════════════════════════════════════
+  const P_ADJ = {
+    nightPlay:  +2,   // 夜更かしして遊ばせた
+    wokenUp:    +2,   // 寝ているのを起こした
+    scoldBad:   +1,   // 理不尽なしかる（落ち着かなくなる）
+    tantrumIgnored: +2, // わがままを叱らず流した（つけあがる）
+    noTouchDay: +1,   // 放っておかれた日
+    praise:     -1,   // ほめられて安心する
+    scoldFair:  -1,   // 正しく叱られて落ち着く
+    feedFull:   -2,   // 満腹でも食べさせられる（おっとりする）
+  };
+  function addP(n){ pet.P = Math.max(-100, Math.min(100, (pet.P||0) + n)); }
+  // 性格の強さ −1（おっとり）〜 +1（やんちゃ）
+  function pTrait(){ return Math.max(-1, Math.min(1, (pet.P||0) / 60)); }
+
   // ── 時間進行（企画書§4 ドラフト値）──
   const HUNGER_MIN = 180;   // 3時間でおなか♥1減（幼体）
   const MOOD_MIN   = 240;   // 4時間でごきげん♪1減
@@ -907,14 +1030,17 @@
   // 段階/系統別の睡眠設定：bed=就寝時,wake=起床時（inv=夜更かしで24=0時）,jit=±分ゆらぎ,nap種別
   function sleepConfig(){
     const st = pet.stage;
+    // 性格で就寝・起床を前後させる（やんちゃ＝遅寝早起きで睡眠が短い）
+    const shift = c => { const t = pTrait();
+      return {bed: c.bed + Math.round(t*1.5), wake: c.wake - Math.round(t), jit: c.jit, nap: c.nap}; };
     if(st==='egg' || st==='mid') return {bed:19, wake:8, jit:45, nap:'baby'};   // 赤ちゃん：ほぼ寝ている
     if(st==='larva')             return {bed:20, wake:8, jit:40, nap:'young'};  // 幼体：夜＋昼寝（幅広）
     const L = pet.lineage;
-    if(L==='tako') return (pet.form==='t3')
+    if(L==='tako') return shift((pet.form==='t3')
       ? {bed:21, wake:7, jit:40, nap:'none'}     // クラーケンは昼寝なし
-      : {bed:21, wake:7, jit:45, nap:'young'};   // タコ：まるっと・昼寝あり（幅広）
-    if(L==='inv')  return {bed:24, wake:9, jit:60, nap:'none'};   // インベーダー：夜更かし
-    return {bed:22, wake:7, jit:40, nap:'none'};                  // グレイ：バランス・昼寝なし
+      : {bed:21, wake:7, jit:45, nap:'young'});  // マーシャン：のんびり・昼寝あり
+    if(L==='inv')  return shift({bed:23, wake:8, jit:60, nap:'none'});   // インベーダー：基準
+    return shift({bed:22, wake:6, jit:40, nap:'none'});                  // グレイ：活発・睡眠短め
   }
   // その日の昼寝ウィンドウ（幼体/タコ/赤ちゃんのみ。回数・時間帯を日ごとにランダム化）
   function napWindows(di, kind){
@@ -977,8 +1103,11 @@
       // NEWBORN期は世話の充実度（機嫌）でも進化速度が少し増減
       const careF = (pet.stage==='egg') ? (pet.mood>=3 ? 1.15 : (pet.mood<=1 ? 0.85 : 1)) : 1;
       pet.EP += mult / 1440 * (1 + wb) * careF;
-      pet.hungerAcc += gameMin;
-      pet.moodAcc   += gameMin * (dirtN > 0 ? 2 : 1);   // 汚れ放置中はごきげん低下が2倍
+      // 系統の癖：マーシャン＝のんびり（きげんは減りにくいが、よく食べる）
+      const Lh = (pet.lineage==='tako') ? 1.2 : 1;
+      const Lm = (pet.lineage==='tako') ? 0.8 : 1;
+      pet.hungerAcc += gameMin * Lh;
+      pet.moodAcc   += gameMin * Lm * (dirtN > 0 ? 2 : 1);   // 汚れ放置中はごきげん低下が2倍
       if(pet.hungerAcc >= HUNGER_MIN){ pet.hungerAcc -= HUNGER_MIN; if(pet.hunger > 0) pet.hunger--; }
       if(pet.moodAcc   >= MOOD_MIN)  { pet.moodAcc   -= MOOD_MIN;   if(pet.mood   > 0) pet.mood--;   }
       clampMood();   // 汚れが出た・病気になった瞬間に、満タンだったきげんも上限まで下がる
@@ -1003,6 +1132,7 @@
       }
       // 病気放置 → 死（36時間・起床換算）
       if(pet.health === 'SICK'){
+        if(!pet.sickAcc) note('sick');
         pet.sickAcc += gameMin;
         if(pet.sickAcc >= 2160){ pet.dead = 'sick'; break; }
       }
@@ -1010,9 +1140,10 @@
       if(pet.hunger === 0){
         pet.starveAcc += gameMin;
         addA(A_ADJ.starveHour * gameMin / 60);      // 空腹MAXの放置＝放置寄り
+        if(pet.starveAcc >= 240) note('hungry');   // 4時間以上ひもじい思いをした
         if(pet.starveAcc >= 1800){ pet.dead = 'starve'; break; }
       } else pet.starveAcc = 0;
-      if(pet.W >= 2) addA(A_ADJ.dirtHour * gameMin / 60);   // 汚れの放置＝放置寄り
+      if(pet.W >= 2){ addA(A_ADJ.dirtHour * gameMin / 60); if(pet.dirtAcc >= 120) note('dirty'); }   // 汚れの放置＝放置寄り
     }
     pet.lastTick = now - remain;
 
@@ -1024,11 +1155,13 @@
     if(pet.poopAt && now >= pet.poopAt && !effectiveAsleep()){ pet.poopAt = 0; pet.W = Math.min(4, pet.W + 1); if(!pet.poopSince) pet.poopSince = now; }
     clampMood();   // うんち・食べ残しが増えた直後にも上限を反映
 
-    // わがまま拒否の放置（60分。DEBUG中は60秒）→ しつけ低下
+    // わがままを叱らずに置いておくと、時間が経てば自然に収まる（60分。DEBUG中は60秒）。
+    //  ただし「叱らずに流した」ぶん、しつけが下がり甘やかし寄りになる。
     const TANTRUM_MS = debugMode ? 60000 : 3600000;
     if(pet.tantrumAt && now - pet.tantrumAt >= TANTRUM_MS){
       pet.tantrumAt = 0; pet.tantrumType = '';
-      pet.D = Math.max(0, pet.D - 3);
+      addD(-3);
+      addA(A_ADJ.tantrumIgnored); addP(P_ADJ.tantrumIgnored); note('tantrum');
     }
 
     // ── 日次処理：日付が変わった時に1回だけ ──
@@ -1037,13 +1170,30 @@
       if(pet.calDay){
         // ふれあい（ごはん以外の世話）が無い日が続くと、少しずつ心が離れる
         if(pet.touchedToday){ pet.noTouchDays = 0; }
-        else { pet.noTouchDays = (pet.noTouchDays||0) + 1; addA(A_ADJ.noTouchDay); pet.B = Math.max(0, pet.B - 5); }
+        else { pet.noTouchDays = (pet.noTouchDays||0) + 1; addA(A_ADJ.noTouchDay); addP(P_ADJ.noTouchDay); pet.B = Math.max(0, pet.B - 5); }
         pet.lowBDays = (pet.B < 20) ? pet.lowBDays + 1 : 0;
         // ごはん／おやつの回数を減衰させ、最近の与え方が判定に効くようにする
         pet.mealCount  = (pet.mealCount||0)  * SNACK_DECAY;
         pet.snackCount = (pet.snackCount||0) * SNACK_DECAY;
         checkReturn();                                  // 帰還の兆候（疎遠期）と確定を判定
+
+        // ── 手紙：前日の出来事から1通つくる（材料が無ければ出さない）──
+        const d = pet.diary || {};
+        if(!pet.touchedToday && !d.fed && !d.snack) d.lonely = 1;   // だれも来なかった日
+        if(!d.playSw && !d.playSs && !d.playAb) d.noPlay = 1;       // 遊んでもらえなかった
+        if(weatherFetched){
+          if(weather==='clear') d.clear = 1;
+          else if(weather==='rain') d.rain = 1;
+          else if(weather==='snow') d.snow = 1;
+        }
+        if(!d.woken && pet.mood >= 3) d.slept = 1;                  // よく眠れた
+        const lt = buildLetter(d);
+        if(lt){ pet.letter = lt; pet.letterAt = Date.now(); pet.letterDay = pet.calDay; }
+
+        // ── C（ケア充実度）：その日の丁寧さを採点して移動平均へ ──
+        pet.C = Math.round((pet.C||50) * (1 - C_SMOOTH) + dailyCareScore(d) * C_SMOOTH);
       }
+      pet.diary = {};                                   // 材料は日ごとにリセット
       pet.calDay = tk;
       pet.touchedToday = false;
     }
@@ -1072,6 +1222,14 @@
   // カーソルが取りうる最大位置：末尾の追記位置まで（文字を飛ばして空きを作らせない）
   function nameCurMax(){ return Math.min(nameBuf.length, NAME_MAX-1); }
   let nameSelActive = false;     // 育成画面で「NAME:????」を選択中（黒塗り反転表示。Aで命名画面へ）
+  let letterSelActive = false;   // 育成画面で封筒を選択中（Aで手紙を開く）
+  const ENVELOPE = [            // 封筒 7×5
+    [1,1,1,1,1,1,1],
+    [1,0,1,1,1,0,1],
+    [1,0,0,1,0,0,1],
+    [1,0,0,0,0,0,1],
+    [1,1,1,1,1,1,1],
+  ];
   let fG = 0;
 
   function nameLayout(){ return {cells:ABC_ROWS, cellW:8, rowH:6, gx0:3, gy0:17}; }
@@ -2093,14 +2251,16 @@
       case 'larva': p = {mode:'walk', speed:0.14, jump:0.06, jumpH:2, float:0, squat:0.18, squatWalk:0.15}; break;
       default: {
         const L = pet.lineage;
+        // マーシャン＝のんびり／インベーダー＝基準（ぴょんぴょん）／グレイ＝活発
         if(L==='tako')     p = {mode:'walk', speed:0.09, jump:0.03, jumpH:1, float:0.12, squat:0.15, squatWalk:0.12}; // ときどき浮遊（控えめ）
-        else if(L==='inv') p = {mode:'hop',  speed:0.30, jump:0.25, jumpH:3, float:0,    squat:0.10}; // ぴょんぴょん移動
-        else               p = {mode:'walk', speed:0.13, jump:0.05, jumpH:2, float:0,    squat:0.18, squatWalk:0.18}; // グレイ：標準（ジャンプ控えめ）
+        else if(L==='inv') p = {mode:'hop',  speed:0.20, jump:0.25, jumpH:3, float:0,    squat:0.10}; // ぴょんぴょん移動
+        else               p = {mode:'walk', speed:0.26, jump:0.10, jumpH:2, float:0,    squat:0.18, squatWalk:0.18}; // よく動きまわる
       }
     }
-    // 性格補正：やんちゃは活発、まるっとはおっとり
-    if(pet.P >= 30){ p.speed *= 1.3; p.jump = Math.min(0.5, p.jump*1.5); }
-    else if(pet.P <= -30){ p.speed *= 0.8; }
+    // 性格補正：やんちゃほど速く・よく跳ね、おっとりほどゆっくり（系統のベース値に掛ける）
+    const t = pTrait();
+    p.speed *= 1 + t*0.35;
+    p.jump   = Math.min(0.5, p.jump * (1 + t*0.6));
     return p;
   }
 
@@ -2120,7 +2280,10 @@
     if(type==='snack') return false;                    // おやつは絶対に拒否しない
     if(!isYoung() || pet.tantrumAt) return false;
     let chance = Math.min(0.5, Math.max(0.05, 0.2 + (50 - pet.D) * 0.004));
-    chance = Math.min(0.75, chance * (1 + snackSeverity() * 0.8));   // おやつ漬けだとわがままが出やすい
+    chance *= 1 + snackSeverity() * 0.8;                             // おやつ漬けだとわがままが出やすい
+    // 甘やかしすぎると、つけあがってわがままが増える（甘やかしの唯一のペナルティ）
+    const st = careStyle((pet.A||0) / Math.max(1, daysSince(pet.birth)));
+    chance = Math.min(0.75, chance * (1 + st.spoil/100 * 0.6));
     if(Math.random() < chance){
       pet.tantrumAt = Date.now(); pet.tantrumType = type;
       return true;
@@ -2141,14 +2304,15 @@
         if(asleep){ leavePlate('meal'); }                           // 起こさない。皿を残す（起床後に空腹なら食べる／放置で食べ残し化）
         else if(pet.tantrumAt || rollTantrum('feed')){ setReaction('refuse'); }  // わがまま：食べない（しかると従う）
         else if(pet.hunger >= 4){
-          if(pet.P <= -30){                                         // まるっと傾向：満腹でも食べてしまう
-            pet.fullFeeds++; pet.P = Math.max(-100, pet.P - 1); addA(A_ADJ.feedFull);
+          if(pTrait() <= -0.5){                                     // おっとり：満腹でも食べてしまう
+            pet.fullFeeds++; addP(P_ADJ.feedFull); addA(A_ADJ.feedFull);
             rollSick(SICK_P.overeat);                               // 食べ過ぎ病気リスク
             schedulePoop(); eatReaction('meal');
           } else { leavePlate('meal'); setReaction('refuse'); }     // 拒否、皿が残る
         }
         else {
           if(pet.hunger <= 1) gainB(1);                             // 空腹時に食べさせるとなつく
+          note('fed');
           addA(A_ADJ.feedHungry);
           pet.hunger++; schedulePoop(); eatReaction('meal');        // 3口で減っていく食事アニメ
         }
@@ -2163,10 +2327,11 @@
         if(pet.hunger < 4) pet.hunger++;
         raiseMood();
         if(over){
-          addA(A_ADJ.snackOver);
+          addA(A_ADJ.snackOver); note('snackMany');
           rollSick(SICK_P.snackNow + snackSeverity() * 0.12);       // おやつ漬けでさらにおやつ＝その場で体調を崩すことがある
         } else {
           gainB(1);                                                 // 適度なおやつはなかよし度アップ
+          note('snack');
           addA(A_ADJ.snackOk);
         }
         markTouch();
@@ -2178,6 +2343,7 @@
           cleanSnapW = pet.W; cleanSnapPlate = !!pet.plateAt; cleanSnapSpoiled = !!pet.plateSpoiled; cleanSnapPoopFly = poopHasFlies(); cleanSnapKind = pet.plateKind;  // 見た目用に退避
           pet.W = 0; pet.plateAt = 0; pet.plateSpoiled = false; pet.poopSince = 0;
           raiseMood();                                              // 汚れを消してから上げるので、病気でなければMAXまで戻せる
+          note('cleaned');
           addA(A_ADJ.clean); markTouch();
           setReaction('clean', CLEAN_T, asleep);                    // ほうき掃きアニメ（睡眠中は音符を出さない）
         }
@@ -2186,6 +2352,7 @@
       case 'MED':
         if(pet.health === 'SICK'){
           pet.health = 'GOOD'; pet.sickAcc = 0; pet.sickCount++;    // 治療（回数は進化条件に使用）
+          note('cured');
           addA(A_ADJ.med); markTouch();
           setReaction('cured');
         }
@@ -2198,30 +2365,31 @@
           pet.praiseCount = (pet.praiseCount||0) + 1;
           addA(A_ADJ.praise); markTouch();
           if(isEstranged()){ setReaction('nothing'); }              // 疎遠期：反応しない（…）
-          else { raiseMood(); gainB(1); setReaction('heart'); }
+          else { raiseMood(); gainB(1); note('praised'); addP(P_ADJ.praise); setReaction('heart'); }
         }
         break;
       case 'SCOLD':
         if(asleep){                                                 // 起こしてしまう
           pet.wokeUntil = Date.now() + (debugMode ? 30000 : 600000);
           pet.mood = Math.max(0, pet.mood - 2);
-          pet.P = Math.min(100, pet.P + 2);                         // 夜更かし癖（やんちゃ化）
+          addP(P_ADJ.wokenUp);                                      // 睡眠を邪魔されて落ち着かなくなる
           pet.scoldBadCount = (pet.scoldBadCount||0) + 1;            // 寝ているのを起こす＝理不尽なしかる
+          note('woken');
           addA(A_ADJ.scoldBad);
           setReaction('anger');
         } else if(pet.tantrumAt){                                   // 正当なしかる：しゅんとして従う（わがまま解消）
           pet.tantrumAt = 0; pet.tantrumType = '';
-          pet.D = Math.min(100, pet.D + 5);
+          addD(+5);
           if(pet.mood > 0) pet.mood--;
-          addA(A_ADJ.scoldFair); markTouch();                        // しつけは甘やかしでも放置でもない（ふれあいには数える）
+          addA(A_ADJ.scoldFair); addP(P_ADJ.scoldFair); markTouch(); // しつけは甘やかしでも放置でもない（ふれあいには数える）
           setReaction('sad');                                       // 食事は出さない。改めてごはんをあげれば食べる
         } else {                                                    // 不当なしかる
           pet.mood = Math.max(0, pet.mood - 2);
           pet.B = Math.max(0, pet.B - 2);
-          pet.D = Math.max(0, pet.D - 4);
-          pet.P = Math.min(100, pet.P + 1);
+          addD(-4);
+          addP(P_ADJ.scoldBad);
           pet.scoldBadCount = (pet.scoldBadCount||0) + 1;
-          addA(A_ADJ.scoldBad);
+          addA(A_ADJ.scoldBad); note('scolded');
           setReaction('sad');
         }
         break;
@@ -2399,6 +2567,12 @@
     ctxM.font='6px "Press Start 2P"';   // DAYカウントは常にピクセル字体（名前がかなでも影響させない）
     ctxM.fillStyle=NK;
     ctxM.textAlign='right'; ctxM.fillText(dayLabel(),  (W-2)*S, 2*S);
+    // 未読の手紙があると、名前と日数のあいだで封筒が点滅する（選択中は常時点灯）
+    if(hasLetter() && (letterSelActive || fM%16 < 10)){
+      const ex = 24, ey = 2;
+      if(letterSelActive){ for(let dx=-1;dx<8;dx++) for(let dy=-1;dy<6;dy++) dot(ctxM, ex+dx, ey+dy, DM); }
+      stamp(ctxM, ENVELOPE, ex, ey, NK);
+    }
     for(let x=0;x<W;x++) dot(ctxM,x,HEADER_Y,DM);
 
     // ── 天体（右上） ──
@@ -2764,7 +2938,7 @@
   function dpadAnim(el){ el.style.transform='translateY(2px) scale(0.88)'; el.style.filter='brightness(2.5)'; setTimeout(()=>{el.style.transform='';el.style.filter='';},120); }
 
   onPress(document.getElementById('mmenu'),()=>{ playClick(); btnAnim(document.getElementById('mmenu'),1,0.93); menuSel=0; menuScroll=0; inSettings=false; inPlay=false; inFeed=false; inStatus=false; confirmReset=false; locPrime=false; playSel=0; feedSel=0; showView('menu'); });
-  onPress(document.getElementById('mb'),()=>{ playClick(); btnAnim(document.getElementById('mb')); nameSelActive=false; });
+  onPress(document.getElementById('mb'),()=>{ playClick(); btnAnim(document.getElementById('mb')); nameSelActive=false; letterSelActive=false; });
   // お世話アクションはMENU内のアイコングリッドへ移動
   // 未命名時：十字上で「NAME:????」を選択（黒塗り反転）→ Aで命名画面へ。下/Bで選択解除
   onPress(document.getElementById('ma'),()=>{
@@ -2772,6 +2946,8 @@
     if(arriveT >= 0) return;                      // 到着演出中は操作を受け付けない
     if(!pet.name && nameSelActive){
       nameSelActive=false; startNaming(); showView('naming');
+    } else if(letterSelActive && hasLetter()){
+      letterSelActive=false; showView('letter');
     }
   });
   document.querySelectorAll('#view-main .dpad-arrow').forEach(el=>{
@@ -2781,6 +2957,9 @@
       if(!pet.name){
         if(el.classList.contains('up'))   nameSelActive = true;
         if(el.classList.contains('down')) nameSelActive = false;
+      } else if(hasLetter()){
+        if(el.classList.contains('up'))   letterSelActive = true;
+        if(el.classList.contains('down')) letterSelActive = false;
       }
     });
   });
@@ -3218,6 +3397,49 @@
     if(!storyDone){ storyScrollY-=0.8; if(storyScrollY < -(lines.length*S_LINE_H)){ storyDone=true; setTimeout(()=>{ showView('menu'); }, 500); } }
   }
   setInterval(tickStory, 80);
+
+
+  // ── 手紙の画面 ──
+  const ctxT = initCanvas('lcd-t');
+  const LETTER_TITLE = { ja:'おてがみ', en:'A LETTER' };
+  function tickLetter(){
+    if(scene !== 'letter') return;
+    ctxT.fillStyle=OFF; ctxT.fillRect(0,0,W*S,H*S);
+    ctxT.textAlign='center'; ctxT.textBaseline='top';
+    // 見出し
+    ctxT.font = uiFont(7); ctxT.fillStyle = ON;
+    ctxT.fillText(LETTER_TITLE[lang] || LETTER_TITLE.en, (W*S)/2, 6*S);
+    for(let x=6;x<W-6;x++) dot(ctxT, x, 14, DIM);
+    // 本文（材料から組み立てた行）。差出人(y52)・案内(y59)に掛からないよう上下中央に置く
+    const body = letterBody();
+    const TOP = 18, BOT = 48;
+    const LH = (body.length <= 5) ? 6 : 5;         // 行数が多い時だけ詰める
+    const y0 = Math.max(TOP, Math.round((TOP + BOT)/2 - (body.length - 1)*LH/2));
+    ctxT.font = (lang==='ja') ? ('10px '+JP_FONT) : '6px "Press Start 2P"';
+    ctxT.fillStyle = ON;
+    body.forEach((line,i)=>{
+      if(!line) return;
+      ctxT.fillText(line, (W*S)/2, (y0 + i*LH)*S);
+    });
+    // 差出人
+    ctxT.font = nameFont(6, pet.name);
+    ctxT.textAlign='right';
+    ctxT.fillStyle = ON;
+    ctxT.fillText(pet.name + (lang==='ja' ? ' より' : ''), (W-4)*S, 52*S);
+    ctxT.textAlign='center';
+    // 閉じ方の案内（点滅）
+    if(Math.floor(Date.now()/450)%2===0){
+      ctxT.font = uiFont(6); ctxT.fillStyle = DIM;
+      ctxT.fillText(lang==='ja' ? 'A/B でとじる' : 'A/B : CLOSE', (W*S)/2, 60*S);
+    }
+  }
+  setInterval(tickLetter, 100);
+
+  // 閉じたら既読にする（封筒も消える）
+  function closeLetter(){ pet.letter = null; savePet(); showView('main'); }
+  onPress(document.getElementById('ta'),()=>{ playClick(); btnAnim(document.getElementById('ta')); closeLetter(); });
+  onPress(document.getElementById('tb'),()=>{ playClick(); btnAnim(document.getElementById('tb')); closeLetter(); });
+  onPress(document.getElementById('tmenu'),()=>{ playClick(); btnAnim(document.getElementById('tmenu'),1,0.93); closeLetter(); });
 
   onPress(document.getElementById('sa'),()=>{ playClick(); btnAnim(document.getElementById('sa')); showView('menu'); });
   onPress(document.getElementById('sb'),()=>{ playClick(); btnAnim(document.getElementById('sb')); showView('menu'); });
