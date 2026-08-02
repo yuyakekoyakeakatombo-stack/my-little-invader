@@ -1911,19 +1911,23 @@
     return segs.filter(([a,b])=>a<=b);
   }
 
-  // CLEAN実行時：ほうきが左→右に掃いて、通過した汚れが消えていく
-  const BROOM_SPR=[          // 斜めの柄＋ヘッド 7×10
-    [0,0,0,0,0,1,1],
-    [0,0,0,0,1,1,0],
-    [0,0,0,1,1,0,0],
-    [0,0,1,1,0,0,0],
-    [0,1,1,0,0,0,0],
-    [1,1,1,1,0,0,0],
-    [1,1,1,1,0,0,0],
-    [1,1,1,1,0,0,0],
-    [1,0,1,0,1,0,0],
-    [1,0,1,0,1,0,0],
-  ];
+  // CLEAN実行時：汚れが左から順に消えて、消えた場所にキラキラが弾ける
+  //  t=0..1 で中心から十字に広がり、後半は薄くなって消える
+  function drawSparkle(cx, cy, t, NK, DM){
+    if(t < 0 || t > 1) return;
+    const r = 1 + Math.round(t*3);                  // 広がる長さ
+    const col = (t < 0.55) ? NK : DM;               // 後半は薄く
+    dot(ctxM, cx, cy, col);
+    dot(ctxM, cx-r, cy, col); dot(ctxM, cx+r, cy, col);
+    dot(ctxM, cx, cy-r, col); dot(ctxM, cx, cy+r, col);
+    if(t > 0.2){                                    // 斜めの短い光を添える
+      const d = Math.max(1, r-2);
+      dot(ctxM, cx-d, cy-d, DM); dot(ctxM, cx+d, cy-d, DM);
+      dot(ctxM, cx-d, cy+d, DM); dot(ctxM, cx+d, cy+d, DM);
+    }
+  }
+  // 仕上げに散らす小さな輝き [x, y, 出るタイミング]
+  const SPARKLE_DUST = [[10,44,0.30],[26,38,0.45],[43,46,0.38],[18,51,0.55],[36,41,0.60]];
   const CLEAN_T = 36;        // 掃除アニメの長さ
   let cleanSnapW = 0, cleanSnapPlate = false, cleanSnapSpoiled = false, cleanSnapPoopFly = false, cleanSnapKind = 'meal';   // 掃除開始時点の汚れの見た目スナップショット
 
@@ -1993,17 +1997,17 @@
 .............
 .............`),
     CLEAN: careIcon(`
-..........##.
-.........##..
-..+.....##...
-.+++...##....
-..+...##.....
-.....##......
-..######.....
-.########....
-.########....
-.##.##.##....
-.+..+..+.....
+..........+..
+.........+++.
+....#.....+..
+....#........
+...###.......
+.#######.....
+...###.......
+....#........
+....#.....+..
+.........+++.
+..........+..
 .............`),
     MED: careIcon(`
 .........##..
@@ -2032,17 +2036,17 @@
 ......#......
 .............`),
     SCOLD: careIcon(`
-.....#####...
-....#####....
-...#####.....
-..#########..
-.....#####...
-....#####....
-...#####.....
-..#####......
-..####.......
-..###........
-..#..........
+.............
+..##....##...
+..##....##...
+####....####.
+####....####.
+.............
+.............
+####....####.
+####....####.
+..##....##...
+..##....##...
 .............`),
     GAME: careIcon(`
 .............
@@ -2666,23 +2670,35 @@
       if(poopFly) drawFly(POOP_X[i]+2, MAIN_GY-6, i, NK, DM);   // 放置中はハエがたかる
     }
 
-    // ── CLEAN：ほうきが左→右へ掃き、通過した汚れが消える ──
+    // ── CLEAN：汚れが左から順に消えて、消えた場所にキラキラが弾ける ──
     if(reactT > 0 && reactType === 'clean'){
-      const prog = (CLEAN_T - reactT) / CLEAN_T;
-      const bx = Math.round(-8 + prog * (W + 16));                  // 画面外左→画面外右
-      // まだ掃かれていない汚れ・皿を表示（ほうきの先端が届くまで）
+      const prog = (CLEAN_T - reactT) / CLEAN_T;                    // 0→1
+      // 掃除前にあった汚れを左から並べる（消える順を決めるため）
+      const items = [];
       for(let i=0;i<cleanSnapW && i<POOP_X.length;i++)
-        if(POOP_X[i] > bx + 4){
-          stamp(ctxM, POOP_SPR, POOP_X[i], MAIN_GY-4, NK);
-          if(cleanSnapPoopFly) drawFly(POOP_X[i]+2, MAIN_GY-6, i, NK, DM);
+        items.push({kind:'poop', i, x:POOP_X[i], cx:POOP_X[i]+2});
+      if(cleanSnapPlate || cleanSnapSpoiled)
+        items.push({kind:'plate', cx:plateX + (foodW(cleanSnapKind)>>1)});
+      items.sort((a,b)=>a.cx-b.cx);
+      items.forEach((it,k)=>{
+        const gone = 0.12 + k * 0.5 / Math.max(1, items.length);    // 消える瞬間（左から順に）
+        if(prog < gone){
+          if(it.kind==='poop'){
+            stamp(ctxM, POOP_SPR, it.x, MAIN_GY-4, NK);
+            if(cleanSnapPoopFly) drawFly(it.cx, MAIN_GY-6, it.i, NK, DM);
+          } else if(cleanSnapSpoiled){
+            drawSpoiledPlate(plateX, MAIN_GY-1, NK, DM, cleanSnapKind);
+          } else {
+            drawFoodPlate(plateX, MAIN_GY-1, 3, NK, DM, cleanSnapKind);
+          }
+        } else {
+          drawSparkle(it.cx, MAIN_GY-4, (prog-gone)/0.4, NK, DM);   // 消えた跡でキラキラ
         }
-      if(plateX > bx + 4){
-        if(cleanSnapSpoiled) drawSpoiledPlate(plateX, MAIN_GY-1, NK, DM, cleanSnapKind);
-        else if(cleanSnapPlate) drawFoodPlate(plateX, MAIN_GY-1, 3, NK, DM, cleanSnapKind);
-      }
-      // ほうき本体（上下に小さく揺れながら進む）
-      const by = MAIN_GY - 10 + ((fM%6<3) ? 0 : 1);
-      stamp(ctxM, BROOM_SPR, bx, by, NK);
+      });
+      // 仕上げに小さな輝きを散らす（掃除が終わった気持ちよさを出す）
+      SPARKLE_DUST.forEach(([sx,sy,delay])=>{
+        drawSparkle(sx, sy, (prog-delay)/0.45, DM, DM);
+      });
     }
 
     // ── 感情アイコン（リアクション優先 → 状態駆動。移動に追従し画面内にクランプ） ──
