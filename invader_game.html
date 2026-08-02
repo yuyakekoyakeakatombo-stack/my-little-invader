@@ -1912,18 +1912,18 @@
   }
 
   // CLEAN実行時：汚れが左から順に消えて、消えた場所にキラキラが弾ける
-  //  t=0..1 で中心から十字に広がり、後半は薄くなって消える
+  //  そうじアイコンと同じダイヤ型の四方星。t=0..1 で大きくなり、後半は薄くなって消える。
+  //  縦横に伸びる光の筋＋中心のダイヤで、辺がくびれた星の形になる。
   function drawSparkle(cx, cy, t, NK, DM){
     if(t < 0 || t > 1) return;
-    const r = 1 + Math.round(t*3);                  // 広がる長さ
+    const r = 1 + Math.round(t*2);                  // 光の筋の長さ 1→3（最大でアイコンの星と同じ大きさ）
+    const core = (r >= 3) ? 2 : 1;                  // 中心のダイヤは一番大きい時だけ（小さいうちは細い十字）
     const col = (t < 0.55) ? NK : DM;               // 後半は薄く
-    dot(ctxM, cx, cy, col);
-    dot(ctxM, cx-r, cy, col); dot(ctxM, cx+r, cy, col);
-    dot(ctxM, cx, cy-r, col); dot(ctxM, cx, cy+r, col);
-    if(t > 0.2){                                    // 斜めの短い光を添える
-      const d = Math.max(1, r-2);
-      dot(ctxM, cx-d, cy-d, DM); dot(ctxM, cx+d, cy-d, DM);
-      dot(ctxM, cx-d, cy+d, DM); dot(ctxM, cx+d, cy+d, DM);
+    for(let dy=-r; dy<=r; dy++){
+      for(let dx=-r; dx<=r; dx++){
+        const ax = Math.abs(dx), ay = Math.abs(dy);
+        if((dx===0 || dy===0) || (ax + ay) <= core) dot(ctxM, cx+dx, cy+dy, col);
+      }
     }
   }
   // 仕上げに散らす小さな輝き [x, y, 出るタイミング]
