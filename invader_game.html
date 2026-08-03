@@ -275,8 +275,8 @@
           </div>
         </div>
 
-        <!-- LETTER（キャラからの手紙） -->
-        <div class="view" id="view-letter">
+        <!-- DIARY（キャラがつけている日記） -->
+        <div class="view" id="view-diary">
           <div class="lcd-wrap" style="margin-top:48px;"><canvas id="lcd-t"></canvas></div>
           <div class="controller-wrap">
             <div class="controller-row">
@@ -338,7 +338,7 @@
     en: {
       feed:'FEED', clean:'CLEAN', med:'MEDICINE', pet:'PRAISE', scold:'SCOLD', game:'MINI GAME',
       meal:'MEAL', snack:'TREAT',
-      status:'STATUS', story:'STORY', settings:'SETTINGS', play:'PLAY',
+      status:'STATUS', story:'STORY', settings:'SETTINGS', play:'PLAY', diary:'DIARY',
       sound:'SOUND', bodycolor:'BODY COLOR', location:'LOCATION', language:'LANGUAGE', debug:'DEBUG', reset:'ALL RESET',
       on:'ON', off:'OFF', sure:'SURE?', yesno:'A:YES  B:NO',
       locn1:'USE LOCATION', locn2:'ONLY TO SHOW', locn3:'IN-GAME WEATHER', locok:'A:OK  B:CANCEL',
@@ -351,7 +351,7 @@
     ja: {
       feed:'ごはん', clean:'そうじ', med:'くすり', pet:'ほめる', scold:'しかる', game:'ゲーム',
       meal:'ごはん', snack:'おやつ',
-      status:'ステータス', story:'ストーリー', settings:'せってい', play:'あそぶ',
+      status:'ステータス', story:'ストーリー', settings:'せってい', play:'あそぶ', diary:'にっき',
       sound:'サウンド', bodycolor:'カラー', location:'ロケーション', language:'げんご', debug:'デバッグ', reset:'リセット',
       on:'オン', off:'オフ', sure:'ほんとうに？', yesno:'A:はい B:いいえ',
       locn1:'いちじょうほうは', locn2:'ゲームの天気に', locn3:'のみつかいます', locok:'A:OK  B:キャンセル',
@@ -571,7 +571,7 @@
     name:'', birth:0, lastTick:0,
     hunger:4, mood:3, health:'GOOD',      // 表示ステータス
     hungerAcc:0, moodAcc:0,               // 進行タイマー（分）
-    P:0, D:50, C:50, B:50, W:0,           // 隠しパラメータ（性格/しつけ/ケア/なつき/汚れ）
+    P:0, D:50, Dm:50, C:50, B:50, W:0,    // 隠しパラメータ（性格/しつけ/しつけの移動平均/ケア/なつき/汚れ）
     plateAt:0, plateSpoiled:false,        // 残った皿（放置で食べ残し汚れ化＝plateSpoiled）
     plateKind:'meal',                     // 残した皿の中身（'meal'=ごはん / 'snack'=おやつ）
     mealCount:0, snackCount:0,            // ごはん／おやつを与えた回数（日次で減衰。おやつ過多の判定用）
@@ -589,7 +589,7 @@
     stage:'egg', lineage:'', form:'',     // 育成段階: egg→mid→larva→adult(系統)→final(形態)
     EP:0, ageMin:0, eggTargetEP:0,        // 進化ポイント/年齢(分)/NEWBORN→BABYの個体別目標EP
     finalAt:0, departFlag:false,          // 最終形態到達時刻・旅立ちエンド確定
-    nightPlays:0,                         // 夜更かしプレイ回数（22時以降。i3条件）
+    nightPlays:0, nightPlayToday:false,   // 夜更かしプレイ回数（22時以降。i3条件）／今日夜更かししたか
     best:{sw:0,ss:0,ab:0},                // ミニゲーム自己ベスト（g3条件）
     tantrumAt:0, tantrumType:'',          // わがまま拒否中（Stage2まで。正当なしかるで解消）
     // ── かまい度システム（甘やかし↔放置。進化分岐と帰還判定に使う）──
@@ -599,7 +599,7 @@
     touchedToday:false, noTouchDays:0,    // 今日ふれあったか／ふれあいゼロの連続日数
     estrangedDays:0,                      // 疎遠期の連続日数（帰還までの猶予）
     // ── 手紙 ──
-    diary:{}, letter:null, letterAt:0, letterDay:'',   // その日の出来事／未読の手紙／届いた時刻／最後に出した日
+    diary:{},                             // その日の出来事（日付が変わると日記1日分にまとめる）
     larvaAt:0, snapL:null,                // 幼体到達時刻とスナップショット（帰還判定の起点）
     lineageAt:0, snapA:null,              // 成体到達時刻とスナップショット（Stage4形態判定の起点）
   }; }
@@ -667,7 +667,6 @@
   };
   const A_SPOIL_SCALE   = 30;     // 1日あたりのAがこの値で「甘やかし度100」
   const A_NEGLECT_SCALE = 15;     // 1日あたりの−Aがこの値で「放置度100」
-  const PLAY_WEIGHT     = 25;     // ミニゲーム傾向の重み（世話スタイルが主・ゲームは従）
   // 帰還エンディング（幼体到達を起点に判定）
   const RET_GRACE_DAYS  = 3;      // 幼体到達からこの日数は判定しない（猶予）
   const RET_ESTR_DAYS   = 3;      // 疎遠期がこの日数続くと帰還
@@ -677,6 +676,7 @@
   const RET_NOTOUCH_DAYS= 5;      // ふれあいゼロがこの日数続くと兆候
 
   function addA(n){ pet.A = Math.max(-9999, Math.min(9999, (pet.A||0) + n)); }
+  const D_SMOOTH = 0.3;           // しつけ度の移動平均に、その日の値を取り込む割合
   // しつけの増減。グレイは覚えが早いぶん、すさむのも早い（変化が1.5倍）
   function addD(n){
     const k = (pet.lineage==='grey') ? 1.5 : 1;
@@ -768,7 +768,11 @@
     const bad = sg.includes('notouch') || sg.length >= 2;
     if(bad){
       pet.estrangedDays = (pet.estrangedDays||0) + 1;
-      if(pet.estrangedDays >= RET_ESTR_DAYS) pet.ufoFlag = true;
+      if(pet.estrangedDays >= RET_ESTR_DAYS){
+        pet.ufoFlag = true;
+        // 迎えが来る日。最後の一言を日記に書き残してから連れて行かれる
+        addDiary({ d: petDay(), n: pet.name, t: ['farewell'], c: '', ts: Date.now() });
+      }
     } else {
       pet.estrangedDays = 0;                                 // 持ち直したら解除
     }
@@ -801,20 +805,36 @@
 
   function evolveTo(st){ pet.stage = st; evoT = 36; note('evolved'); savePet(); }
 
-  // Stage3 系統分岐：全期間の世話スタイル＋ミニゲーム傾向
-  //   甘やかす→タコ ／ バランス→インベーダー ／ 放置気味→グレイ
-  // 層1：系統＝「何を一緒に遊んだか」だけで決まる。世話の仕方とは独立させてある。
-  //  3種のゲームが3系統に対称に対応するので、構造として優劣がつかない。
-  //  ほとんど遊ばせていない／どれも均等なら、基準のインベーダーになる。
-  const LINEAGE_MIN_PLAYS = 3;    // これ未満のプレイ回数では偏りを見ない
-  const LINEAGE_BIAS      = 0.4;  // 一番遊んだゲームがこの比率を超えて初めて偏りとみなす
+  // 層1：系統＝「何を一緒に遊んだか」が主、「どう育てたか」が従。
+  //  ミニゲーム3種が3系統に対称に対応し、そこへ世話の傾向を弱く足す。
+  //  ゲームを全く触らなくても育て方だけで傾向が出るが、両者がぶつかったらゲームが勝つ。
+  //   spacewalk / 甘やかし     → マーシャン
+  //   shootingstar / どちらでもない → インベーダー
+  //   abduction / しつけが通っている → グレイ
+  //  放置は系統に対して中立にしてある。放置の帰結は体型（C）と帰還エンディングのほうで効くので、
+  //  ここでも効かせると「グレイ＝手を抜いた結果」になり、系統に優劣をつけないという方針と衝突する。
+  const LINEAGE_CARE_W = 0.45;    // 世話の重み（ゲームの偏りは最大1.0なので、世話は従）
+  const LINEAGE_TH     = 0.30;    // 最大でもこれ未満なら決め手なしとみなしてインベーダー
+  const LINEAGE_D_MIN  = 55;      // しつけ度がこれを超えた分だけグレイ側に効く
+  const LINEAGE_D_FULL = 90;      // ここでグレイ側の寄与が最大
+  function playBias(r){ return Math.max(0, (r - 1/3) / (2/3)); }   // 3種均等=0、1本に全振り=1
+  function discTrait(){           // しつけの通り具合 0〜1（駆け込み調整が効かないよう移動平均を使う）
+    const d = (pet.Dm != null) ? pet.Dm : (pet.D || 50);
+    return Math.max(0, Math.min(1, (d - LINEAGE_D_MIN) / (LINEAGE_D_FULL - LINEAGE_D_MIN)));
+  }
   function pickLineage(){
     const p = pet.plays || {sw:0,ss:0,ab:0};
     const total = (p.sw||0)+(p.ss||0)+(p.ab||0);
-    if(total < LINEAGE_MIN_PLAYS) return 'inv';
-    const top = bestOf({tako:p.sw||0, inv:p.ss||0, grey:p.ab||0});
-    const cnt = {tako:p.sw||0, inv:p.ss||0, grey:p.ab||0}[top];
-    return (cnt / total > LINEAGE_BIAS) ? top : 'inv';
+    const r = total ? {sw:(p.sw||0)/total, ss:(p.ss||0)/total, ab:(p.ab||0)/total}
+                    : {sw:0, ss:0, ab:0};
+    const spoil = Math.max(0, Math.min(1, careStyle((pet.A||0) / Math.max(1, daysSince(pet.birth))).spoil / 100));
+    const s = {
+      tako: playBias(r.sw) + LINEAGE_CARE_W * spoil,
+      grey: playBias(r.ab) + LINEAGE_CARE_W * discTrait(),
+      inv:  playBias(r.ss),
+    };
+    const top = bestOf(s);
+    return (s[top] >= LINEAGE_TH) ? top : 'inv';
   }
   // Stage4 形態分岐：成体になってからの行動だけで判定（前半と後半で育て方を変えられる）
   //   甘やかす→まるっと(1) ／ バランス→バランス(2) ／ 放置気味→やんちゃ(3)
@@ -847,7 +867,7 @@
       return evolveTo('larva');
     }
     if(pet.stage==='larva' && pet.EP >= 4){
-      pet.lineage = pickLineage();                // 世話スタイル×ミニゲーム傾向で系統決定
+      pet.lineage = pickLineage();                // 系統決定：ミニゲーム傾向が主、世話の傾向が従
       // 成体到達＝形態判定の起点。ここからの行動だけで最終形態が決まる
       pet.lineageAt = Date.now();
       const p = pet.plays || {sw:0,ss:0,ab:0};
@@ -874,7 +894,7 @@
       raiseMood();                                // 遊んで楽しかった（汚れ・病気があるうちはMAXにならない）
       gainB(2);
       const h = new Date(r.at).getHours();
-      if(h >= 22 || h < 4){ pet.nightPlays++; addP(P_ADJ.nightPlay); }   // 夜更かしは生活リズムの話なのでPに効く
+      if(h >= 22 || h < 4){ pet.nightPlays++; pet.nightPlayToday = true; addP(P_ADJ.nightPlay); }   // 夜更かしは生活リズムの話なのでPに効く
       if(!pet.plays) pet.plays = {sw:0,ss:0,ab:0};
       // スコアはPに影響させない（遊ぶゲームの種類＝系統 と 性格 を独立させるため）
       if(r.game==='spacewalk'){    note('playSw'); pet.best.sw = Math.max(pet.best.sw, r.score); pet.plays.sw++; }
@@ -929,16 +949,20 @@
 
 
   // ════════════════════════════════════════
-  // 手紙システム
-  //  その日の出来事を diary に貯め、日付が変わったときに材料の中から
-  //  印象の強いものを選んで手紙にする。定型文の抽選ではなく「実際に起きたこと」の報告。
+  // 日記システム
+  //  その日の出来事を dayNote に貯め、日付が変わったときに材料の中から
+  //  印象の強いものを選んで1日分の日記にする。定型文の抽選ではなく「実際に起きたこと」の記録。
   //  文面は言語ごとに持ち、表示時に組み立てる（後から端末内AIの生成に差し替えられるよう、
   //  材料（タグと回数）と文面を分けてある）。
+  //  日記本体は pet とは別のキーに保存する。帰還エンディングはセーブを消すが、
+  //  日記は ALL RESET まで残り、死んだあとも帰還したあとも読み返せる。
   // ════════════════════════════════════════
   function note(tag, n){ const d = pet.diary || (pet.diary = {}); d[tag] = (d[tag]||0) + (n||1); }
 
   // 材料 → 文面（2行以内に収まる長さで用意する。LCD幅に収まるよう改行済み）
-  const LETTER_LINES = {
+  const DIARY_LINES = {
+    farewell: { ja:['むかえが きた','たのしかったよ','ありがとう'],
+                en:['THEY CAME FOR ME.','IT WAS FUN.','THANK YOU'] },
     hungry:   { ja:['きのう ずっと','おなかが すいてた'],      en:['I WAS HUNGRY','ALL DAY'] },
     fed:      { ja:['ごはん おいしかった'],                    en:['THE FOOD WAS GOOD'] },
     snack:    { ja:['おやつ うれしかった'],                    en:['THE TREAT WAS NICE'] },
@@ -962,30 +986,78 @@
     evolved:  { ja:['からだが おおきく','なった みたい'],      en:['I THINK MY BODY','GOT BIGGER'] },
     slept:    { ja:['よく ねむれた'],                          en:['I SLEPT WELL'] },
   };
-  // 印象の強い順。上から拾って最大3つ載せる
-  const LETTER_PRIORITY = ['evolved','sick','cured','hungry','lonely','woken','scolded','dirty',
-                           'snackMany','tantrum','cleaned','praised','playSw','playSs','playAb',
-                           'snack','fed','noPlay','rain','snow','clear','slept'];
+  // 性格でにじむ結びの一言（おっとり／やんちゃ）
+  const DIARY_CLOSE = {
+    calm:   { ja:['きょうも しずかな','いちにち だった'], en:['A QUIET DAY,','LIKE ALWAYS'] },
+    lively: { ja:['あしたは なにを','しようかな'],        en:['WHAT SHOULD I DO','TOMORROW?'] },
+  };
+  // 印象の強い順。上から拾って載せる
+  const DIARY_PRIORITY = ['farewell','evolved','sick','cured','hungry','lonely','woken','scolded','dirty',
+                          'snackMany','tantrum','cleaned','praised','playSw','playSs','playAb',
+                          'snack','fed','noPlay','rain','snow','clear','slept'];
 
-  // 前日の diary から手紙を作る（材料が無ければ出さない）
-  function buildLetter(d){
-    const picked = LETTER_PRIORITY.filter(t => d[t] > 0).slice(0, 3);
-    return picked.length ? {tags: picked, at: Date.now()} : null;
+  // ── 日記帳（pet とは別保存。ALL RESET でだけ消える）──
+  const DIARY_KEY = 'myvader_diary';
+  const DIARY_MAX = 60;                       // 残す最大日数（古いものから捨てる）
+  let diaryLog = [], diaryUnread = 0;
+  try{
+    const raw = localStorage.getItem(DIARY_KEY);
+    if(raw){ const o = JSON.parse(raw) || {}; diaryLog = o.log || []; diaryUnread = o.unread || 0; }
+  }catch(e){}
+  function saveDiary(){ try{ localStorage.setItem(DIARY_KEY, JSON.stringify({log:diaryLog, unread:diaryUnread})); }catch(e){} }
+  function clearDiary(){ diaryLog = []; diaryUnread = 0; try{ localStorage.removeItem(DIARY_KEY); }catch(e){} }
+  // 中間体になったら日記を書き始める。書いたものは死んでも帰還しても読み返せる
+  function diaryWriting(){ return !!pet.stage && pet.stage !== 'egg'; }
+  function diaryUnlocked(){ return diaryWriting() || diaryLog.length > 0; }
+
+  // 性格で書き方が変わる。おっとりはまめに長く、やんちゃは書き忘れる日があって短い
+  function diaryStyle(){
+    const t = pTrait();                       // -1=おっとり … +1=やんちゃ
+    return {
+      skip:   Math.max(0, t) * 0.35,          // その日は書かずに終わる確率
+      topics: (t <= -0.4) ? 4 : (t >= 0.4 ? 2 : 3),
+      close:  (t <= -0.4) ? 'calm' : (t >= 0.4 ? 'lively' : ''),
+    };
   }
-  function letterBody(){
-    if(!pet.letter) return [];
-    const parts = pet.letter.tags
-      .map(t => { const m = LETTER_LINES[t]; return m ? (lang==='ja' ? m.ja : m.en) : null; })
+  // 前日の材料から1日分を書く（材料が無ければ書かない）
+  function buildDiary(d){
+    const st = diaryStyle();
+    if(Math.random() < st.skip) return null;
+    const picked = DIARY_PRIORITY.filter(t => d[t] > 0).slice(0, st.topics);
+    if(!picked.length) return null;
+    return { d: petDay(), n: pet.name, t: picked, c: st.close, ts: Date.now() };
+  }
+  function addDiary(e){
+    if(!e) return;
+    diaryLog.push(e);
+    if(diaryLog.length > DIARY_MAX) diaryLog.splice(0, diaryLog.length - DIARY_MAX);
+    diaryUnread++;
+    saveDiary();
+  }
+  function diaryBody(e){
+    if(!e) return [];
+    const parts = (e.t||[])
+      .map(t => { const m = DIARY_LINES[t]; return m ? (lang==='ja' ? m.ja : m.en) : null; })
       .filter(Boolean);
-    const total = parts.reduce((a,b)=>a+b.length, 0);
+    const cl = (e.c && DIARY_CLOSE[e.c]) ? (lang==='ja' ? DIARY_CLOSE[e.c].ja : DIARY_CLOSE[e.c].en) : null;
+    // 署名の位置(y52)まで入りきる行数に収める。結びは性格が出るところなので先に席を取り、
+    // あふれるぶんは話題のほうを落とす
+    const BODY_MAX = 7;
+    const budget = BODY_MAX - (cl ? cl.length : 0);
+    const kept = [];
+    let used = 0;
+    for(const lines of parts){
+      if(used + lines.length > budget) break;
+      kept.push(lines); used += lines.length;
+    }
+    if(cl){ kept.push(cl); used += cl.length; }
     const out = [];
-    parts.forEach((lines,i)=>{
-      if(i && total <= 5) out.push('');        // 行数が少ないときだけ段落を空ける
+    kept.forEach((lines,i)=>{
+      if(i && used <= 5) out.push('');         // 行数が少ないときだけ段落を空ける
       lines.forEach(l=>out.push(l));
     });
     return out;
   }
-  function hasLetter(){ return !!pet.letter; }
 
 
   // ════════════════════════════════════════
@@ -1011,15 +1083,17 @@
   //  接し方と生活リズムだけで動かす（ミニゲームの種類には влиять させない）。
   //  移動の速さ・跳ね方・睡眠時間・食事量に効く。
   // ════════════════════════════════════════
+  //  性格は「生活リズム」だけで決める。ほめる・正しく叱る・満腹給餌は系統（甘やかし↔しつけ）
+  //  のほうで使うので、ここには入れない。両方に効かせると系統と性格が連動してしまい、
+  //  「やんちゃなグレイ」「おっとりしたマーシャン」が出なくなる。
   const P_ADJ = {
     nightPlay:  +2,   // 夜更かしして遊ばせた
     wokenUp:    +2,   // 寝ているのを起こした
     scoldBad:   +1,   // 理不尽なしかる（落ち着かなくなる）
     tantrumIgnored: +2, // わがままを叱らず流した（つけあがる）
     noTouchDay: +1,   // 放っておかれた日
-    praise:     -1,   // ほめられて安心する
-    scoldFair:  -1,   // 正しく叱られて落ち着く
-    feedFull:   -2,   // 満腹でも食べさせられる（おっとりする）
+    calmDay:    -5,   // 起こさず・夜更かしもさせず・ちゃんと構った日＝落ち着いた一日
+                      //  （やんちゃ側は1日に何度でも積めるが、落ち着きは1日1回しか戻らない）
   };
   function addP(n){ pet.P = Math.max(-100, Math.min(100, (pet.P||0) + n)); }
   // 性格の強さ −1（おっとり）〜 +1（やんちゃ）
@@ -1189,12 +1263,17 @@
         if(pet.touchedToday){ pet.noTouchDays = 0; }
         else { pet.noTouchDays = (pet.noTouchDays||0) + 1; addA(A_ADJ.noTouchDay); addP(P_ADJ.noTouchDay); pet.B = Math.max(0, pet.B - 5); }
         pet.lowBDays = (pet.B < 20) ? pet.lowBDays + 1 : 0;
+        // 起こさず・夜更かしもさせず・ちゃんと構った日は、生活リズムが整っておっとり寄りに戻る。
+        //  これが無いとPは上がる一方になるので、性格の振り子はここで戻す
+        if(pet.touchedToday && !pet.nightPlayToday && !(pet.diary||{}).woken) addP(P_ADJ.calmDay);
+        // しつけ度の移動平均。系統判定の直前に叱りまくって操作されないよう、こちらを使う
+        pet.Dm = Math.round(((pet.Dm != null) ? pet.Dm : (pet.D||50)) * (1 - D_SMOOTH) + (pet.D||50) * D_SMOOTH);
         // ごはん／おやつの回数を減衰させ、最近の与え方が判定に効くようにする
         pet.mealCount  = (pet.mealCount||0)  * SNACK_DECAY;
         pet.snackCount = (pet.snackCount||0) * SNACK_DECAY;
         checkReturn();                                  // 帰還の兆候（疎遠期）と確定を判定
 
-        // ── 手紙：前日の出来事から1通つくる（材料が無ければ出さない）──
+        // ── 日記：前日の出来事から1日分を書く（たまご期は書かない）──
         const d = pet.diary || {};
         if(!pet.touchedToday && !d.fed && !d.snack) d.lonely = 1;   // だれも来なかった日
         if(!d.playSw && !d.playSs && !d.playAb) d.noPlay = 1;       // 遊んでもらえなかった
@@ -1204,8 +1283,7 @@
           else if(weather==='snow') d.snow = 1;
         }
         if(!d.woken && pet.mood >= 3) d.slept = 1;                  // よく眠れた
-        const lt = buildLetter(d);
-        if(lt){ pet.letter = lt; pet.letterAt = Date.now(); pet.letterDay = pet.calDay; }
+        if(diaryWriting()) addDiary(buildDiary(d));
 
         // ── C（ケア充実度）：その日の丁寧さを採点して移動平均へ ──
         pet.C = Math.round((pet.C||50) * (1 - C_SMOOTH) + dailyCareScore(d) * C_SMOOTH);
@@ -1213,6 +1291,7 @@
       pet.diary = {};                                   // 材料は日ごとにリセット
       pet.calDay = tk;
       pet.touchedToday = false;
+      pet.nightPlayToday = false;
     }
     // 旅立ちエンド（E4）：最終形態から14日・なつき度60以上・健康
     if(pet.stage==='final' && pet.finalAt && !pet.departFlag &&
@@ -1239,8 +1318,7 @@
   // カーソルが取りうる最大位置：末尾の追記位置まで（文字を飛ばして空きを作らせない）
   function nameCurMax(){ return Math.min(nameBuf.length, NAME_MAX-1); }
   let nameSelActive = false;     // 育成画面で「NAME:????」を選択中（黒塗り反転表示。Aで命名画面へ）
-  let letterSelActive = false;   // 育成画面で封筒を選択中（Aで手紙を開く）
-  const ENVELOPE = [            // 封筒 7×5
+  const ENVELOPE = [            // 未読マーク 7×5（封筒）
     [1,1,1,1,1,1,1],
     [1,0,1,1,1,0,1],
     [1,0,0,1,0,0,1],
@@ -2171,17 +2249,20 @@
   // ════════════════════════════════════════
   function careIcon(s){ return s.trim().split('\n').map(r=>r.trim().split('').map(c=>c==='#'?2:(c==='+'?1:0))); }
   const CARE_ICONS = {
+    // フォークは柄を3ドットにして左右対称に。歯4段→ヘッド1段→柄でまっすぐ落とす
     FEED: careIcon(`
-#.#.#....#
-#.#.#...##
-#.#.#..###
-#####..###
-.###...###
-..#....###
-..#.....##
-..#.....##
-..#.....##
-..#.....##`),
+.#.#.#.....##
+.#.#.#....###
+.#.#.#...####
+.#.#.#...####
+.#####...####
+..###....####
+..###.....##.
+..###.....##.
+..###.....##.
+..###.....##.
+.............
+.............`),
     CLEAN: careIcon(`
 .........+.
 ...#....+++
@@ -2330,7 +2411,7 @@
         else if(pet.tantrumAt || rollTantrum('feed')){ setReaction('refuse'); }  // わがまま：食べない（しかると従う）
         else if(pet.hunger >= 4){
           if(pTrait() <= -0.5){                                     // おっとり：満腹でも食べてしまう
-            pet.fullFeeds++; addP(P_ADJ.feedFull); addA(A_ADJ.feedFull);
+            pet.fullFeeds++; addA(A_ADJ.feedFull);
             rollSick(SICK_P.overeat, true);                         // 食べ過ぎ：あとから効いてくる
             schedulePoop(); eatReaction('meal');
           } else { leavePlate('meal'); setReaction('refuse'); }     // 拒否、皿が残る
@@ -2390,7 +2471,7 @@
           pet.praiseCount = (pet.praiseCount||0) + 1;
           addA(A_ADJ.praise); markTouch();
           if(isEstranged()){ setReaction('nothing'); }              // 疎遠期：反応しない（…）
-          else { raiseMood(); gainB(1); note('praised'); addP(P_ADJ.praise); setReaction('heart'); }
+          else { raiseMood(); gainB(1); note('praised'); setReaction('heart'); }
         }
         break;
       case 'SCOLD':
@@ -2406,7 +2487,7 @@
           pet.tantrumAt = 0; pet.tantrumType = '';
           addD(+5);
           if(pet.mood > 0) pet.mood--;
-          addA(A_ADJ.scoldFair); addP(P_ADJ.scoldFair); markTouch(); // しつけは甘やかしでも放置でもない（ふれあいには数える）
+          addA(A_ADJ.scoldFair); markTouch();   // しつけは甘やかしでも放置でもない（ふれあいには数える）
           setReaction('sad');                                       // 食事は出さない。改めてごはんをあげれば食べる
         } else {                                                    // 不当なしかる
           pet.mood = Math.max(0, pet.mood - 2);
@@ -2592,12 +2673,8 @@
     ctxM.font='6px "Press Start 2P"';   // DAYカウントは常にピクセル字体（名前がかなでも影響させない）
     ctxM.fillStyle=NK;
     ctxM.textAlign='right'; ctxM.fillText(dayLabel(),  (W-2)*S, 2*S);
-    // 未読の手紙があると、名前と日数のあいだで封筒が点滅する（選択中は常時点灯）
-    if(hasLetter() && (letterSelActive || fM%16 < 10)){
-      const ex = 24, ey = 2;
-      if(letterSelActive){ for(let dx=-1;dx<8;dx++) for(let dy=-1;dy<6;dy++) dot(ctxM, ex+dx, ey+dy, DM); }
-      stamp(ctxM, ENVELOPE, ex, ey, NK);
-    }
+    // 日記に未読があると、名前と日数のあいだで封筒が点滅する（読むのは MENU→DIARY）
+    if(diaryUnread > 0 && fM%16 < 10) stamp(ctxM, ENVELOPE, 24, 2, NK);
     for(let x=0;x<W;x++) dot(ctxM,x,HEADER_Y,DM);
 
     // ── 天体（右上） ──
@@ -2960,7 +3037,7 @@
   function dpadAnim(el){ el.style.transform='translateY(2px) scale(0.88)'; el.style.filter='brightness(2.5)'; setTimeout(()=>{el.style.transform='';el.style.filter='';},120); }
 
   onPress(document.getElementById('mmenu'),()=>{ playClick(); btnAnim(document.getElementById('mmenu'),1,0.93); menuSel=0; menuScroll=0; inSettings=false; inPlay=false; inFeed=false; inStatus=false; confirmReset=false; locPrime=false; playSel=0; feedSel=0; showView('menu'); });
-  onPress(document.getElementById('mb'),()=>{ playClick(); btnAnim(document.getElementById('mb')); nameSelActive=false; letterSelActive=false; });
+  onPress(document.getElementById('mb'),()=>{ playClick(); btnAnim(document.getElementById('mb')); nameSelActive=false; });
   // お世話アクションはMENU内のアイコングリッドへ移動
   // 未命名時：十字上で「NAME:????」を選択（黒塗り反転）→ Aで命名画面へ。下/Bで選択解除
   onPress(document.getElementById('ma'),()=>{
@@ -2968,8 +3045,6 @@
     if(arriveT >= 0) return;                      // 到着演出中は操作を受け付けない
     if(!pet.name && nameSelActive){
       nameSelActive=false; startNaming(); showView('naming');
-    } else if(letterSelActive && hasLetter()){
-      letterSelActive=false; showView('letter');
     }
   });
   document.querySelectorAll('#view-main .dpad-arrow').forEach(el=>{
@@ -2979,9 +3054,6 @@
       if(!pet.name){
         if(el.classList.contains('up'))   nameSelActive = true;
         if(el.classList.contains('down')) nameSelActive = false;
-      } else if(hasLetter()){
-        if(el.classList.contains('up'))   letterSelActive = true;
-        if(el.classList.contains('down')) letterSelActive = false;
       }
     });
   });
@@ -2990,8 +3062,12 @@
   // MENU  (interval: 80ms、元モックと同一)
   // ════════════════════════════════════════
   const ctxN = initCanvas('lcd-n');
-  const MENU_ITEMS=['STATUS','SETTINGS','STORY'];   // FEED/PLAY/CLEANはアクションバーに移管済み（遷移判定用）
-  const MENU_KEYS =['status','settings','story'];   // 表示用（言語辞書キー・MENU_ITEMSと同順）
+  // FEED/PLAY/CLEANはアクションバーに移管済み。DIARY は中間体になってから並ぶ
+  const MENU_BASE = [['STATUS','status'], ['SETTINGS','settings'], ['STORY','story']];
+  function menuList(){
+    if(!diaryUnlocked()) return MENU_BASE;
+    return [MENU_BASE[0], ['DIARY','diary'], MENU_BASE[1], MENU_BASE[2]];
+  }
   const PLAY_ITEMS=['SPACEWALK','SHOOTING STAR','ABDUCTION'];
   const PLAY_FILES={'SPACEWALK':'spacewalk_game.html','SHOOTING STAR':'shootingstar_game.html','ABDUCTION':'abduction_game.html'};
   let playSel=0;
@@ -3216,16 +3292,20 @@
       if(menuSel < 6) ctxN.fillText(T(CARE_ORDER[menuSel].toLowerCase()), (W*S)/2, 36*S);
       for(let x=1;x<W-1;x++) dot(ctxN,x,40,DIM);
 
-      // サブ項目（STATUS/STORY/SETTINGS）
-      MENU_KEYS.forEach((key,i)=>{
-        const y = 43 + i*7;
+      // サブ項目（STATUS / DIARY / SETTINGS / STORY）。DIARYが並ぶ4項目時は行間を詰める
+      const list = menuList();
+      const HL_H = (list.length >= 4) ? 6 : 7, Y0 = (list.length >= 4) ? 41 : 43;
+      list.forEach(([item,key],i)=>{
+        const y = Y0 + i*HL_H;
         const isSel = (menuSel === 6+i);
-        const HL_H = 7, cy = (y + HL_H/2)*S;                 // 文字は網掛けの上下中央に置く
+        const cy = (y + HL_H/2)*S;                           // 文字は網掛けの上下中央に置く
         if(isSel){ for(let dx=1;dx<W-1;dx++) for(let dy=0;dy<HL_H;dy++) dot(ctxN,dx,y+dy,DIM); }
         ctxN.font=uiFont(7); ctxN.fillStyle=ON; ctxN.textAlign='left'; ctxN.textBaseline='middle';
         if(isSel) ctxN.fillText('>',2*S,cy);
         ctxN.fillText(T(key), 8*S, cy);
         ctxN.textBaseline='top';
+        // 未読があるDIARYには封筒を添える
+        if(item==='DIARY' && diaryUnread > 0) stamp(ctxN, ENVELOPE, W-11, y + ((HL_H-5)>>1), ON);
       });
     }
 
@@ -3261,17 +3341,18 @@
         // アイコングリッド(0..5) ⇔ サブ項目(6..8) のナビゲーション
         const dir = el.classList.contains('up')?'up' : el.classList.contains('down')?'down'
                   : el.classList.contains('left')?'left' : 'right';
+        const last = 6 + menuList().length - 1;    // サブ項目の最後（DIARYの有無で変わる）
         if(menuSel < 6){
           const r = Math.floor(menuSel/3);
           // 左右は6アイコンを一列としてループ（くすり→ほめる、ゲーム→ごはん）
           if(dir==='left')  menuSel = (menuSel+5)%6;
           if(dir==='right') menuSel = (menuSel+1)%6;
-          // 上下もループ：上段から上でSETTINGS(8)へ、下段から下でサブ項目へ
-          if(dir==='up')    menuSel = (r===1) ? menuSel-3 : 8;
+          // 上下もループ：上段から上で最後のサブ項目へ、下段から下でサブ項目へ
+          if(dir==='up')    menuSel = (r===1) ? menuSel-3 : last;
           if(dir==='down')  menuSel = (r===0) ? menuSel+3 : 6;
         } else {
-          if(dir==='up')   menuSel = (menuSel===6) ? 4 : menuSel-1;  // STATUSから上でグリッド下段中央へ
-          if(dir==='down') menuSel = (menuSel===8) ? 0 : menuSel+1;  // SETTINGSから下で先頭アイコンへループ
+          if(dir==='up')   menuSel = (menuSel===6) ? 4 : menuSel-1;      // 先頭から上でグリッド下段中央へ
+          if(dir==='down') menuSel = (menuSel===last) ? 0 : menuSel+1;   // 末尾から下で先頭アイコンへループ
         }
       }
     });
@@ -3308,6 +3389,7 @@
           clearInterval(debugTimer);
           timeOfDay=getTimeOfDay();
           try{ localStorage.removeItem(SAVE_KEY); }catch(e){}
+          clearDiary();                    // 日記が消えるのはこのリセットの時だけ
           pet = defaultPet(); nameBuf=''; nameCur=0; onSlots=false;
           ufoEnding = false; ufoT = 0; departEnding = false; departT = 0; evoT = 0;
           applyBodyColor(); showView('opening'); fO=0; openingReady=false;
@@ -3348,9 +3430,10 @@
         }
         else { doCare(act); showView('main'); }
       } else {
-        const sel = MENU_ITEMS[menuSel-6];
+        const sel = (menuList()[menuSel-6] || [])[0];
         if(sel==='SETTINGS'){ inSettings=true; settingsSel=0; }
-        else if(pet.dead){ /* おばけ：SETTINGS以外は操作不可 */ }
+        else if(sel==='DIARY'){ openDiary(); }        // 日記は死んだあと・帰還したあとも読める
+        else if(pet.dead){ /* おばけ：SETTINGS・DIARY以外は操作不可 */ }
         else if(sel==='STATUS'){ inStatus=true; }
         else if(sel==='STORY'){ storyScrollY=H*S; showView('story'); }
       }
@@ -3422,19 +3505,34 @@
   setInterval(tickStory, 80);
 
 
-  // ── 手紙の画面 ──
+  // ── 日記の画面（1ページ＝1日。十字上下でページを繰る）──
   const ctxT = initCanvas('lcd-t');
-  const LETTER_TITLE = { ja:'おてがみ', en:'A LETTER' };
-  function tickLetter(){
-    if(scene !== 'letter') return;
+  const DIARY_TITLE = { ja:'にっき', en:'DIARY' };
+  const DIARY_EMPTY = { ja:['まだ なにも','かいていない'], en:['NOTHING WRITTEN','YET'] };
+  let diaryPage = 0;
+  function openDiary(){
+    diaryPage = Math.max(0, diaryLog.length - 1);   // いちばん新しい日を開く
+    if(diaryUnread > 0){ diaryUnread = 0; saveDiary(); }   // 開いたら既読
+    showView('diary');
+  }
+  function tickDiary(){
+    if(scene !== 'diary') return;
     ctxT.fillStyle=OFF; ctxT.fillRect(0,0,W*S,H*S);
     ctxT.textAlign='center'; ctxT.textBaseline='top';
-    // 見出し
+    const e = diaryLog[diaryPage];
+    // 見出し（何日目の日記か）
     ctxT.font = uiFont(7); ctxT.fillStyle = ON;
-    ctxT.fillText(LETTER_TITLE[lang] || LETTER_TITLE.en, (W*S)/2, 6*S);
+    ctxT.fillText(e ? ('DAY : ' + String(e.d||1).padStart(2,'0'))
+                    : (DIARY_TITLE[lang] || DIARY_TITLE.en), (W*S)/2, 6*S);
+    // ページ位置（前後にまだ日があることを示す）。見出しの左右に置く
+    if(e){
+      ctxT.font = uiFont(6); ctxT.fillStyle = DIM;
+      if(diaryPage > 0)                 ctxT.fillText('<', 6*S, 6*S);
+      if(diaryPage < diaryLog.length-1) ctxT.fillText('>', (W-6)*S, 6*S);
+    }
     for(let x=6;x<W-6;x++) dot(ctxT, x, 14, DIM);
-    // 本文（材料から組み立てた行）。差出人(y52)・案内(y59)に掛からないよう上下中央に置く
-    const body = letterBody();
+    // 本文（材料から組み立てた行）。署名(y52)・案内(y59)に掛からないよう上下中央に置く
+    const body = e ? diaryBody(e) : (lang==='ja' ? DIARY_EMPTY.ja : DIARY_EMPTY.en);
     const TOP = 18, BOT = 48;
     const LH = (body.length <= 5) ? 6 : 5;         // 行数が多い時だけ詰める
     const y0 = Math.max(TOP, Math.round((TOP + BOT)/2 - (body.length - 1)*LH/2));
@@ -3444,25 +3542,31 @@
       if(!line) return;
       ctxT.fillText(line, (W*S)/2, (y0 + i*LH)*S);
     });
-    // 差出人
-    ctxT.font = nameFont(6, pet.name);
-    ctxT.textAlign='right';
-    ctxT.fillStyle = ON;
-    ctxT.fillText(pet.name + (lang==='ja' ? ' より' : ''), (W-4)*S, 52*S);
-    ctxT.textAlign='center';
-    // 閉じ方の案内（点滅）
+    if(e){
+      // 書いた本人の名前（帰還後は前の子の日記も残るので、ページごとに出す）
+      ctxT.font = nameFont(6, e.n || pet.name);
+      ctxT.textAlign='right'; ctxT.fillStyle = ON;
+      ctxT.fillText(e.n || pet.name, (W-4)*S, 52*S);
+      ctxT.textAlign='center';
+    }
     if(Math.floor(Date.now()/450)%2===0){
       ctxT.font = uiFont(6); ctxT.fillStyle = DIM;
       ctxT.fillText(lang==='ja' ? 'A/B でとじる' : 'A/B : CLOSE', (W*S)/2, 60*S);
     }
   }
-  setInterval(tickLetter, 100);
+  setInterval(tickDiary, 100);
 
-  // 閉じたら既読にする（封筒も消える）
-  function closeLetter(){ pet.letter = null; savePet(); showView('main'); }
-  onPress(document.getElementById('ta'),()=>{ playClick(); btnAnim(document.getElementById('ta')); closeLetter(); });
-  onPress(document.getElementById('tb'),()=>{ playClick(); btnAnim(document.getElementById('tb')); closeLetter(); });
-  onPress(document.getElementById('tmenu'),()=>{ playClick(); btnAnim(document.getElementById('tmenu'),1,0.93); closeLetter(); });
+  function closeDiary(){ showView('menu'); }
+  onPress(document.getElementById('ta'),()=>{ playClick(); btnAnim(document.getElementById('ta')); closeDiary(); });
+  onPress(document.getElementById('tb'),()=>{ playClick(); btnAnim(document.getElementById('tb')); closeDiary(); });
+  onPress(document.getElementById('tmenu'),()=>{ playClick(); btnAnim(document.getElementById('tmenu'),1,0.93); closeDiary(); });
+  document.querySelectorAll('#view-diary .dpad-arrow').forEach(el=>{
+    onPress(el,()=>{
+      playClick(900); dpadAnim(el);
+      if(el.classList.contains('up')||el.classList.contains('left'))    diaryPage = Math.max(0, diaryPage-1);
+      if(el.classList.contains('down')||el.classList.contains('right')) diaryPage = Math.min(diaryLog.length-1, diaryPage+1);
+    });
+  });
 
   onPress(document.getElementById('sa'),()=>{ playClick(); btnAnim(document.getElementById('sa')); showView('menu'); });
   onPress(document.getElementById('sb'),()=>{ playClick(); btnAnim(document.getElementById('sb')); showView('menu'); });

@@ -240,6 +240,12 @@
   const TICK=50;
   const FPS=1000/TICK;
 
+  // ゲームの芯は「ビームから逃げる」こと。降下と体当たりはそこに時々混ざるサブ要素なので、
+  //  序盤は出さず、中盤から少しずつ増やす。降下が3回続かないよう連続回数にも上限を置く。
+  const DIVE_START   = 15;    // ここまでの秒数は降りてこない（ビーム回避に集中させる）
+  const CHARGE_START = 25;    // 体当たりが混ざり始める秒数
+  const MAX_DIVE_STREAK = 2;  // 降下の連続はここまで。超えたら必ずビーム回を挟む
+
   // 経過時間（秒）に応じた難易度を返す
   function curDiff(){
     const t=elapsed/FPS; // 経過秒
@@ -247,12 +253,13 @@
       ufoSpeed: Math.min(0.5 + t*0.04, 1.6),    // 0.5→最大1.6
       beamDur:  Math.min(10 + t*0.3, 18),       // 10→最大18フレーム
       safeDur:  Math.max(20 - t*0.4, 8),        // 20→最小8フレーム
-      diveChance: Math.min(0.30 + t*0.012, 0.6),
+      // 降下：序盤0 → 中盤12% → 後半じわじわ増えて最大35%
+      diveChance: (t < DIVE_START) ? 0 : Math.min(0.12 + (t-DIVE_START)*0.006, 0.35),
       beamHalf: Math.min(3 + Math.floor(t/5), 9),
-      canCharge: t>=12,                          // 12秒以降から突進が出る
-      chargeSpeed: Math.min(1.4 + (t-12)*0.05, 2.6),
-      chargeChance: Math.min(0.22 + (t-12)*0.01, 0.45), // 降下後に突進する確率
-      chargeCD: Math.max(110 - (t-12)*0.8, 70),  // 突進後はこのフレーム数あける（難易度が上がっても最低3.5秒）
+      canCharge: t>=CHARGE_START,
+      chargeSpeed: Math.min(1.4 + (t-CHARGE_START)*0.05, 2.6),
+      chargeChance: Math.min(0.20 + (t-CHARGE_START)*0.008, 0.40), // 降下後に突進する確率
+      chargeCD: Math.max(110 - (t-CHARGE_START)*0.8, 70),  // 突進後はこのフレーム数あける（最低3.5秒）
     };
   }
 
@@ -270,12 +277,13 @@
   const GRAV=0.55, JUMP_V=-4.2;
 
   // UFO
-  const UFO_HIGH=9;
+  const UFO_HIGH=11;            // 通常高度。ヘッダーの区切り線(y=10)に被らない位置
   let ufoX, ufoDir, ufoY, ufoYtarget;
   let mode, modeTimer, beamX;
   let chargeDir=1;
   // 体当たりの間隔制御：突進のあとは必ず休みを入れ、続けざまに突っ込んでこないようにする
   let chargeCD=0;          // 次の突進までのクールダウン（フレーム）
+  let diveStreak=0;        // 連続で降りてきた回数（ビーム回に戻るとリセット）
   let forceBeamNext=false; // 突進の直後は必ずビーム回にする
   let graceFrames=0;
   let caughtTimer=0;
@@ -302,7 +310,7 @@
     plyX=W/2-CH_W/2; plyY=GROUND_Y; vy=0; jumping=false;
     ufoX=21; ufoDir=1; ufoY=UFO_HIGH; ufoYtarget=UFO_HIGH;
     mode='safe'; modeTimer=0; beamX=ufoCenter();
-    chargeCD=0; forceBeamNext=false;
+    chargeCD=0; forceBeamNext=false; diveStreak=0;
     graceFrames=6;
     score=0; elapsed=0; hitCount=0; hitCooldown=0;
     state=STATE.PLAY;
@@ -376,9 +384,11 @@
       if(ufoX<=1){ufoX=1;ufoDir=1;} if(ufoX>=W-UFO_W-1){ufoX=W-UFO_W-1;ufoDir=-1;}
       if(modeTimer>D.safeDur){
         modeTimer=0;
-        // 突進の直後は必ずビーム回を挟む（体当たりが連続しないように）
-        if(!forceBeamNext && Math.random()<D.diveChance){ mode='dive'; ufoYtarget=GROUND_Y; }
-        else { forceBeamNext=false; mode='warn'; beamX=ufoCenter(); }
+        // 突進の直後は必ずビーム回を挟む（体当たりが連続しないように）。
+        // 降下もMAX_DIVE_STREAK回続いたら、そこで一度ビームに戻す
+        const dive = !forceBeamNext && diveStreak < MAX_DIVE_STREAK && Math.random()<D.diveChance;
+        if(dive){ mode='dive'; ufoYtarget=GROUND_Y; diveStreak++; }
+        else { forceBeamNext=false; diveStreak=0; mode='warn'; beamX=ufoCenter(); }
       }
     } else if(mode==='warn'){
       if(modeTimer>4){ modeTimer=0; mode='beam'; beep(300,0.12); }
