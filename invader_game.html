@@ -599,7 +599,7 @@
     touchedToday:false, noTouchDays:0,    // 今日ふれあったか／ふれあいゼロの連続日数
     estrangedDays:0,                      // 疎遠期の連続日数（帰還までの猶予）
     // ── 手紙 ──
-    diary:{},                             // その日の出来事（日付が変わると日記1日分にまとめる）
+    diary:{}, diaryDay:'', diaryDue:null, // その日の出来事／日記を書き終えた日／翌日に持ち越したぶん
     larvaAt:0, snapL:null,                // 幼体到達時刻とスナップショット（帰還判定の起点）
     lineageAt:0, snapA:null,              // 成体到達時刻とスナップショット（Stage4形態判定の起点）
   }; }
@@ -1015,17 +1015,34 @@
     const t = pTrait();                       // -1=おっとり … +1=やんちゃ
     return {
       skip:   Math.max(0, t) * 0.35,          // その日は書かずに終わる確率
+      putOff: Math.max(0, t) * 0.50,          // 寝る前に書かず、翌日に回す確率
       topics: (t <= -0.4) ? 4 : (t >= 0.4 ? 2 : 3),
       close:  (t <= -0.4) ? 'calm' : (t >= 0.4 ? 'lively' : ''),
     };
   }
-  // 前日の材料から1日分を書く（材料が無ければ書かない）
-  function buildDiary(d){
+  // 日記を書く時刻＝就寝の1時間前。就寝が遅い子でも深夜には回さない
+  const DIARY_BEFORE_BED = 1;
+  function diaryWriteHour(){
+    return Math.max(17, Math.min(23, sleepConfig().bed - DIARY_BEFORE_BED));
+  }
+  // 材料に、その日ぜんたいを見ないと分からないぶんを足す
+  function diaryFill(d){
+    if(!pet.touchedToday && !d.fed && !d.snack) d.lonely = 1;   // だれも来なかった日
+    if(!d.playSw && !d.playSs && !d.playAb) d.noPlay = 1;       // 遊んでもらえなかった
+    if(weatherFetched){
+      if(weather==='clear') d.clear = 1;
+      else if(weather==='rain') d.rain = 1;
+      else if(weather==='snow') d.snow = 1;
+    }
+    if(!d.woken && pet.mood >= 3) d.slept = 1;                  // よく眠れた
+    return d;
+  }
+  // 材料から1日分を組み立てる（材料が無ければ書かない）。書くかどうかの抽選は呼び出し側
+  function buildDiary(d, dayNo){
     const st = diaryStyle();
-    if(Math.random() < st.skip) return null;
     const picked = DIARY_PRIORITY.filter(t => d[t] > 0).slice(0, st.topics);
     if(!picked.length) return null;
-    return { d: petDay(), n: pet.name, t: picked, c: st.close, ts: Date.now() };
+    return { d: dayNo || petDay(), n: pet.name, t: picked, c: st.close, ts: Date.now() };
   }
   function addDiary(e){
     if(!e) return;
@@ -1255,6 +1272,29 @@
       addA(A_ADJ.tantrumIgnored); addP(P_ADJ.tantrumIgnored); note('tantrum');
     }
 
+    // ── 日記を書く：寝る前に、その日の出来事を書く ──
+    //  日付が変わるタイミングで書くと寝ている間に日記が増えて不自然なので、就寝前に書かせる。
+    //  やんちゃな子ほど寝る前に書きそびれ、翌日に「きのうのこと」として書く。
+    if(diaryWriting() && !pet.dead){
+      const tkNow = todayKey();
+      if(pet.diaryDay !== tkNow && !effectiveAsleep() && new Date().getHours() >= diaryWriteHour()){
+        pet.diaryDay = tkNow;
+        const st = diaryStyle();
+        if(Math.random() >= st.skip){
+          const mat = diaryFill(Object.assign({}, pet.diary || {}));
+          if(Math.random() < st.putOff) pet.diaryDue = { day: petDay(), mat, after: tkNow };
+          else addDiary(buildDiary(mat, petDay()));
+        }
+      }
+      // 持ち越したぶんは、翌日「きのうのこと」として書く。夜更かし中の0時台ではなく、
+      //  ちゃんと起きたあとの時間に書かせる
+      if(pet.diaryDue && pet.diaryDue.after !== todayKey() && !effectiveAsleep()
+         && new Date().getHours() >= (((sleepConfig().wake % 24) + 24) % 24)){
+        addDiary(buildDiary(pet.diaryDue.mat || {}, pet.diaryDue.day));
+        pet.diaryDue = null;
+      }
+    }
+
     // ── 日次処理：日付が変わった時に1回だけ ──
     const tk = todayKey();
     if(pet.calDay !== tk){
@@ -1273,17 +1313,13 @@
         pet.snackCount = (pet.snackCount||0) * SNACK_DECAY;
         checkReturn();                                  // 帰還の兆候（疎遠期）と確定を判定
 
-        // ── 日記：前日の出来事から1日分を書く（たまご期は書かない）──
-        const d = pet.diary || {};
-        if(!pet.touchedToday && !d.fed && !d.snack) d.lonely = 1;   // だれも来なかった日
-        if(!d.playSw && !d.playSs && !d.playAb) d.noPlay = 1;       // 遊んでもらえなかった
-        if(weatherFetched){
-          if(weather==='clear') d.clear = 1;
-          else if(weather==='rain') d.rain = 1;
-          else if(weather==='snow') d.snow = 1;
+        // ── 日記：寝る前に書けなかったぶんは持ち越して、翌日「きのうのこと」として書く ──
+        const d = diaryFill(pet.diary || {});
+        //  「書かない日がある」性格はここでも同じように効かせる（夜に開いていたかで差が出ないように）
+        if(diaryWriting() && pet.diaryDay !== pet.calDay && !pet.diaryDue
+           && Math.random() >= diaryStyle().skip){
+          pet.diaryDue = { day: Math.max(1, petDay()-1), mat: Object.assign({}, d), after: pet.calDay };
         }
-        if(!d.woken && pet.mood >= 3) d.slept = 1;                  // よく眠れた
-        if(diaryWriting()) addDiary(buildDiary(d));
 
         // ── C（ケア充実度）：その日の丁寧さを採点して移動平均へ ──
         pet.C = Math.round((pet.C||50) * (1 - C_SMOOTH) + dailyCareScore(d) * C_SMOOTH);
