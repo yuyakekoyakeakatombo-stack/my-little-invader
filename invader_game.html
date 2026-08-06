@@ -343,7 +343,7 @@
       on:'ON', off:'OFF', sure:'SURE?', yesno:'A:YES  B:NO',
       locn1:'USE LOCATION', locn2:'ONLY TO SHOW', locn3:'IN-GAME WEATHER', locok:'A:OK  B:CANCEL',
       hungry:'HUNGRY', mood:'MOOD', health:'HEALTH', stage:'STAGE', ptype:'TYPE',
-      good:'GOOD', sick:'SICK', weak:'WEAK', dead:'DEAD',
+      good:'GOOD', sick:'SICK', weak:'CRITICAL', normal:'NORMAL', dead:'DEAD', friend:'BOND',
       newborn:'NEWBORN', baby:'BABY', child:'CHILD', adult:'ADULT', finalst:'FINAL',
       gray:'GRAY', martian:'MARTIAN', alien:'ALIEN',
       nameq:'NAME?', done:'DONE', del:'DELETE', langval:'ENGLISH',
@@ -356,7 +356,7 @@
       on:'オン', off:'オフ', sure:'ほんとうに？', yesno:'A:はい B:いいえ',
       locn1:'いちじょうほうは', locn2:'ゲームの天気に', locn3:'のみつかいます', locok:'A:OK  B:キャンセル',
       hungry:'おなか', mood:'きげん', health:'けんこう', stage:'せいちょう', ptype:'タイプ',
-      good:'げんき', sick:'びょうき', weak:'よわり', dead:'おばけ',
+      good:'げんき', sick:'びょうき', weak:'ひんし', normal:'ふつう', dead:'おばけ', friend:'なかよし',
       newborn:'うまれたて', baby:'あかちゃん', child:'こども', adult:'おとな', finalst:'さいしゅう',
       gray:'グレイ', martian:'マーシャン', alien:'エイリアン',
       nameq:'なまえは？', done:'けってい', del:'けす', langval:'にほんご',
@@ -569,8 +569,9 @@
   const SAVE_KEY = 'myvader_pet';
   function defaultPet(){ return {
     name:'', birth:0, lastTick:0,
-    hunger:4, mood:3, health:'GOOD',      // 表示ステータス
+    hunger:5, mood:4, health:'GOOD',      // 表示ステータス（おなか・きげんは0〜5の6段階）
     hungerAcc:0, moodAcc:0,               // 進行タイマー（分）
+    lastPlayAt:0, playStreak:0,           // 最後にミニゲームで遊んだ時刻／立て続けに遊んだ回数
     P:0, D:50, Dm:50, C:50, B:50, W:0,    // 隠しパラメータ（性格/しつけ/しつけの移動平均/ケア/なつき/汚れ）
     plateAt:0, plateSpoiled:false,        // 残った皿（放置で食べ残し汚れ化＝plateSpoiled）
     plateKind:'meal',                     // 残した皿の中身（'meal'=ごはん / 'snack'=おやつ）
@@ -666,6 +667,37 @@
     starveHour: -1,               // 空腹MAXの放置（1時間ごと）
     dirtHour:   -1,               // 汚れの放置（1時間ごと）
   };
+  // ════════════════════════════════════════
+  // P（性格）：やんちゃ(+) ↔ おっとり(−)。系統とは独立した軸。
+  //  接し方と生活リズムだけで動かす（ミニゲームの種類には影響させない）。
+  //  移動の速さ・跳ね方・睡眠時間・食事量に効く。
+  // ════════════════════════════════════════
+  //  性格は「生活リズム」だけで決める。ほめる・正しく叱る・満腹給餌は系統（甘やかし↔しつけ）
+  //  のほうで使うので、ここには入れない。両方に効かせると系統と性格が連動してしまい、
+  //  「やんちゃなグレイ」「おっとりしたマーシャン」が出なくなる。
+  const P_ADJ = {
+    nightPlay:  +2,   // 夜更かしして遊ばせた
+    wokenUp:    +2,   // 寝ているのを起こした
+    scoldBad:   +1,   // 理不尽なしかる（落ち着かなくなる）
+    tantrumIgnored: +2, // わがままを叱らず流した（つけあがる）
+    noTouchDay: +1,   // 放っておかれた日
+    calmDay:    -5,   // 起こさず・夜更かしもさせず・ちゃんと構った日＝落ち着いた一日
+                      //  （やんちゃ側は1日に何度でも積めるが、落ち着きは1日1回しか戻らない）
+  };
+  function addP(n){ pet.P = Math.max(-100, Math.min(100, (pet.P||0) + n)); }
+  // 性格の強さ −1（おっとり）〜 +1（やんちゃ）
+  function pTrait(){ return Math.max(-1, Math.min(1, (pet.P||0) / 60)); }
+
+  // ── 時間進行（企画書§4 ドラフト値）──
+  const HUNGER_MIN = 144;   // 2.4時間でおなか●1減。5段階×144分＝12時間で満腹→空腹（4段階×180分と同じ）
+  const MOOD_MIN   = 192;   // 3.2時間でごきげん♪1減。5段階×192分＝16時間（4段階×240分と同じ）
+  // ミニゲームで消耗する空腹。時間経過の進行タイマー(hungerAcc)に足すので、
+  //  遊べば遊ぶほど次の「おなか1減」が早く来る。立て続けだと1回あたりの消耗が増える
+  const PLAY_HUNGER_MIN = 40;        // 1回遊ぶと進む空腹（分）
+  const PLAY_STREAK_MS  = 30*60000;  // 前回からこの時間内に遊んだら「立て続け」
+  const PLAY_STREAK_MAX = 4;         // 連続の重みはここで頭打ち（最大2.6倍）
+  const CATCHUP_CAP_MS = 14*86400000;  // 起動時の経過計算は最大14日分
+
   const A_SPOIL_SCALE   = 30;     // 1日あたりのAがこの値で「甘やかし度100」
   const A_NEGLECT_SCALE = 15;     // 1日あたりの−Aがこの値で「放置度100」
   // 帰還エンディング（幼体到達を起点に判定）
@@ -737,7 +769,7 @@
   function dirtCount(){ return (pet.W||0) + (pet.plateSpoiled ? 1 : 0); }
   // きげんの上限。汚れを放置している／病気を治していない間はMAXにできない。
   //  ほめてもおやつをあげても満タンにはならず、「バーが満タン＝手入れが行き届いている」と読めるようにする。
-  function moodCap(){ return (dirtCount() > 0 || pet.health === 'SICK') ? 3 : 4; }
+  function moodCap(){ return (dirtCount() > 0 || pet.health === 'SICK') ? 4 : 5; }
   function raiseMood(){ if(pet.mood < moodCap()) pet.mood++; }
   function clampMood(){ if(pet.mood > moodCap()) pet.mood = moodCap(); }   // 汚れ・病気が発生した瞬間に上限まで下げる
 
@@ -903,6 +935,12 @@
       if(r.game==='abduction'){    note('playAb'); pet.best.ab = Math.max(pet.best.ab, r.score); pet.plays.ab++; if(r.score >= 400) pet.C = Math.min(100, pet.C + 2); }
       addA(A_ADJ.play); markTouch();                // 遊んであげた＝ふれあい
       pet.C = Math.min(100, pet.C + 1);           // 遊んであげたケア加点
+      // 遊ぶとおなかが減る。前回から間が空いていなければ「立て続け」とみなして消耗が増える
+      const gap = r.at - (pet.lastPlayAt || 0);
+      pet.playStreak = (gap <= PLAY_STREAK_MS) ? Math.min(PLAY_STREAK_MAX, (pet.playStreak||0) + 1) : 0;
+      pet.lastPlayAt = r.at;
+      pet.hungerAcc = (pet.hungerAcc||0) + PLAY_HUNGER_MIN * (1 + 0.4 * pet.playStreak);
+      while(pet.hungerAcc >= HUNGER_MIN && pet.hunger > 0){ pet.hungerAcc -= HUNGER_MIN; pet.hunger--; }
       savePet();
     } catch(e){}
   }
@@ -961,31 +999,93 @@
   function note(tag, n){ const d = pet.diary || (pet.diary = {}); d[tag] = (d[tag]||0) + (n||1); }
 
   // 材料 → 文面（2行以内に収まる長さで用意する。LCD幅に収まるよう改行済み）
+  // 材料 → 文面。1つのタグに複数の言い回しを持たせ、書いた日ごとにどれかを選ぶ。
+  //  選んだ番号は日記に保存するので、あとから読み返しても文面は変わらない。
+  //  ひらがな主体のたどたどしい口調。英語も短縮形を使わず、同じ幼さになるよう揃える。
   const DIARY_LINES = {
-    farewell: { ja:['むかえが きた','たのしかったよ','ありがとう'],
-                en:['THEY CAME FOR ME.','IT WAS FUN.','THANK YOU'] },
-    hungry:   { ja:['きのう ずっと','おなかが すいてた'],      en:['I WAS HUNGRY','ALL DAY'] },
-    fed:      { ja:['ごはん おいしかった'],                    en:['THE FOOD WAS GOOD'] },
-    snack:    { ja:['おやつ うれしかった'],                    en:['THE TREAT WAS NICE'] },
-    snackMany:{ ja:['おやつ ばっかりで','おなかが へん'],      en:['TOO MANY TREATS.','MY TUMMY IS ODD'] },
-    dirty:    { ja:['おそうじ して','ほしかった'],             en:['I WANTED IT','TO BE CLEAN'] },
-    cleaned:  { ja:['きれいに なって','うれしかった'],         en:['IT GOT CLEAN.','THAT MADE ME GLAD'] },
-    praised:  { ja:['ほめて もらえた'],                        en:['YOU SAID I WAS GOOD'] },
-    lonely:   { ja:['きょうは だれも','こなかった'],           en:['NOBODY CAME','TO SEE ME'] },
-    scolded:  { ja:['なんで おこられたのか','わからない'],     en:['I DO NOT KNOW','WHY YOU WERE MAD'] },
-    woken:    { ja:['ゆうべ おこされた のは','いやだった'],    en:['YOU WOKE ME UP.','I DID NOT LIKE IT'] },
-    playSw:   { ja:['スペースウォーク','また やりたい'],       en:['I WANT TO PLAY','SPACEWALK AGAIN'] },
-    playSs:   { ja:['シューティングスター','たのしかった'],    en:['SHOOTING STAR','WAS FUN'] },
-    playAb:   { ja:['アブダクション','こわいけど すき'],       en:['ABDUCTION IS SCARY','BUT I LIKE IT'] },
-    noPlay:   { ja:['たまには あそびたいな'],                  en:['I WANT TO PLAY','SOMETIME'] },
-    clear:    { ja:['いい てんき だった'],                     en:['THE SKY WAS NICE'] },
-    rain:     { ja:['あめの ひは','たいくつ'],                 en:['RAINY DAYS','ARE BORING'] },
-    snow:     { ja:['ゆきが きれいだった'],                    en:['THE SNOW WAS PRETTY'] },
-    sick:     { ja:['ぐあいが わるかった'],                    en:['I FELT BAD'] },
-    cured:    { ja:['くすり にがかった','ありがとう'],         en:['THE MEDICINE WAS','BITTER. THANK YOU'] },
-    tantrum:  { ja:['わがまま いって','ごめんね'],             en:['SORRY I WAS','DIFFICULT'] },
-    evolved:  { ja:['からだが おおきく','なった みたい'],      en:['I THINK MY BODY','GOT BIGGER'] },
-    slept:    { ja:['よく ねむれた'],                          en:['I SLEPT WELL'] },
+    farewell: [ { ja:['むかえが きた','たのしかったよ','ありがとう'],
+                  en:['THEY CAME FOR ME.','IT WAS FUN.','THANK YOU'] } ],
+    hungry:   [ { ja:['きのう ずっと','おなかが すいてた'], en:['I WAS HUNGRY','ALL DAY'] },
+                { ja:['おなかの おとが','なりつづけていた'], en:['MY TUMMY MADE','NOISES ALL DAY'] },
+                { ja:['たべものの ことばかり','かんがえていた'], en:['I ONLY THOUGHT','ABOUT FOOD'] } ],
+    fed:      [ { ja:['ごはん おいしかった'], en:['THE FOOD WAS GOOD'] },
+                { ja:['きょうの ごはんは','あたたかかった'], en:['THE FOOD TODAY','WAS WARM'] },
+                { ja:['たべると げんきが でる','ふしぎだ'], en:['FOOD MAKES ME STRONG.','THAT IS STRANGE'] } ],
+    snack:    [ { ja:['おやつ うれしかった'], en:['THE TREAT WAS NICE'] },
+                { ja:['あまいものは','ほしでは たべなかった'], en:['WE HAD NOTHING SWEET','ON MY PLANET'] },
+                { ja:['おやつの あじを','おぼえて しまった'], en:['I REMEMBER','THE TASTE NOW'] } ],
+    snackMany:[ { ja:['おやつ ばっかりで','おなかが へん'], en:['TOO MANY TREATS.','MY TUMMY IS ODD'] },
+                { ja:['あまいものが','おおすぎた かも'], en:['MAYBE TOO MUCH','SWEET STUFF'] } ],
+    dirty:    [ { ja:['おそうじ して','ほしかった'], en:['I WANTED IT','TO BE CLEAN'] },
+                { ja:['においが きになって','おちつかない'], en:['THE SMELL BOTHERED ME','ALL DAY'] } ],
+    cleaned:  [ { ja:['きれいに なって','うれしかった'], en:['IT GOT CLEAN.','THAT MADE ME GLAD'] },
+                { ja:['じめんが きれいだと','ころがりたく なる'], en:['WHEN THE GROUND IS CLEAN','I WANT TO ROLL'] } ],
+    praised:  [ { ja:['ほめて もらえた'], en:['YOU SAID I WAS GOOD'] },
+                { ja:['あたまを なでられた','くすぐったい'], en:['YOU PATTED MY HEAD.','IT TICKLED'] },
+                { ja:['いい こだって','いわれた きがする'], en:['I THINK YOU SAID','I WAS GOOD'] } ],
+    lonely:   [ { ja:['きょうは だれも','こなかった'], en:['NOBODY CAME','TO SEE ME'] },
+                { ja:['ずっと まっていた','きづいて いたかな'], en:['I WAITED ALL DAY.','DID YOU NOTICE?'] },
+                { ja:['しずかすぎて','じぶんの おとが した'], en:['SO QUIET THAT','I HEARD MYSELF'] } ],
+    scolded:  [ { ja:['なんで おこられたのか','わからない'], en:['I DO NOT KNOW','WHY YOU WERE MAD'] },
+                { ja:['おおきな こえは','こわい'], en:['LOUD VOICES','SCARE ME'] } ],
+    woken:    [ { ja:['ゆうべ おこされた のは','いやだった'], en:['YOU WOKE ME UP.','I DID NOT LIKE IT'] },
+                { ja:['ねむいのに','おこされて しまった'], en:['I WAS SLEEPY BUT','YOU WOKE ME'] } ],
+    playSw:   [ { ja:['スペースウォーク','また やりたい'], en:['I WANT TO PLAY','SPACEWALK AGAIN'] },
+                { ja:['そらを あるくのは','ほしを おもいだす'], en:['WALKING IN THE SKY','REMINDS ME OF HOME'] } ],
+    playSs:   [ { ja:['シューティングスター','たのしかった'], en:['SHOOTING STAR','WAS FUN'] },
+                { ja:['ひかるのを おいかけた','つかれた'], en:['I CHASED THE LIGHTS','AND GOT TIRED'] } ],
+    playAb:   [ { ja:['アブダクション','こわいけど すき'], en:['ABDUCTION IS SCARY','BUT I LIKE IT'] },
+                { ja:['ひかりに つかまるのは','どきどき する'], en:['THE BEAM MAKES','MY HEART JUMP'] } ],
+    noPlay:   [ { ja:['たまには あそびたいな'], en:['I WANT TO PLAY','SOMETIME'] },
+                { ja:['からだが あまっている','きがする'], en:['MY BODY HAS','TOO MUCH LEFT OVER'] } ],
+    clear:    [ { ja:['いい てんき だった'], en:['THE SKY WAS NICE'] },
+                { ja:['ひざしが あたたかくて','ねむくなった'], en:['THE SUN WAS WARM.','IT MADE ME SLEEPY'] } ],
+    rain:     [ { ja:['あめの ひは','たいくつ'], en:['RAINY DAYS','ARE BORING'] },
+                { ja:['あめの おとを','ずっと きいていた'], en:['I LISTENED TO','THE RAIN ALL DAY'] },
+                { ja:['あめの ひは','とおくが みえない'], en:['ON RAINY DAYS','I CANNOT SEE FAR'] } ],
+    snow:     [ { ja:['ゆきが きれいだった'], en:['THE SNOW WAS PRETTY'] },
+                { ja:['しろいのが おちてきて','てで とけた'], en:['WHITE THINGS FELL','AND MELTED ON ME'] } ],
+    sick:     [ { ja:['ぐあいが わるかった'], en:['I FELT BAD'] },
+                { ja:['からだが おもい','うごきたくない'], en:['MY BODY IS HEAVY.','I DO NOT WANT TO MOVE'] } ],
+    cured:    [ { ja:['くすり にがかった','ありがとう'], en:['THE MEDICINE WAS','BITTER. THANK YOU'] },
+                { ja:['らくに なった','たすかった'], en:['I FEEL BETTER NOW.','YOU HELPED ME'] } ],
+    tantrum:  [ { ja:['わがまま いって','ごめんね'], en:['SORRY I WAS','DIFFICULT'] },
+                { ja:['なんだか いらいら した','りゆうは ない'], en:['I FELT CROSS TODAY.','THERE IS NO REASON'] } ],
+    evolved:  [ { ja:['からだが おおきく','なった みたい'], en:['I THINK MY BODY','GOT BIGGER'] },
+                { ja:['きのうまでの ふくが','あわない'], en:['I DO NOT FIT','THE WAY I DID'] } ],
+    slept:    [ { ja:['よく ねむれた'], en:['I SLEPT WELL'] },
+                { ja:['いい ゆめを みた','おぼえて いないけど'], en:['I HAD A GOOD DREAM.','I FORGOT IT'] } ],
+  };
+
+  // ひとりごと：世話とは関係のない、プレイヤーが見ていない時間の一面。
+  //  条件（天気・成長段階・なつき度・性格）に合うものから1つ選ぶ。
+  //  s = {clear, rain, snow, young, grown, bond, trait}
+  const DIARY_MUSINGS = {
+    star1:  { when:s=>s.clear, ja:['よぞらに ながれぼしが','ひとつ とんだ'], en:['ONE SHOOTING STAR','CROSSED THE SKY'] },
+    star2:  { when:s=>s.clear&&s.grown, ja:['ほしを みていたら','なつかしく なった'], en:['I LOOKED AT THE STARS','AND FELT HOMESICK'] },
+    star3:  { when:s=>s.clear&&s.grown, ja:['わたしの ほしは','どれだろう'], en:['WHICH ONE OF THEM','IS MY PLANET?'] },
+    rain1:  { when:s=>s.rain, ja:['あめは つめたい','でも きらいでは ない'], en:['RAIN IS COLD.','I DO NOT HATE IT'] },
+    rain2:  { when:s=>s.rain, ja:['みずたまりに','じぶんが うつった'], en:['I SAW MYSELF','IN A PUDDLE'] },
+    snow1:  { when:s=>s.snow, ja:['しろいのが つもった','あしあとを つけた'], en:['THE WHITE PILED UP.','I MADE FOOTPRINTS'] },
+    earth1: { when:s=>true, ja:['ちきゅうの かぜは','おもたい においが する'], en:['THE WIND HERE','SMELLS HEAVY'] },
+    earth2: { when:s=>true, ja:['じめんが かたい','わたしの ほしより かたい'], en:['THE GROUND IS HARD.','HARDER THAN HOME'] },
+    earth3: { when:s=>s.grown, ja:['あさの ひかりは','まだ まぶしい'], en:['THE MORNING LIGHT','IS STILL TOO BRIGHT'] },
+    alone1: { when:s=>true, ja:['だれも いないとき','すこし あるいてみた'], en:['WHEN NOBODY LOOKED','I WALKED A LITTLE'] },
+    alone2: { when:s=>true, ja:['へんな むしが いた','ともだちに なれるかな'], en:['A STRANGE BUG CAME.','CAN WE BE FRIENDS?'] },
+    alone3: { when:s=>true, ja:['ひとりで うたを','うたって みた'], en:['I TRIED SINGING','TO MYSELF'] },
+    alone4: { when:s=>true, ja:['くもの かたちが','かおに みえてきた'], en:['A CLOUD UP THERE','LOOKED LIKE A FACE'] },
+    bond1:  { when:s=>s.bond>=70, ja:['きみの あしおとが','わかるように なった'], en:['I KNOW YOUR STEPS','WHEN YOU COME'] },
+    bond2:  { when:s=>s.bond>=70, ja:['ここは あんぜんだ','そう おもう'], en:['THIS PLACE IS SAFE.','I THINK SO NOW'] },
+    bond3:  { when:s=>s.bond<30, ja:['きみは だれ だっけ','わすれそうに なる'], en:['WHO ARE YOU AGAIN?','I ALMOST FORGOT'] },
+    bond4:  { when:s=>s.bond<30, ja:['そらばかり みていた','だれも こないから'], en:['I WATCHED THE SKY.','NOBODY CAME'] },
+    young1: { when:s=>s.young, ja:['まだ よく わからない','でも たのしい'], en:['I DO NOT UNDERSTAND.','BUT IT IS FUN'] },
+    young2: { when:s=>s.young, ja:['じぶんの てを','ずっと みていた'], en:['I LOOKED AT MY HANDS','FOR A LONG TIME'] },
+    grown1: { when:s=>s.grown, ja:['むかしは もっと','ちいさかった はずだ'], en:['I WAS SMALLER','I AM SURE OF IT'] },
+    grown2: { when:s=>s.grown, ja:['いつか かえるのかな','まだ わからない'], en:['WILL I GO BACK?','I DO NOT KNOW YET'] },
+    lively1:{ when:s=>s.trait>=0.4, ja:['はしりたい','もっと はしりたい'], en:['I WANT TO RUN.','I WANT TO RUN MORE'] },
+    lively2:{ when:s=>s.trait>=0.4, ja:['たかい ところに','のぼって みたい'], en:['I WANT TO CLIMB','SOMETHING TALL'] },
+    calm1:  { when:s=>s.trait<=-0.4, ja:['なにも しない じかんも','わるく ない'], en:['DOING NOTHING','IS NOT SO BAD'] },
+    calm2:  { when:s=>s.trait<=-0.4, ja:['ひなたで まるくなって','いちにち おわった'], en:['I CURLED UP IN THE SUN','AND THE DAY ENDED'] },
   };
   // 性格でにじむ結びの一言（おっとり／やんちゃ）
   const DIARY_CLOSE = {
@@ -1040,15 +1140,41 @@
       else if(weather==='rain') d.rain = 1;
       else if(weather==='snow') d.snow = 1;
     }
-    if(!d.woken && pet.mood >= 3) d.slept = 1;                  // よく眠れた
+    if(!d.woken && pet.mood >= 4) d.slept = 1;                  // よく眠れた
+    // ひとりごとは、その日の天気や今の成長段階を見て選ぶ。材料と一緒に持っておき、
+    //  持ち越して翌日書く場合でも「その日」の内容がずれないようにする
+    if(d.solo === undefined) d.solo = pickMusing();
     return d;
   }
-  // 材料から1日分を組み立てる（材料が無ければ書かない）。書くかどうかの抽選は呼び出し側
+  // 条件に合うひとりごとから1つ選ぶ（毎日は書かない）
+  const DIARY_MUSING_RATE = 0.6;
+  function pickMusing(){
+    if(Math.random() >= DIARY_MUSING_RATE) return '';
+    const st = pet.stage;
+    const s = {
+      clear: weatherFetched && weather==='clear',
+      rain:  weatherFetched && weather==='rain',
+      snow:  weatherFetched && weather==='snow',
+      young: st==='mid' || st==='larva',
+      grown: st==='adult' || st==='final',
+      bond:  pet.B || 0,
+      trait: pTrait(),
+    };
+    const keys = Object.keys(DIARY_MUSINGS).filter(k => DIARY_MUSINGS[k].when(s));
+    return keys.length ? keys[Math.floor(Math.random()*keys.length)] : '';
+  }
+  // 材料から1日分を組み立てる（材料が無ければ書かない）。書くかどうかの抽選は呼び出し側。
+  //  言い回しの番号もここで決めて保存する（読み返すたびに文面が変わらないように）
   function buildDiary(d, dayNo){
     const st = diaryStyle();
-    const picked = DIARY_PRIORITY.filter(t => d[t] > 0).slice(0, st.topics);
-    if(!picked.length) return null;
-    return { d: dayNo || petDay(), n: pet.name, t: picked, c: st.close, ts: Date.now() };
+    const solo = d.solo || '';
+    // ひとりごとを書く日は出来事を絞る。毎日おなじ密度の報告にならないようにするため
+    const room = solo ? Math.min(2, st.topics) : st.topics;
+    const picked = DIARY_PRIORITY.filter(t => d[t] > 0).slice(0, room);
+    if(!picked.length && !solo) return null;
+    return { d: dayNo || petDay(), n: pet.name, t: picked,
+             v: picked.map(t => Math.floor(Math.random() * DIARY_LINES[t].length)),
+             s: solo, c: solo ? '' : st.close, ts: Date.now() };
   }
   function addDiary(e){
     if(!e) return;
@@ -1060,8 +1186,14 @@
   function diaryBody(e){
     if(!e) return [];
     const parts = (e.t||[])
-      .map(t => { const m = DIARY_LINES[t]; return m ? (lang==='ja' ? m.ja : m.en) : null; })
+      .map((t,i) => {
+        const set = DIARY_LINES[t]; if(!set) return null;
+        const m = set[Math.min((e.v && e.v[i]) || 0, set.length-1)];   // 保存した言い回しを使う
+        return lang==='ja' ? m.ja : m.en;
+      })
       .filter(Boolean);
+    const mu = e.s && DIARY_MUSINGS[e.s];                              // ひとりごと
+    if(mu) parts.push(lang==='ja' ? mu.ja : mu.en);
     const cl = (e.c && DIARY_CLOSE[e.c]) ? (lang==='ja' ? DIARY_CLOSE[e.c].ja : DIARY_CLOSE[e.c].en) : null;
     // 署名の位置(y52)まで入りきる行数に収める。結びは性格が出るところなので先に席を取り、
     // あふれるぶんは話題のほうを落とす
@@ -1101,31 +1233,7 @@
     return Math.max(0, Math.min(100, v));
   }
 
-  // ════════════════════════════════════════
-  // P（性格）：やんちゃ(+) ↔ おっとり(−)。系統とは独立した軸。
-  //  接し方と生活リズムだけで動かす（ミニゲームの種類には влиять させない）。
-  //  移動の速さ・跳ね方・睡眠時間・食事量に効く。
-  // ════════════════════════════════════════
-  //  性格は「生活リズム」だけで決める。ほめる・正しく叱る・満腹給餌は系統（甘やかし↔しつけ）
-  //  のほうで使うので、ここには入れない。両方に効かせると系統と性格が連動してしまい、
-  //  「やんちゃなグレイ」「おっとりしたマーシャン」が出なくなる。
-  const P_ADJ = {
-    nightPlay:  +2,   // 夜更かしして遊ばせた
-    wokenUp:    +2,   // 寝ているのを起こした
-    scoldBad:   +1,   // 理不尽なしかる（落ち着かなくなる）
-    tantrumIgnored: +2, // わがままを叱らず流した（つけあがる）
-    noTouchDay: +1,   // 放っておかれた日
-    calmDay:    -5,   // 起こさず・夜更かしもさせず・ちゃんと構った日＝落ち着いた一日
-                      //  （やんちゃ側は1日に何度でも積めるが、落ち着きは1日1回しか戻らない）
-  };
-  function addP(n){ pet.P = Math.max(-100, Math.min(100, (pet.P||0) + n)); }
-  // 性格の強さ −1（おっとり）〜 +1（やんちゃ）
-  function pTrait(){ return Math.max(-1, Math.min(1, (pet.P||0) / 60)); }
 
-  // ── 時間進行（企画書§4 ドラフト値）──
-  const HUNGER_MIN = 180;   // 3時間でおなか♥1減（幼体）
-  const MOOD_MIN   = 240;   // 4時間でごきげん♪1減
-  const CATCHUP_CAP_MS = 14*86400000;  // 起動時の経過計算は最大14日分
 
   // ── 睡眠スケジュール（企画書§4：段階/系統別。毎日±ランダムでばらつく）──
   // 日ごとに安定した擬似乱数（同じ日は同じ、日が変われば変わる。個体ごとにも異なる）
@@ -1203,7 +1311,7 @@
       const sleeping = isAsleep(new Date(vt));
       // 残しておいた皿：起きていて空腹なら食べる（傷んだ皿は食べない）。
       //  わがまま中は目の前にあっても食べない＝しかって収まってから食べる
-      if(pet.plateAt && !pet.plateSpoiled && !sleeping && !pet.tantrumAt && pet.hunger < 4){ pet.plateAt = 0; pet.hunger++; schedulePoop(); }
+      if(pet.plateAt && !pet.plateSpoiled && !sleeping && !pet.tantrumAt && pet.hunger < 5){ pet.plateAt = 0; pet.hunger++; schedulePoop(); }
       const rate = sleeping ? 1/3 : 1;
       const gameMin = mult * rate;
       const dirtN = dirtCount();                          // 汚れ総数（うんち＋食べ残し）
@@ -1211,7 +1319,7 @@
       pet.ageMin += mult;
       const wb = weatherFetched ? (weather==='clear' ? 0.2 : isBadWeather() ? -0.2 : 0) : 0;
       // NEWBORN期は世話の充実度（機嫌）でも進化速度が少し増減
-      const careF = (pet.stage==='egg') ? (pet.mood>=3 ? 1.15 : (pet.mood<=1 ? 0.85 : 1)) : 1;
+      const careF = (pet.stage==='egg') ? (pet.mood>=4 ? 1.15 : (pet.mood<=1 ? 0.85 : 1)) : 1;
       pet.EP += mult / 1440 * (1 + wb) * careF;
       // 系統の癖：マーシャン＝のんびり（きげんは減りにくいが、よく食べる）
       const Lh = (pet.lineage==='tako') ? 1.2 : 1;
@@ -2463,8 +2571,12 @@
   function leavePlate(kind){ pet.plateAt = Date.now(); pet.plateKind = kind; }
   function eatReaction(kind){ reactFood = kind; setReaction('eat', EAT_T); }
 
+  // 皿（ごはん／おやつ／食べ残し）が育成画面に出ているか。出ている間は新しく出せない
+  function plateOnScreen(){ return !!(pet.plateAt || pet.plateSpoiled); }
+
   function doCare(act){
     if(pet.dead || ufoEnding || departEnding || !pet.name) return;  // おばけ・エンディング後・命名前は世話不可
+    if((act==='FEED' || act==='SNACK') && plateOnScreen()) return;  // 皿が残っている間は出せない
     const asleep = effectiveAsleep();
     switch(act){
       case 'FEED':                                                  // ごはん
@@ -2473,7 +2585,7 @@
         // わがまま：食べないが、ごはんは出す。皿はそのまま残り、わがままが収まってから食べる
         //  （放置すれば他の拒否と同じく食べ残しとして傷む）
         else if(pet.tantrumAt || rollTantrum('feed')){ leavePlate('meal'); setReaction('refuse'); }
-        else if(pet.hunger >= 4){
+        else if(pet.hunger >= 5){
           if(pTrait() <= -0.5){                                     // おっとり：満腹でも食べてしまう
             pet.fullFeeds++; addA(A_ADJ.feedFull);
             rollSick(SICK_P.overeat, true);                         // 食べ過ぎ：あとから効いてくる
@@ -2494,7 +2606,7 @@
         pet.snackCount = (pet.snackCount||0) + 1;
         if(asleep){ leavePlate('snack'); break; }                   // 起こさない。おやつの皿を残す
         // わがまま中でもおやつは食べる（わがまま自体は解消しない＝しかるまで続く）
-        if(pet.hunger < 4) pet.hunger++;
+        if(pet.hunger < 5) pet.hunger++;
         raiseMood();
         if(over){
           addA(A_ADJ.snackOver); note('snackMany');
@@ -3162,6 +3274,28 @@
   try{ const b = localStorage.getItem('myvader_bodycolor'); if(b !== null) bodyColorIdx = Math.min(BODY_COLORS.length-1, Math.max(0, Number(b)||0)); }catch(e){}
   let inSettings = false;
   let inPlay = false;
+  // ステータスの5段階表示に使うピップ。3種とも5幅にして縦の列を揃える
+  const PIP_BELLY = [           // ● おなか
+    [0,1,1,1,0],
+    [1,1,1,1,1],
+    [1,1,1,1,1],
+    [1,1,1,1,1],
+    [0,1,1,1,0],
+  ];
+  const PIP_NOTE = [            // ♪ きげん（八分音符。玉を3ドットにして5幅に収める）
+    [0,0,1,1,1],
+    [0,0,1,0,1],
+    [0,0,1,0,0],
+    [1,1,1,0,0],
+    [1,1,1,0,0],
+  ];
+  const PIP_HEART = [           // ♥ なかよし
+    [0,1,0,1,0],
+    [1,1,1,1,1],
+    [1,1,1,1,1],
+    [0,1,1,1,0],
+    [0,0,1,0,0],
+  ];
   let inStatus = false;
   const FEED_ITEMS = ['meal','snack'];   // FEEDアイコンから開くサブ画面（ごはん／おやつ）
   let inFeed = false, feedSel = 0;
@@ -3261,34 +3395,32 @@
       ctxN.fillText(T('status'),(W*S)/2,11*S);
       for(let x=1;x<W-1;x++) dot(ctxN,x,18,DIM);
 
-      // けんこう度（★0〜4）：おなか・きげんと同じ4段階表示に揃える。
-      // 状態が悪化する順に星が減り、手遅れになる前に気づけるようにしてある
-      const healthVal =
-          pet.dead                ? 0    // おばけ
-        : isWeak()                ? 1    // 衰弱（空腹18時間超。あと12時間で死）
-        : pet.health==='SICK'     ? 2    // 病気（放置36時間で死）
-        : pet.hunger===0          ? 3    // 空腹が続いている（このままだと衰弱）
-        :                           4;   // げんき
+      // けんこうはバーではなく文字で出す。バーだと「半分」が何を指すのか伝わらないため
+      const healthText =
+          pet.dead            ? T('dead')     // おばけ
+        : isWeak()            ? T('weak')     // 衰弱（空腹18時間超。あと12時間で死）
+        : pet.health==='SICK' ? T('sick')     // 病気（放置36時間で死）
+        : pet.hunger===0      ? T('normal')   // 空腹が続いている（このままだと衰弱）
+        :                       T('good');
+      // なかよし度Bは0〜100なので、5段階に落としてハートで見せる
+      const bondPips = Math.max(0, Math.min(5, Math.round((pet.B||0) / 20)));
       const rows=[
-        {label:T('hungry'), type:'bar', val:pet.hunger},
-        {label:T('mood'),   type:'bar', val:pet.mood},
-        {label:T('health'), type:'bar', val:healthVal},
-        {label:T('stage'),  type:'text',  val:stageLabel()},
-        {label:T('ptype'),  type:'text',  val:typeLabel()},
+        {label:T('hungry'), pip:PIP_BELLY, val:pet.hunger, max:5},
+        {label:T('mood'),   pip:PIP_NOTE,  val:pet.mood,   max:5},
+        {label:T('friend'), pip:PIP_HEART, val:bondPips,   max:5},
+        {label:T('health'), text:healthText},
+        {label:T('stage'),  text:stageLabel()},
+        {label:T('ptype'),  text:typeLabel()},
       ];
       rows.forEach((r,i)=>{
-        const y = 22 + i*9;
+        const y = 21 + i*7;                          // 6行入るよう行間を9→7に詰める
         ctxN.font=uiFont(6); ctxN.fillStyle=ON; ctxN.textAlign='left';
         ctxN.fillText(r.label, 2*S, y*S);
-        if(r.type==='bar'){
-          // 4段階のバー：枠をDIMで描き、中身をONで val/4 ぶん塗る（内側28ドット＝1段階7ドット）
-          const BX=22, BW=30, BH=5, by=y-1;
-          for(let dx=0;dx<BW;dx++){ dot(ctxN, BX+dx, by, DIM); dot(ctxN, BX+dx, by+BH-1, DIM); }
-          for(let dy=0;dy<BH;dy++){ dot(ctxN, BX, by+dy, DIM); dot(ctxN, BX+BW-1, by+dy, DIM); }
-          const fill = Math.round((BW-2) * r.val / 4);
-          for(let dx=0;dx<fill;dx++) for(let dy=1;dy<BH-1;dy++) dot(ctxN, BX+1+dx, by+dy, ON);
+        if(r.pip){
+          // 5個並べ、点いているぶんをON・残りをDIMで描く（丸・音符・ハートとも5幅で列を揃える）
+          for(let k=0;k<r.max;k++) stamp(ctxN, r.pip, 24 + k*6, y, (k < r.val) ? ON : DIM);
         } else {
-          ctxN.textAlign='right'; ctxN.fillText(r.val, (W-2)*S, y*S);
+          ctxN.textAlign='right'; ctxN.fillText(r.text, (W-2)*S, y*S);
         }
       });
 
@@ -3505,8 +3637,10 @@
         }
         else if(pet.dead){ /* おばけ：世話不可 */ }
         else if(act==='FEED'){
-          // ごはん／おやつの選択へ。世話が効かない状態では開かない（空の画面を見せない）
-          if(!pet.name || ufoEnding || departEnding) showView('main');
+          // ごはん／おやつの選択へ。世話が効かない状態では開かない（空の画面を見せない）。
+          // 皿が画面に残っているあいだは、置き場所がひとつしかないので新しく出せない
+          //  （出すと皿の絵はそのままで中身だけ食べる、という不自然なことになる）
+          if(!pet.name || ufoEnding || departEnding || plateOnScreen()) showView('main');
           else { inFeed=true; feedSel=0; }
         }
         else { doCare(act); showView('main'); }
