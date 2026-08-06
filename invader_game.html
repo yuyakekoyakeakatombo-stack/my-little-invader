@@ -3343,7 +3343,7 @@
       ctxN.font=uiFont(7);
       ctxN.fillStyle=ON; ctxN.textAlign='center'; ctxN.textBaseline='top';
       ctxN.fillText(T('settings'),(W*S)/2,11*S);
-      for(let x=1;x<W-1;x++) dot(ctxN,x,18,DIM);
+      for(let x=1;x<W-1;x++) dot(ctxN,x,16,DIM);   // 見出しの下の区切り線
 
       if(confirmReset){
         // ── ALL RESET 確認ダイアログ ──
@@ -3393,7 +3393,7 @@
       ctxN.font=uiFont(7);
       ctxN.fillStyle=ON; ctxN.textAlign='center'; ctxN.textBaseline='top';
       ctxN.fillText(T('status'),(W*S)/2,11*S);
-      for(let x=1;x<W-1;x++) dot(ctxN,x,18,DIM);
+      for(let x=1;x<W-1;x++) dot(ctxN,x,16,DIM);   // 見出しの下の区切り線
 
       // けんこうはバーではなく文字で出す。バーだと「半分」が何を指すのか伝わらないため
       const healthText =
@@ -3417,8 +3417,11 @@
         ctxN.font=uiFont(6); ctxN.fillStyle=ON; ctxN.textAlign='left';
         ctxN.fillText(r.label, 2*S, y*S);
         if(r.pip){
-          // 5個並べ、点いているぶんをON・残りをDIMで描く（丸・音符・ハートとも5幅で列を揃える）
-          for(let k=0;k<r.max;k++) stamp(ctxN, r.pip, 24 + k*6, y, (k < r.val) ? ON : DIM);
+          // 5個並べ、点いているぶんをON・残りをDIMで描く（丸・音符・ハートとも5幅で列を揃える）。
+          //  ピップは5ドット、ラベルの文字はそれより低いので、中心が揃う位置まで持ち上げる
+          //  （文字の高さが言語で違うため持ち上げ量も変える）
+          const pipDy = (lang==='ja') ? -1 : -2;
+          for(let k=0;k<r.max;k++) stamp(ctxN, r.pip, 24 + k*6, y + pipDy, (k < r.val) ? ON : DIM);
         } else {
           ctxN.textAlign='right'; ctxN.fillText(r.text, (W-2)*S, y*S);
         }
@@ -3429,7 +3432,7 @@
       ctxN.font=uiFont(7);
       ctxN.fillStyle=ON; ctxN.textAlign='center'; ctxN.textBaseline='top';
       ctxN.fillText(T('feed'),(W*S)/2,11*S);
-      for(let x=1;x<W-1;x++) dot(ctxN,x,18,DIM);
+      for(let x=1;x<W-1;x++) dot(ctxN,x,16,DIM);   // 見出しの下の区切り線
 
       const ROW_H = 16, FOOD_ICON_CX = 10;   // アイコンを揃える中心x
       FEED_ITEMS.forEach((key,i)=>{
@@ -3453,7 +3456,7 @@
       ctxN.font=uiFont(7);
       ctxN.fillStyle=ON; ctxN.textAlign='center'; ctxN.textBaseline='top';
       ctxN.fillText(T('play'),(W*S)/2,11*S);
-      for(let x=1;x<W-1;x++) dot(ctxN,x,18,DIM);
+      for(let x=1;x<W-1;x++) dot(ctxN,x,16,DIM);   // 見出しの下の区切り線
 
       const ITEM_H = 12;
       PLAY_ITEMS.forEach((label,i)=>{
