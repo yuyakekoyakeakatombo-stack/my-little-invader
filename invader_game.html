@@ -1201,8 +1201,9 @@
     while(remain >= STEP){
       vt += STEP; remain -= STEP;
       const sleeping = isAsleep(new Date(vt));
-      // 残しておいた皿：起きていて空腹なら食べる（傷んだ皿は食べない）
-      if(pet.plateAt && !pet.plateSpoiled && !sleeping && pet.hunger < 4){ pet.plateAt = 0; pet.hunger++; schedulePoop(); }
+      // 残しておいた皿：起きていて空腹なら食べる（傷んだ皿は食べない）。
+      //  わがまま中は目の前にあっても食べない＝しかって収まってから食べる
+      if(pet.plateAt && !pet.plateSpoiled && !sleeping && !pet.tantrumAt && pet.hunger < 4){ pet.plateAt = 0; pet.hunger++; schedulePoop(); }
       const rate = sleeping ? 1/3 : 1;
       const gameMin = mult * rate;
       const dirtN = dirtCount();                          // 汚れ総数（うんち＋食べ残し）
@@ -2469,7 +2470,9 @@
       case 'FEED':                                                  // ごはん
         pet.mealCount = (pet.mealCount||0) + 1;
         if(asleep){ leavePlate('meal'); }                           // 起こさない。皿を残す（起床後に空腹なら食べる／放置で食べ残し化）
-        else if(pet.tantrumAt || rollTantrum('feed')){ setReaction('refuse'); }  // わがまま：食べない（しかると従う）
+        // わがまま：食べないが、ごはんは出す。皿はそのまま残り、わがままが収まってから食べる
+        //  （放置すれば他の拒否と同じく食べ残しとして傷む）
+        else if(pet.tantrumAt || rollTantrum('feed')){ leavePlate('meal'); setReaction('refuse'); }
         else if(pet.hunger >= 4){
           if(pTrait() <= -0.5){                                     // おっとり：満腹でも食べてしまう
             pet.fullFeeds++; addA(A_ADJ.feedFull);
