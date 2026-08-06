@@ -600,6 +600,7 @@
     estrangedDays:0,                      // 疎遠期の連続日数（帰還までの猶予）
     // ── 手紙 ──
     diary:{}, diaryDay:'', diaryDue:null, // その日の出来事／日記を書き終えた日／翌日に持ち越したぶん
+    diaryMark:null,                       // 寝る前に書いた時点の材料（以降の出来事を翌日に回すための印）
     larvaAt:0, snapL:null,                // 幼体到達時刻とスナップショット（帰還判定の起点）
     lineageAt:0, snapA:null,              // 成体到達時刻とスナップショット（Stage4形態判定の起点）
   }; }
@@ -1025,6 +1026,11 @@
   function diaryWriteHour(){
     return Math.max(17, Math.min(23, sleepConfig().bed - DIARY_BEFORE_BED));
   }
+  // 日記を書けるのは「予定として起きている時間」だけ。
+  //  effectiveAsleep() は しかって無理やり起こした状態も"起きている"と数えるので使わない。
+  //  夜中に叩き起こされた瞬間に日記を書き始めるのは不自然だし、
+  //  そこで書くと「ゆうべ おこされた」が起こされる前の日付に載ってしまう。
+  function diaryAwake(){ return debugMode || !isAsleep(new Date()); }
   // 材料に、その日ぜんたいを見ないと分からないぶんを足す
   function diaryFill(d){
     if(!pet.touchedToday && !d.fed && !d.snack) d.lonely = 1;   // だれも来なかった日
@@ -1277,18 +1283,19 @@
     //  やんちゃな子ほど寝る前に書きそびれ、翌日に「きのうのこと」として書く。
     if(diaryWriting() && !pet.dead){
       const tkNow = todayKey();
-      if(pet.diaryDay !== tkNow && !effectiveAsleep() && new Date().getHours() >= diaryWriteHour()){
+      if(pet.diaryDay !== tkNow && diaryAwake() && new Date().getHours() >= diaryWriteHour()){
         pet.diaryDay = tkNow;
         const st = diaryStyle();
+        const mat = diaryFill(Object.assign({}, pet.diary || {}));
+        pet.diaryMark = mat;                 // ここまでは書いた印。以降の出来事は翌日ぶんに回す
         if(Math.random() >= st.skip){
-          const mat = diaryFill(Object.assign({}, pet.diary || {}));
           if(Math.random() < st.putOff) pet.diaryDue = { day: petDay(), mat, after: tkNow };
           else addDiary(buildDiary(mat, petDay()));
         }
       }
-      // 持ち越したぶんは、翌日「きのうのこと」として書く。夜更かし中の0時台ではなく、
-      //  ちゃんと起きたあとの時間に書かせる
-      if(pet.diaryDue && pet.diaryDue.after !== todayKey() && !effectiveAsleep()
+      // 持ち越したぶんは、翌日「きのうのこと」として書く。
+      //  夜更かし中の0時台や、しかって叩き起こした夜中ではなく、自然に目が覚めたあとに書かせる
+      if(pet.diaryDue && pet.diaryDue.after !== todayKey() && diaryAwake()
          && new Date().getHours() >= (((sleepConfig().wake % 24) + 24) % 24)){
         addDiary(buildDiary(pet.diaryDue.mat || {}, pet.diaryDue.day));
         pet.diaryDue = null;
@@ -1298,6 +1305,7 @@
     // ── 日次処理：日付が変わった時に1回だけ ──
     const tk = todayKey();
     if(pet.calDay !== tk){
+      let nextMat = {};   // 翌日に持ち込む材料（寝る前に書いたあとに起きたこと）
       if(pet.calDay){
         // ふれあい（ごはん以外の世話）が無い日が続くと、少しずつ心が離れる
         if(pet.touchedToday){ pet.noTouchDays = 0; }
@@ -1320,11 +1328,17 @@
            && Math.random() >= diaryStyle().skip){
           pet.diaryDue = { day: Math.max(1, petDay()-1), mat: Object.assign({}, d), after: pet.calDay };
         }
+        // その日ぶんを書いたあとに起きたこと（夜中にしかって起こした等）は、翌日の材料に繰り越す。
+        //  そうしないと拾われずに消えてしまうし、「ゆうべ おこされた」は翌日の日記に載るのが自然
+        if(pet.diaryMark){
+          for(const k in d){ const rest = (d[k]||0) - (pet.diaryMark[k]||0); if(rest > 0) nextMat[k] = rest; }
+          pet.diaryMark = null;
+        }
 
         // ── C（ケア充実度）：その日の丁寧さを採点して移動平均へ ──
         pet.C = Math.round((pet.C||50) * (1 - C_SMOOTH) + dailyCareScore(d) * C_SMOOTH);
       }
-      pet.diary = {};                                   // 材料は日ごとにリセット
+      pet.diary = nextMat;                              // 材料は日ごとにリセット（書いたあとのぶんだけ引き継ぐ）
       pet.calDay = tk;
       pet.touchedToday = false;
       pet.nightPlayToday = false;
@@ -1354,13 +1368,24 @@
   // カーソルが取りうる最大位置：末尾の追記位置まで（文字を飛ばして空きを作らせない）
   function nameCurMax(){ return Math.min(nameBuf.length, NAME_MAX-1); }
   let nameSelActive = false;     // 育成画面で「NAME:????」を選択中（黒塗り反転表示。Aで命名画面へ）
-  const ENVELOPE = [            // 未読マーク 7×5（封筒）
+  let diarySelActive = false;   // 育成画面で日記マークを選択中（Aで日記を開く）
+  // 日記マーク（ノート）。ヘッダーの文字（6px）と並ぶので、1pxきざみの細かいドットで小さく描く。
+  //  論理ドット（4px）で描くと文字の3倍の高さになって浮くため、ここだけ文字と同じ細かさにしてある
+  const DIARY_ICON = [
     [1,1,1,1,1,1,1],
-    [1,0,1,1,1,0,1],
-    [1,0,0,1,0,0,1],
-    [1,0,0,0,0,0,1],
+    [1,1,0,0,0,0,1],
+    [1,1,0,1,1,0,1],
+    [1,1,0,0,0,0,1],
+    [1,1,0,1,1,0,1],
+    [1,1,0,0,0,0,1],
+    [1,1,0,0,0,0,1],
     [1,1,1,1,1,1,1],
   ];
+  // 1キャンバスpxきざみで絵を置く（座標もpx）。文字と並べる小さなアイコン用
+  function stampPx(ctx, g, px0, py0, col){
+    ctx.fillStyle = col || ON;
+    g.forEach((row,ry)=>row.forEach((v,rx)=>{ if(v) ctx.fillRect(px0+rx, py0+ry, 1, 1); }));
+  }
   let fG = 0;
 
   function nameLayout(){ return {cells:ABC_ROWS, cellW:8, rowH:6, gx0:3, gy0:17}; }
@@ -2709,8 +2734,14 @@
     ctxM.font='6px "Press Start 2P"';   // DAYカウントは常にピクセル字体（名前がかなでも影響させない）
     ctxM.fillStyle=NK;
     ctxM.textAlign='right'; ctxM.fillText(dayLabel(),  (W-2)*S, 2*S);
-    // 日記に未読があると、名前と日数のあいだで封筒が点滅する（読むのは MENU→DIARY）
-    if(diaryUnread > 0 && fM%16 < 10) stamp(ctxM, ENVELOPE, 24, 2, NK);
+    // 名前と日数のあいだに日記マーク。未読のあいだは点滅する（十字上で選択→Aで開く）
+    if(diaryUnread > 0){                          // 読み終わると消える（読み返すのは MENU→DIARY）
+      const IX = 90, IY = 8;                      // px。名前と日数のあいだ、文字の高さに揃える
+      if(diarySelActive){                         // 選択中は薄色の枠で囲む
+        ctxM.fillStyle = DM; ctxM.fillRect(IX-3, IY-3, 13, 14);
+      }
+      if(diarySelActive || fM%16 < 10) stampPx(ctxM, DIARY_ICON, IX, IY, NK);
+    } else if(diarySelActive) diarySelActive = false;
     for(let x=0;x<W;x++) dot(ctxM,x,HEADER_Y,DM);
 
     // ── 天体（右上） ──
@@ -3073,7 +3104,7 @@
   function dpadAnim(el){ el.style.transform='translateY(2px) scale(0.88)'; el.style.filter='brightness(2.5)'; setTimeout(()=>{el.style.transform='';el.style.filter='';},120); }
 
   onPress(document.getElementById('mmenu'),()=>{ playClick(); btnAnim(document.getElementById('mmenu'),1,0.93); menuSel=0; menuScroll=0; inSettings=false; inPlay=false; inFeed=false; inStatus=false; confirmReset=false; locPrime=false; playSel=0; feedSel=0; showView('menu'); });
-  onPress(document.getElementById('mb'),()=>{ playClick(); btnAnim(document.getElementById('mb')); nameSelActive=false; });
+  onPress(document.getElementById('mb'),()=>{ playClick(); btnAnim(document.getElementById('mb')); nameSelActive=false; diarySelActive=false; });
   // お世話アクションはMENU内のアイコングリッドへ移動
   // 未命名時：十字上で「NAME:????」を選択（黒塗り反転）→ Aで命名画面へ。下/Bで選択解除
   onPress(document.getElementById('ma'),()=>{
@@ -3081,6 +3112,8 @@
     if(arriveT >= 0) return;                      // 到着演出中は操作を受け付けない
     if(!pet.name && nameSelActive){
       nameSelActive=false; startNaming(); showView('naming');
+    } else if(diarySelActive && diaryUnread > 0){
+      diarySelActive=false; openDiary('main');
     }
   });
   document.querySelectorAll('#view-main .dpad-arrow').forEach(el=>{
@@ -3090,6 +3123,9 @@
       if(!pet.name){
         if(el.classList.contains('up'))   nameSelActive = true;
         if(el.classList.contains('down')) nameSelActive = false;
+      } else if(diaryUnread > 0){
+        if(el.classList.contains('up'))   diarySelActive = true;   // ヘッダーの日記マークを選択
+        if(el.classList.contains('down')) diarySelActive = false;
       }
     });
   });
@@ -3341,7 +3377,13 @@
         ctxN.fillText(T(key), 8*S, cy);
         ctxN.textBaseline='top';
         // 未読があるDIARYには封筒を添える
-        if(item==='DIARY' && diaryUnread > 0) stamp(ctxN, ENVELOPE, W-11, y + ((HL_H-5)>>1), ON);
+        // 未読があるDIARYには「NEW」を点滅させる
+        if(item==='DIARY' && diaryUnread > 0 && fN%16 < 10){
+          ctxN.textAlign='right'; ctxN.textBaseline='middle';
+          ctxN.font=uiFont(6); ctxN.fillStyle=ON;
+          ctxN.fillText('NEW', (W-3)*S, cy);
+          ctxN.textAlign='left'; ctxN.textBaseline='top';
+        }
       });
     }
 
@@ -3546,7 +3588,9 @@
   const DIARY_TITLE = { ja:'にっき', en:'DIARY' };
   const DIARY_EMPTY = { ja:['まだ なにも','かいていない'], en:['NOTHING WRITTEN','YET'] };
   let diaryPage = 0;
-  function openDiary(){
+  let diaryFrom = 'menu';        // どこから開いたか（閉じたらそこへ戻る）
+  function openDiary(from){
+    diaryFrom = from || 'menu';
     diaryPage = Math.max(0, diaryLog.length - 1);   // いちばん新しい日を開く
     if(diaryUnread > 0){ diaryUnread = 0; saveDiary(); }   // 開いたら既読
     showView('diary');
@@ -3592,7 +3636,7 @@
   }
   setInterval(tickDiary, 100);
 
-  function closeDiary(){ showView('menu'); }
+  function closeDiary(){ diarySelActive=false; showView(diaryFrom); }
   onPress(document.getElementById('ta'),()=>{ playClick(); btnAnim(document.getElementById('ta')); closeDiary(); });
   onPress(document.getElementById('tb'),()=>{ playClick(); btnAnim(document.getElementById('tb')); closeDiary(); });
   onPress(document.getElementById('tmenu'),()=>{ playClick(); btnAnim(document.getElementById('tmenu'),1,0.93); closeDiary(); });
