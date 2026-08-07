@@ -3274,28 +3274,12 @@
   try{ const b = localStorage.getItem('myvader_bodycolor'); if(b !== null) bodyColorIdx = Math.min(BODY_COLORS.length-1, Math.max(0, Number(b)||0)); }catch(e){}
   let inSettings = false;
   let inPlay = false;
-  // ステータスの5段階表示に使うピップ。3種とも5幅にして縦の列を揃える
-  const PIP_BELLY = [           // ● おなか
-    [0,1,1,1,0],
-    [1,1,1,1,1],
-    [1,1,1,1,1],
-    [1,1,1,1,1],
-    [0,1,1,1,0],
-  ];
-  const PIP_NOTE = [            // ♪ きげん（八分音符。玉を3ドットにして5幅に収める）
-    [0,0,1,1,1],
-    [0,0,1,0,1],
-    [0,0,1,0,0],
-    [1,1,1,0,0],
-    [1,1,1,0,0],
-  ];
-  const PIP_HEART = [           // ♥ なかよし
-    [0,1,0,1,0],
-    [1,1,1,1,1],
-    [1,1,1,1,1],
-    [0,1,1,1,0],
-    [0,0,1,0,0],
-  ];
+  // ステータスの目盛り：10本並べ、2本で1段階（内部値0〜5 → 0〜10本）。
+  //  5個のアイコンより刻みが細かく見え、残量メーターとして読みやすい
+  const GAUGE_X = 18, GAUGE_W = 2, GAUGE_GAP = 1, GAUGE_H = 4;
+  const GAUGE_MAX = 5;                 // 内部値の段階数（1段階＝2本）
+  const STAT_VAL_X = 54 - 8;           // 文字で出す項目（けんこう等）の右端
+  const STAT_LEADER = 3;               // 項目名と状態をつなぐ点線の間隔（ドット）
   let inStatus = false;
   const FEED_ITEMS = ['meal','snack'];   // FEEDアイコンから開くサブ画面（ごはん／おやつ）
   let inFeed = false, feedSel = 0;
@@ -3405,9 +3389,9 @@
       // なかよし度Bは0〜100なので、5段階に落としてハートで見せる
       const bondPips = Math.max(0, Math.min(5, Math.round((pet.B||0) / 20)));
       const rows=[
-        {label:T('hungry'), pip:PIP_BELLY, val:pet.hunger, max:5},
-        {label:T('mood'),   pip:PIP_NOTE,  val:pet.mood,   max:5},
-        {label:T('friend'), pip:PIP_HEART, val:bondPips,   max:5},
+        {label:T('hungry'), gauge:pet.hunger},
+        {label:T('mood'),   gauge:pet.mood},
+        {label:T('friend'), gauge:bondPips},
         {label:T('health'), text:healthText},
         {label:T('stage'),  text:stageLabel()},
         {label:T('ptype'),  text:typeLabel()},
@@ -3416,14 +3400,20 @@
         const y = 21 + i*7;                          // 6行入るよう行間を9→7に詰める
         ctxN.font=uiFont(6); ctxN.fillStyle=ON; ctxN.textAlign='left';
         ctxN.fillText(r.label, 2*S, y*S);
-        if(r.pip){
-          // 5個並べ、点いているぶんをON・残りをDIMで描く（丸・音符・ハートとも5幅で列を揃える）。
-          //  ピップは5ドット、ラベルの文字はそれより低いので、中心が揃う位置まで持ち上げる
-          //  （文字の高さが言語で違うため持ち上げ量も変える）
-          const pipDy = (lang==='ja') ? -1 : -2;
-          for(let k=0;k<r.max;k++) stamp(ctxN, r.pip, 24 + k*6, y + pipDy, (k < r.val) ? ON : DIM);
+        if(r.gauge !== undefined){
+          // 目盛り10本。点いているぶんがON、残りはDIM
+          const lit = Math.max(0, Math.min(GAUGE_MAX, r.gauge)) * 2;
+          for(let k=0;k<GAUGE_MAX*2;k++){
+            const c = (k < lit) ? ON : DIM;
+            for(let dx=0;dx<GAUGE_W;dx++) for(let dy=0;dy<GAUGE_H;dy++)
+              dot(ctxN, GAUGE_X + k*(GAUGE_W+GAUGE_GAP) + dx, y + dy, c);
+          }
         } else {
-          ctxN.textAlign='right'; ctxN.fillText(r.text, (W-2)*S, y*S);
+          ctxN.textAlign='right'; ctxN.fillText(r.text, STAT_VAL_X*S, y*S);
+          // 項目名と状態のあいだを薄い点線でつなぐ。「・」の文字だと言語でグリフが変わるのでドットで描く
+          const lx = 2 + ctxN.measureText(r.label).width / S;
+          const vx = STAT_VAL_X - ctxN.measureText(r.text).width / S;
+          for(let x = Math.floor(lx) + 2; x < vx - 1.5; x += STAT_LEADER) dot(ctxN, x, y + 1, DIM);
         }
       });
 
