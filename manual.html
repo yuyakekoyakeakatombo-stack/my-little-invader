@@ -4,6 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="description" content="My Little Invader のとりあつかいせつめいしょ（テスト版）">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <title>My Little Invader — とりあつかいせつめいしょ</title>
 <style>
 *{box-sizing:border-box}
@@ -404,7 +406,7 @@ STATUS画面の「タイプ」に、いまの ゆくえが 出ています。</p
   <tr><td class="k">セーブ</td><td>じどうで 保存されます。とじても だいじょうぶです。ただし ブラウザの データを 消すと きえます。</td></tr>
   <tr><td class="k">時間</td><td>とじている あいだも 進みます。ひさしぶりに ひらくと、そのぶん 変化しています。</td></tr>
   <tr><td class="k">音</td><td>SETTINGS で 切りかえられます。音が 出ないときは、端末の マナーモードも ごかくにんください。</td></tr>
-  <tr><td class="k">通信</td><td>あそぶには インターネットへの せつぞくが ひつようです（ホーム画面に ついかした ばあいも おなじです）。お天気を つかう ときは、ときどき 天気を とりに いきます。</td></tr>
+  <tr><td class="k">通信</td><td><b>いちど ひらけば、つぎからは 圏外でも あそべます</b>（ゲーム一式が 端末に 保管されます）。お天気を つかう ときだけ、ときどき 天気を とりに いきます。</td></tr>
   <tr><td class="k">リセット</td><td>SETTINGS の いちばん下に あります。<b>そだてた子も 日記も すべて 消えます。</b>おきをつけください。</td></tr>
 </table>
 
@@ -433,6 +435,10 @@ STATUS画面の「タイプ」に、いまの ゆくえが 出ています。</p
 <p class="a">申しわけありません。名前は あとから 変えられない しくみです。
 どうしても という ばあいは、SETTINGS の リセットで さいしょから やりなおせます（そだてた子は 消えます）。</p></div>
 
+<div class="qa"><p class="q">画面の下に「あたらしい バージョンが あります」と出ました</p>
+<p class="a">ゲームが 更新された ときの おしらせです。「よみこみなおす」を おすと 新しい版に なります。
+そだてた子は そのままですので、ご安心ください。あとで でも かまいません。</p></div>
+
 <div class="qa"><p class="q">ほかの端末で つづきを あそべますか</p>
 <p class="a">いまの ところ できません。データは その端末の ブラウザの中に あります。</p></div>
 
@@ -451,5 +457,6 @@ STATUS画面の「タイプ」に、いまの ゆくえが 出ています。</p
   <span style="font-size:11px">© 2026</span>
 </footer>
 </div>
+<script src="register-sw.js"></script>
 </body>
 </html>

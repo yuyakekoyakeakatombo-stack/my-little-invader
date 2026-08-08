@@ -1,0 +1,20 @@
+{
+  "name": "My Little Invader",
+  "short_name": "My Invader",
+  "description": "UFOが置いていったインベーダーのたまごを育てる、レトロ2色LCD風の育成ゲーム。",
+  "lang": "ja",
+  "start_url": "invader_game.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#1c1c1a",
+  "theme_color": "#1c1c1a",
+  "icons": [
+    {
+      "src": "apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
