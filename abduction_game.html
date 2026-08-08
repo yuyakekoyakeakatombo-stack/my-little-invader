@@ -148,6 +148,8 @@
   function hl(y,col,dash){ for(let x=0;x<W;x++) if(!dash||x%2===0) d(x,y,col||ON); }
   function stamp(g,ox,oy,col){ g.forEach((r,ry)=>r.forEach((v,rx)=>{if(v)d(ox+rx,oy+ry,col||ON);})); }
   function txtC(s,py,sz,col){ ct.font=`${sz}px "Press Start 2P"`; ct.fillStyle=col||ON; ct.textAlign='center'; ct.textBaseline='top'; ct.fillText(s,(W*S)/2,py*S); }
+  // 上下中央そろえの中央寄せテキスト（網掛けの帯に文字を収めるのに使う）
+  function txtCM(s,py,sz,col){ ct.font=`${sz}px "Press Start 2P"`; ct.fillStyle=col||ON; ct.textAlign='center'; ct.textBaseline='middle'; ct.fillText(s,(W*S)/2,py*S); }
   function txt(s,px,py,sz,col){ ct.font=`${sz}px "Press Start 2P"`; ct.fillStyle=col||ON; ct.textAlign='left'; ct.textBaseline='top'; ct.fillText(s,px*S,py*S); }
 
   // ── スプライト ──
@@ -479,11 +481,15 @@
       stamp(UFO, W/2-5, 11, ON);
       txtC('ABDUCTION',22,7,ON);
       txtC('FROM THE UFO',32,5,DIM);
+      // 選択中を網掛けの帯で示す（本編のMENUと同じ表現）。
+      //  以前は未選択を薄色にしていたため、HOW TO PLAY がキャッチコピーと同じ見た目になり、
+      //  選べる項目だと気づかれなかった。両方とも濃色で並べ、文字も6→7pxに上げてある
       const items=['START','HOW TO PLAY'];
+      const HL_H=9;
       items.forEach((it,i)=>{
-        const y=46+i*9, sel=(i===menuSel);
-        if(sel) txtC('>'+it+'<',y,6,ON);
-        else    txtC(it,y,6,DIM);
+        const by=44+i*10;
+        if(i===menuSel){ for(let x=3;x<W-3;x++) for(let dy=0;dy<HL_H;dy++) d(x,by+dy,DIM); }
+        txtCM(it, by+HL_H/2, 7, ON);      // 帯の上下中央に置く
       });
       return;
     }

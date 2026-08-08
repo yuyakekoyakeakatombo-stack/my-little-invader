@@ -469,6 +469,9 @@
 
   const O_PHASES = [35,45,45,90,35,50,80];
   const O_TOTAL  = O_PHASES.reduce((a,b)=>a+b,0);
+  // UFOが画面外へ去りきるフレーム（フェーズ5の終わり）。ここからタイトルを出し、
+  //  残りのフェーズ6（キャラが歩き去る）はタイトルの裏で続ける
+  const O_UFO_GONE = O_PHASES.slice(0,6).reduce((a,b)=>a+b,0);
   const UFO_START_X = W+2;
   const UFO_END_X   = Math.floor(W/2)-7;
   const UFO_CX      = UFO_END_X+5;
@@ -522,11 +525,13 @@
         if(bx<W+2) stamp(ctxO,BABY_SPR,bx,by,ON);
       }
       fO++;
-      if(fO >= O_TOTAL){ openingDone=true; titleWait=0; }
+      if(fO >= O_TOTAL) openingDone = true;
+    }
 
-    } else {
-      // ── タイトル＋PRESS A ──
-      if(scene!=='opening') return;
+    // ── タイトル＋PRESS A ──
+    //  UFOが去りきった時点で出す。キャラが歩き去る動きはこの裏で続く
+    if(scene!=='opening') return;
+    if(openingDone || fO >= O_UFO_GONE){
       titleWait++;
       const cx = (W*S)/2;
 
