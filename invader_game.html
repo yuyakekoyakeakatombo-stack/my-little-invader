@@ -339,9 +339,10 @@
       feed:'FEED', clean:'CLEAN', med:'MEDICINE', pet:'PRAISE', scold:'SCOLD', game:'MINI GAME',
       meal:'MEAL', snack:'TREAT',
       status:'STATUS', story:'STORY', settings:'SETTINGS', play:'PLAY', diary:'DIARY',
-      sound:'SOUND', bodycolor:'BODY COLOR', location:'LOCATION', language:'LANGUAGE', debug:'DEBUG', reset:'ALL RESET',
+      sound:'SOUND', bodycolor:'BODY COLOR', weather:'WEATHER', language:'LANGUAGE', debug:'DEBUG', reset:'ALL RESET',
+      where:'HERE',
       on:'ON', off:'OFF', sure:'SURE?', yesno:'A:YES  B:NO',
-      locn1:'USE LOCATION', locn2:'ONLY TO SHOW', locn3:'IN-GAME WEATHER', locok:'A:OK  B:CANCEL',
+      locok:'A:OK  B:CANCEL',
       hungry:'HUNGRY', mood:'MOOD', health:'HEALTH', stage:'STAGE', ptype:'TYPE',
       good:'GOOD', sick:'SICK', weak:'CRITICAL', normal:'NORMAL', dead:'DEAD', friend:'BOND',
       newborn:'NEWBORN', baby:'BABY', child:'CHILD', adult:'ADULT', finalst:'FINAL',
@@ -352,15 +353,31 @@
       feed:'ごはん', clean:'そうじ', med:'くすり', pet:'ほめる', scold:'しかる', game:'ゲーム',
       meal:'ごはん', snack:'おやつ',
       status:'ステータス', story:'ストーリー', settings:'せってい', play:'あそぶ', diary:'にっき',
-      sound:'サウンド', bodycolor:'カラー', location:'ロケーション', language:'げんご', debug:'デバッグ', reset:'リセット',
+      sound:'サウンド', bodycolor:'カラー', weather:'てんき', language:'げんご', debug:'デバッグ', reset:'リセット',
+      where:'げんざいち',
       on:'オン', off:'オフ', sure:'ほんとうに？', yesno:'A:はい B:いいえ',
-      locn1:'いちじょうほうは', locn2:'ゲームの天気に', locn3:'のみつかいます', locok:'A:OK  B:キャンセル',
+      locok:'A:OK  B:キャンセル',
       hungry:'おなか', mood:'きげん', health:'けんこう', stage:'せいちょう', ptype:'タイプ',
       good:'げんき', sick:'びょうき', weak:'ひんし', normal:'ふつう', dead:'おばけ', friend:'なかよし',
       newborn:'うまれたて', baby:'あかちゃん', child:'こども', adult:'おとな', finalst:'さいしゅう',
       gray:'グレイ', martian:'マーシャン', alien:'エイリアン',
       nameq:'なまえは？', done:'けってい', del:'けす', langval:'にほんご',
     },
+  };
+  // 位置情報の用途説明。LCDの幅に収まるよう改行済み（行数は言語で違う）
+  const LOC_NOTE = {
+    ja:['いちじょうほうは、ゲームに',
+        'はんえいされる てんきを',
+        'しゅとくする もくてきにのみ',
+        'しようします。そのほかの',
+        'もくてきで、ほぞん および',
+        'だいさんしゃへ ていきょう',
+        'されることは ありません。'],
+    en:['LOCATION IS USED ONLY TO GET',
+        'THE WEATHER SHOWN IN THE GAME.',
+        'IT IS NOT STORED OR GIVEN TO',
+        'THIRD PARTIES FOR ANY',
+        'OTHER PURPOSE.'],
   };
   function T(k){ return (I18N[lang] && I18N[lang][k]) || I18N.en[k] || k; }
   function toggleLang(){ lang = (lang==='en') ? 'ja' : 'en'; try{ localStorage.setItem('myvader_lang', lang); }catch(e){} }
@@ -1680,22 +1697,6 @@
     return 'clear';
   }
 
-  async function fetchWeather() {
-    try {
-      const pos = await new Promise((res,rej)=>
-        navigator.geolocation.getCurrentPosition(res,rej,{timeout:8000})
-      );
-      const {latitude:lat, longitude:lon} = pos.coords;
-      const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=weathercode`;
-      const r = await fetch(url);
-      const d = await r.json();
-      weather = codeToWeather(d.current.weathercode);
-      weatherFetched = true;
-    } catch(e) {
-      // 位置情報拒否 or オフライン → そのまま
-    }
-  }
-
   // ── デバッグ：天気・時刻を自動サイクル ──
   const DEBUG_STATES = [
     { weather:'clear',  timeOfDay:'day'   },
@@ -1722,39 +1723,65 @@
   weather   = 'clear';
   timeOfDay = getTimeOfDay();
 
-  // ── 位置情報 ON/OFF（ONにすると現在地の天気を取得して育成画面に反映） ──
-  let locationOn = false;
-  try{ if(localStorage.getItem('myvader_location') === 'on') locationOn = true; }catch(e){}
+  // ── 天気の取り方（OFF／都市を選ぶ／現在地）──
+  //  位置情報を渡したくない人でも天気を楽しめるよう、主要都市から選ぶ方式を用意してある。
+  //  都市選択なら位置情報の許可は一切要らない（緯度経度は下の表の固定値を使う）。
+  const CITIES = [   // [英語名, 日本語名, 緯度, 経度]
+    ['TOKYO','トウキョウ',35.68,139.69], ['OSAKA','オオサカ',34.69,135.50],
+    ['SAPPORO','サッポロ',43.06,141.35], ['NAHA','ナハ',26.21,127.68],
+    ['SEOUL','ソウル',37.57,126.98],     ['TAIPEI','タイペイ',25.03,121.57],
+    ['SINGAPORE','シンガポール',1.35,103.82], ['SYDNEY','シドニー',-33.87,151.21],
+    ['LONDON','ロンドン',51.51,-0.13],   ['PARIS','パリ',48.86,2.35],
+    ['NEW YORK','ニューヨーク',40.71,-74.01], ['REYKJAVIK','レイキャビク',64.15,-21.94],
+  ];
+  const WMODES = ['off','city','here'];
+  let weatherMode = 'off';
+  let cityIdx = 0;
+  try{
+    const m = localStorage.getItem('myvader_wmode');
+    if(WMODES.includes(m)) weatherMode = m;
+    else if(localStorage.getItem('myvader_location') === 'on') weatherMode = 'here';   // 旧設定からの引き継ぎ
+    const ci = parseInt(localStorage.getItem('myvader_city'), 10);
+    if(ci >= 0 && ci < CITIES.length) cityIdx = ci;
+  }catch(e){}
   let weatherFetched = false;   // 実データ取得済みか（天気補正の有効判定に使用）
+  function cityName(){ const c = CITIES[cityIdx]; return (lang==='ja') ? c[1] : c[0]; }
 
-  async function fetchWeatherOnce() {
-    if (!locationOn) return;
+  async function fetchWeatherNow(){
+    if(weatherMode === 'off') return;
     try {
-      const pos = await new Promise((res,rej)=>
-        navigator.geolocation.getCurrentPosition(res,rej,{timeout:8000})
-      );
-      const {latitude:lat, longitude:lon} = pos.coords;
-      const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=weathercode`;
-      const r = await fetch(url);
+      let lat, lon;
+      if(weatherMode === 'city'){ lat = CITIES[cityIdx][2]; lon = CITIES[cityIdx][3]; }
+      else {
+        const pos = await new Promise((res,rej)=>
+          navigator.geolocation.getCurrentPosition(res,rej,{timeout:8000})
+        );
+        lat = pos.coords.latitude; lon = pos.coords.longitude;
+      }
+      const r = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=weathercode`);
       const d = await r.json();
       weather = codeToWeather(d.current.weathercode);
       weatherFetched = true;
     } catch(e) {
-      // 拒否 or オフライン → clear のまま。トグルはONだが未取得
+      // 拒否 or オフライン → clear のまま
     }
   }
-  function setLocation(on){
-    locationOn = on;
-    try{ localStorage.setItem('myvader_location', on ? 'on' : 'off'); }catch(e){}
-    if(on){ fetchWeatherOnce(); }
-    else { weatherFetched = false; weather = 'clear'; }
+  function saveWeatherPref(){
+    try{
+      localStorage.setItem('myvader_wmode', weatherMode);
+      localStorage.setItem('myvader_city', String(cityIdx));
+      localStorage.removeItem('myvader_location');
+    }catch(e){}
   }
-  if(locationOn) fetchWeatherOnce();   // 起動時に許可済みなら取得
+  function setWeatherMode(m){
+    weatherMode = m; saveWeatherPref();
+    if(m === 'off'){ weatherFetched = false; weather = 'clear'; }
+    else fetchWeatherNow();
+  }
+  if(weatherMode !== 'off') fetchWeatherNow();   // 起動時に設定済みなら取得
 
-  // 以後30分ごとに再取得（ONのときのみ）
-  setInterval(()=>{
-    if(locationOn) fetchWeather();
-  }, 30 * 60 * 1000);
+  // 以後30分ごとに再取得
+  setInterval(fetchWeatherNow, 30 * 60 * 1000);
 
   setInterval(()=>{ timeOfDay = getTimeOfDay(); }, 60 * 1000);
   timeOfDay = getTimeOfDay();
@@ -2105,6 +2132,51 @@
   // 病気の姿：休息ポーズのまま、目だけ就寝時と同じ閉じ線にする。
   //  就寝スプライトは休息ポーズから目の段を差し替えて作ってあるので、
   //  両者を見比べて「変わっている段」＝閉じた目を取り出し、それを休息ポーズに当てる。
+  // 目のある行を返す。就寝スプライトは休息ポーズから目の段だけ差し替えて作ってあるので、
+  //  両者を見比べて「変わっている段」＝目のある段が分かる
+  function eyeRows(sp){
+    const rows = [];
+    const n = Math.min(sp.sleep.length, sp.rest.length);
+    for(let y=0; y<n; y++){
+      if(sp.rest[y].length === sp.sleep[y].length &&
+         sp.rest[y].some((v,x)=>v !== sp.sleep[y][x])) rows.push(y);
+    }
+    return rows;
+  }
+  // 目を左右にずらす。目は顔の中の「1で囲まれた背景の穴」なので、その穴だけを動かす。
+  //  顔からはみ出す場合は動かさない（輪郭が欠けないように）
+  function shiftEyes(sp, grid, dx){
+    if(!dx) return grid;
+    const rows = eyeRows(sp);
+    if(!rows.length) return grid;
+    const out = grid.map(r=>[...r]);
+    for(const y of rows){
+      const row = out[y]; if(!row) continue;
+      const src = [...row];
+      const holes = [];
+      for(let x=1; x<src.length-1; x++){
+        if(src[x] === 0){
+          let a = x; while(a < src.length && src[a] === 0) a++;
+          if(src[x-1] === 1 && a < src.length && src[a] === 1) holes.push([x, a-1]);
+          x = a;
+        }
+      }
+      if(!holes.length) continue;
+      const inHole = (x)=> holes.some(([a,b]) => x>=a && x<=b);
+      // 目ごとに動かせるか判定する。輪郭に接していて動かせない目はその場に残す
+      //  （成体のように目が縁ぎりぎりの絵では、片目だけ動いて視線が寄って見える）
+      const moved = holes.map(([a,b])=>{
+        const na = a+dx, nb = b+dx;
+        if(na < 1 || nb > src.length-2) return [a,b];
+        for(let x=na; x<=nb; x++) if(src[x] !== 1 && !inHole(x)) return [a,b];
+        return [na,nb];
+      });
+      if(moved.every(([a,b],i)=> a===holes[i][0])) continue;                 // どの目も動かせない
+      holes.forEach(([a,b])=>{ for(let x=a;x<=b;x++) row[x] = 1; });         // いったん埋めて
+      moved.forEach(([a,b])=>{ for(let x=a;x<=b;x++) row[x] = 0; });         // 動かせたぶんだけ開け直す
+    }
+    return out;
+  }
   function sickSprite(sp){
     const repl = [];
     const n = Math.min(sp.sleep.length, sp.rest.length);
@@ -2517,12 +2589,40 @@
   // ── 移動AI（進化段階・系統・性格で歩き方が変わる） ──
   let walkX = null, walkDir = 1, walkTimer = 0;
   let jumpT = 0, floatT = 0, hopPause = 0, preJumpT = 0;
+  let jumpDur = 10, jumpHi = 3;   // 今の跳躍の長さ（フレーム）と高さ（ドット）
   let wiggleT = 0;   // その場モゾモゾ（傾きポーズを左右反転で切り替え）
   let squatT = 0;    // その場屈伸（脚を畳んで縮む↔伸びるを繰り返す）
   let squatWalkT = 0; // 屈伸しながら横移動
+  let lookT = 0;     // その場で見回す（グレイ）
+  let dashT = 0;     // ひと息に走る（グレイ）
   function flipH(g){ return g.map(r=>[...r].reverse()); }
   // しゃがみフレーム：下から2番目の行（脚）を1段抜いて縮める。足元は据え置きで屈伸に見える
   function squatFrame(g){ return (g.length >= 5) ? [...g.slice(0, g.length-2), g[g.length-1]] : g; }
+  // 浮遊（マーシャン）：画面中央あたりまでふわりと上がり、左右に漂ってから降りてくる。
+  //  tickMain は100msなので、70フレーム＝7秒ほどの動作になる
+  const FLOAT_T = 70;                    // 浮遊の総フレーム
+  const FLOAT_RISE = 18, FLOAT_FALL = 18;// 上がる／降りるのにかける時間
+  const FLOAT_H = 18;                    // 最大の浮き（ドット）。地面から画面中央あたりまで
+  const FLOAT_TOP = 10;                  // 頭がこの高さより上に行かないようにする（ヘッダー回避）
+  // グレイ：立ち止まって見回す／ひと息に走って急停止。
+  //  「活発で知的」を、速さではなく“注意深さと緩急”で表す
+  const LOOK_T = 36, LOOK_TURN = 9;                  // 見回す長さと、目を動かす間隔
+  const LOOK_SCAN = [-1, 1, -1, 1];                  // 見回すときの目の向き（左→右→左→右）
+  const DASH_T = 12, DASH_MUL = 2.2, DASH_STOP = 10; // 走るフレーム数・速度倍率・止まったあとの静止
+  // 跳躍（インベーダー）：跳ぶたびに高さを変える。大きく跳ぶと体の中心が画面中央よりやや下まで上がる
+  const HOP_H_MAX = 15;                  // 一番大きい跳ね（ドット）
+  function hopHeight(base){
+    const r = Math.random();
+    if(r < 0.55) return base;                                        // ふつうの跳ね
+    if(r < 0.85) return base + 2 + Math.floor(Math.random()*3);      // 少し高め
+    return HOP_H_MAX - Math.floor(Math.random()*3);                  // ときどき大きく跳ぶ
+  }
+  // 跳躍を始める。高いほど滞空も長くする（高さの平方根に比例＝放物線らしい伸び方）
+  function startJump(prof){
+    jumpHi  = (prof.mode === 'hop') ? hopHeight(prof.jumpH) : prof.jumpH;
+    jumpDur = Math.max(8, Math.round(8 * Math.sqrt(jumpHi / 3)));
+    jumpT   = jumpDur;
+  }
   function moveProfile(){
     // speed:ドット/tick, jump:行動決定時のジャンプ率, jumpH:高さ, float:浮遊率, mode:'walk'|'hop'
     let p;
@@ -2535,7 +2635,7 @@
         // マーシャン＝のんびり／インベーダー＝基準（ぴょんぴょん）／グレイ＝活発
         if(L==='tako')     p = {mode:'walk', speed:0.09, jump:0.03, jumpH:1, float:0.12, squat:0.15, squatWalk:0.12}; // ときどき浮遊（控えめ）
         else if(L==='inv') p = {mode:'hop',  speed:0.20, jump:0.25, jumpH:3, float:0,    squat:0.10}; // ぴょんぴょん移動
-        else               p = {mode:'walk', speed:0.26, jump:0.10, jumpH:2, float:0,    squat:0.18, squatWalk:0.18}; // よく動きまわる
+        else               p = {mode:'walk', speed:0.26, jump:0.10, jumpH:2, float:0,    squat:0.12, squatWalk:0.12, look:0.22, dash:0.30}; // 見回して、ひと息に走る
       }
     }
     // 性格補正：やんちゃほど速く・よく跳ね、おっとりほどゆっくり（系統のベース値に掛ける）
@@ -3027,18 +3127,22 @@
         squatT--; yOff = 0;
         if(Math.floor((42 - squatT) / 7) % 2 === 1) grid = squatFrame(grid);
       } else {
-      if(walkTimer <= 0 && !squatWalkT && !preJumpT && !jumpT && !floatT){
+      if(walkTimer <= 0 && !squatWalkT && !preJumpT && !jumpT && !floatT && !lookT && !dashT){
         // 次の行動を決める（実行中のアクションが終わってから）：左へ／右へ／ひとやすみ
         const r = Math.random();
         walkDir = r < 0.34 ? -1 : (r < 0.68 ? 1 : 0);
-        if(prof.wiggle && Math.random() < prof.wiggle){
+        if(prof.look && Math.random() < prof.look){
+          lookT = LOOK_T; walkDir = 0;                                                  // グレイ：立ち止まって見回す
+        } else if(prof.wiggle && Math.random() < prof.wiggle){
           wiggleT = 22; walkDir = 0;                                                    // 時々その場でモゾモゾ
         } else if(prof.squat && Math.random() < prof.squat){
           squatT = 42; walkDir = 0;                                                     // 時々その場で屈伸
         } else if(prof.squatWalk && walkDir !== 0 && Math.random() < prof.squatWalk){
           squatWalkT = 54;                                                              // 屈伸しながら横移動
+        } else if(prof.dash && walkDir !== 0 && Math.random() < prof.dash){
+          dashT = DASH_T;                                                               // グレイ：ひと息に走る
         } else if(!isBadWeather()){
-          if(prof.float && Math.random() < prof.float) floatT = 44;                     // タコ：浮遊
+          if(prof.float && Math.random() < prof.float) floatT = FLOAT_T;               // マーシャン：浮遊
           else if(prof.jump && Math.random() < prof.jump && floatT === 0) preJumpT = 5; // ジャンプ（まずしゃがんで溜め）
         }
         walkTimer = 25 + Math.floor(Math.random()*35);
@@ -3047,7 +3151,18 @@
       if(preJumpT > 0){
         // ジャンプ前の溜め：しゃがんでから発射
         preJumpT--; yOff = 0; grid = squatFrame(grid);
-        if(preJumpT === 0) jumpT = 10;
+        if(preJumpT === 0) startJump(prof);
+      } else if(lookT > 0){
+        // 見回す：その場で目だけを左右に動かす。
+        //  グレイのドット絵は左右対称なので、体を反転しても見た目が変わらない（目を動かす必要がある）
+        lookT--; yOff = 0;
+        grid = shiftEyes(sp, grid, LOOK_SCAN[Math.floor((LOOK_T - lookT) / LOOK_TURN) % LOOK_SCAN.length]);
+      } else if(dashT > 0){
+        // ダッシュ：ひと息に走り、終わりはぴたりと止まってしばらく動かない
+        dashT--;
+        grid = shiftEyes(sp, grid, walkDir);          // 走っている方向へ目を寄せる
+        walkX += walkDir * prof.speed * DASH_MUL * wSpd;
+        if(dashT === 0){ walkDir = 0; walkTimer = Math.max(walkTimer, DASH_STOP); }
       } else if(squatWalkT > 0){
         // 屈伸しながら横移動（しゃがみ↔立ちを繰り返しつつ進む）
         squatWalkT--; yOff = 0;
@@ -3055,21 +3170,26 @@
         if(Math.floor((54 - squatWalkT)/6) % 2 === 1) grid = squatFrame(grid);
         walkX += walkDir * prof.speed * 0.9 * wSpd;
       } else if(floatT > 0){
-        // 浮遊：ふわっと上がり漂って降りる
+        // 浮遊：ふわりと上がって画面中央あたりで漂い、ゆっくり降りてくる
         floatT--;
-        const ft = 44 - floatT;
-        const lift = ft < 10 ? ft*0.4 : (floatT < 10 ? floatT*0.4 : 4 + Math.sin(fM/4));
-        airOff = Math.round(lift);
-        walkX += walkDir * prof.speed * 0.6 * wSpd;
+        const ft = FLOAT_T - floatT;                            // 経過フレーム
+        let lift;
+        if(ft <= FLOAT_RISE)          lift = FLOAT_H * easeOut(ft / FLOAT_RISE);
+        else if(floatT <= FLOAT_FALL) lift = FLOAT_H * easeOut(floatT / FLOAT_FALL);
+        else                          lift = FLOAT_H + Math.sin(fM/6) * 1.2;   // 高いところで上下にたゆたう
+        airOff = Math.min(Math.round(lift), MAIN_GY - gh - FLOAT_TOP);
+        // 左右にふわふわ漂う（決めた進行方向へわずかに流れる）
+        walkX += (Math.sin(ft * 0.16) * 0.55 + walkDir * prof.speed * 0.2) * wSpd;
       } else if(jumpT > 0){
         // ジャンプ：放物線（跳びながら進む）
         jumpT--;
-        airOff = Math.round(Math.sin(Math.PI * (10-jumpT)/10) * prof.jumpH);
+        airOff = Math.round(Math.sin(Math.PI * (jumpDur-jumpT)/jumpDur) * jumpHi);
+        airOff = Math.min(airOff, MAIN_GY - gh - FLOAT_TOP);   // 頭がヘッダーに掛からないよう止める
         walkX += walkDir * prof.speed * 1.4 * wSpd;
       } else if(walkDir !== 0){
         if(prof.mode === 'hop'){
           // インベーダー：跳ねて進む（着地中は進まない）
-          if(hopPause <= 0){ jumpT = 10; hopPause = 5 + Math.floor(Math.random()*6); }
+          if(hopPause <= 0){ startJump(prof); hopPause = 5 + Math.floor(Math.random()*6); }
           else hopPause--;
         } else {
           walkX += walkDir * prof.speed * wSpd;
@@ -3223,7 +3343,7 @@
   function btnAnim(el,ty=1,sc=0.95){ el.style.transform=`translateY(${ty}px) scale(${sc})`; el.style.filter='brightness(0.7)'; setTimeout(()=>{el.style.transform='';el.style.filter='';},120); }
   function dpadAnim(el){ el.style.transform='translateY(2px) scale(0.88)'; el.style.filter='brightness(2.5)'; setTimeout(()=>{el.style.transform='';el.style.filter='';},120); }
 
-  onPress(document.getElementById('mmenu'),()=>{ playClick(); btnAnim(document.getElementById('mmenu'),1,0.93); menuSel=0; menuScroll=0; inSettings=false; inPlay=false; inFeed=false; inStatus=false; confirmReset=false; locPrime=false; playSel=0; feedSel=0; showView('menu'); });
+  onPress(document.getElementById('mmenu'),()=>{ playClick(); btnAnim(document.getElementById('mmenu'),1,0.93); menuSel=0; menuScroll=0; inSettings=false; inPlay=false; inFeed=false; inStatus=false; confirmReset=false; locPrime=false; inWeather=false; playSel=0; feedSel=0; showView('menu'); });
   onPress(document.getElementById('mb'),()=>{ playClick(); btnAnim(document.getElementById('mb')); nameSelActive=false; diarySelActive=false; });
   // お世話アクションはMENU内のアイコングリッドへ移動
   // 未命名時：十字上で「NAME:????」を選択（黒塗り反転）→ Aで命名画面へ。下/Bで選択解除
@@ -3292,7 +3412,20 @@
   let confirmReset = false;   // ALL RESETの確認ダイアログ表示中
   let locPrime = false;       // LOCATION ON前に用途（天気のみ）を説明する画面を表示中
   // 項目はキーで管理（表示ラベルは言語辞書、値は各キーで分岐）
-  const SETTINGS_KEYS = ['sound','language','bodycolor','location','reset'];
+  const SETTINGS_KEYS = ['language','weather','sound','bodycolor','reset'];
+  let inWeather = false, wSel = 0, wScroll = 0;      // 天気の選択リスト（オフ／げんざいち／都市）
+  // 選択肢をひとつのリストにまとめる。左右キーに頼らせず、Aを押せば全部の選択肢が見える
+  function weatherOptions(){
+    return [{k:'off'}, {k:'here'}].concat(CITIES.map((c,i)=>({k:'city', i})));
+  }
+  function weatherOptionLabel(o){
+    if(o.k === 'off')  return T('off');
+    if(o.k === 'here') return T('where');
+    return (lang==='ja') ? CITIES[o.i][1] : CITIES[o.i][0];
+  }
+  function weatherSelIndex(){
+    return weatherMode==='off' ? 0 : weatherMode==='here' ? 1 : 2 + cityIdx;
+  }
 
   function applyBodyColor() {
     const bg = BODY_COLORS[bodyColorIdx];
@@ -3349,13 +3482,42 @@
 
       if(locPrime){
         // ── LOCATION 用途説明（OSの許可ダイアログの前に、天気反映のみに使う旨を表示）──
+        const note = LOC_NOTE[lang] || LOC_NOTE.en;
+        const TOP = 19, BOT = 54;                              // 区切り線と案内のあいだに収める
+        const LH = (note.length >= 7) ? 5 : 6;                // 行数が多い言語では行間を詰める
+        const y0 = Math.max(TOP, Math.round((TOP + BOT - note.length*LH) / 2));
         ctxN.font=uiFont(6); ctxN.fillStyle=ON; ctxN.textAlign='center'; ctxN.textBaseline='top';
-        ctxN.fillText(T('locn1'),(W*S)/2, 26*S);
-        ctxN.fillText(T('locn2'),(W*S)/2, 34*S);
-        ctxN.fillText(T('locn3'),(W*S)/2, 42*S);
+        note.forEach((line,i)=> ctxN.fillText(line, (W*S)/2, (y0 + i*LH)*S));
         ctxN.font=uiFont(5); ctxN.fillStyle=DIM;
-        if((fN%14)<9) ctxN.fillText(T('locok'),(W*S)/2, 54*S);
+        if((fN%14)<9) ctxN.fillText(T('locok'),(W*S)/2, 57*S);
         fN++;
+        return;
+      }
+      if(inWeather){
+        // ── 天気の取り方を選ぶ（オフ／げんざいち／都市をひとつのリストに）──
+        const opts = weatherOptions();
+        // 親（SETTINGS）が見出しを描いたあとなので、いったん消してから自分の見出しを描く
+        ctxN.fillStyle=OFF; ctxN.fillRect(0, 9*S, W*S, 6*S);
+        ctxN.font=uiFont(7); ctxN.fillStyle=ON; ctxN.textAlign='center'; ctxN.textBaseline='top';
+        ctxN.fillText(T('weather'),(W*S)/2,11*S);
+        const ROW_H = 8, VIEW = 5;                       // 一度に5件見せて、選択に合わせてスクロール
+        if(wSel < wScroll) wScroll = wSel;
+        if(wSel > wScroll + VIEW - 1) wScroll = wSel - VIEW + 1;
+        wScroll = Math.max(0, Math.min(wScroll, opts.length - VIEW));
+        for(let i=0;i<VIEW;i++){
+          const idx = wScroll + i; if(idx >= opts.length) break;
+          const y = 20 + i*ROW_H, isSel = (idx === wSel), cy = (y + ROW_H/2)*S;
+          if(isSel){ for(let dx=1;dx<W-1;dx++) for(let dy=0;dy<ROW_H;dy++) dot(ctxN,dx,y+dy,DIM); }
+          ctxN.font=uiFont(6); ctxN.fillStyle=ON; ctxN.textAlign='left'; ctxN.textBaseline='middle';
+          if(isSel) ctxN.fillText('>',2*S,cy);
+          ctxN.fillText(weatherOptionLabel(opts[idx]), 7*S, cy);
+          // いま設定されているものに印を付ける
+          if(idx === weatherSelIndex()){ ctxN.textAlign='right'; ctxN.fillText('*',(W-3)*S,cy); }
+          ctxN.textBaseline='top';
+        }
+        ctxN.textAlign='center'; ctxN.font=uiFont(5); ctxN.fillStyle=DIM;
+        if(wScroll > 0) ctxN.fillText('^',(W*S)/2, 17*S);
+        if(wScroll + VIEW < opts.length) ctxN.fillText('v',(W*S)/2, 60*S);
         return;
       }
       // 項目を1画面に収める（y=19起点・間隔8。画面高65内）
@@ -3368,12 +3530,24 @@
         ctxN.font=uiFont(6); ctxN.fillStyle=ON; ctxN.textAlign='left'; ctxN.textBaseline='middle';
         if(isSel) ctxN.fillText('>',2*S,cy);
         ctxN.fillText(T(key), 7*S, cy);
-        ctxN.font=uiFont(6); ctxN.textAlign='right'; ctxN.fillStyle=ON;
-        if(key==='sound')     ctxN.fillText(soundOn?T('on'):T('off'), (W-2)*S, cy);
-        if(key==='language')  ctxN.fillText(T('langval'), (W-2)*S, cy);
-        if(key==='bodycolor') ctxN.fillText(BODY_LABELS[bodyColorIdx], (W-2)*S, cy);
-        if(key==='location')  ctxN.fillText(locationOn?T('on'):T('off'), (W-2)*S, cy);
-        if(key==='debug')   { ctxN.fillStyle=debugMode?ON:'#7a7660'; ctxN.fillText(debugMode?T('on'):T('off'), (W-2)*S, cy); }
+        // 現在の設定値。右端はステータス画面と同じ位置に揃え、項目名とのあいだを薄い点線でつなぐ
+        const val = key==='sound'     ? (soundOn?T('on'):T('off'))
+                  : key==='language'  ? T('langval')
+                  : key==='bodycolor' ? BODY_LABELS[bodyColorIdx]
+                  : key==='weather'   ? (weatherMode==='off' ? T('off')
+                                       : weatherMode==='city' ? cityName() : T('where'))
+                  : key==='debug'     ? (debugMode?T('on'):T('off'))
+                  : '';
+        if(val){
+          const lx = 7 + ctxN.measureText(T(key)).width / S;
+          const rx = STAT_VAL_X - ctxN.measureText(val).width / S;
+          // 選択中の行は網掛けの上なので、点を明るい色にして見えるようにする（明暗を反転）
+          const lead = isSel ? OFF : DIM;
+          for(let x = Math.floor(lx) + 2; x < rx - 1.5; x += STAT_LEADER) dot(ctxN, x, y + 3, lead);
+          ctxN.textAlign='right';
+          ctxN.fillStyle = (key==='debug' && !debugMode) ? '#7a7660' : ON;
+          ctxN.fillText(val, STAT_VAL_X*S, cy);
+        }
         ctxN.textBaseline='top';
       });
 
@@ -3529,6 +3703,11 @@
       playClick(900); dpadAnim(el);
       if(inSettings){
         if(confirmReset || locPrime) return;   // ダイアログ/説明中は移動不可（A/Bのみ）
+        if(inWeather){                         // 天気リストの上下移動
+          if(el.classList.contains('up'))   wSel = Math.max(0, wSel-1);
+          if(el.classList.contains('down')) wSel = Math.min(weatherOptions().length-1, wSel+1);
+          return;
+        }
         if(el.classList.contains('up'))   settingsSel=Math.max(0, settingsSel-1);
         if(el.classList.contains('down')) settingsSel=Math.min(SETTINGS_KEYS.length-1, settingsSel+1);
         // 左右で値変更
@@ -3538,7 +3717,7 @@
           if(key==='sound')     setSound(!soundOn);
           if(key==='language')  toggleLang();
           if(key==='bodycolor'){ bodyColorIdx=(right?bodyColorIdx+1:bodyColorIdx-1+BODY_COLORS.length)%BODY_COLORS.length; applyBodyColor(); }
-          if(key==='location'){ if(locationOn) setLocation(false); else locPrime=true; }   // ONにする前に用途を説明
+          // 天気は選択肢が多いので左右では変えない。Aでリストを開いて選ぶ
         }
       } else if(inStatus){
         // STATUSに選択項目なし
@@ -3573,12 +3752,20 @@
   onPress(document.getElementById('na'),()=>{
     playClick(900); btnAnim(document.getElementById('na'));
     if(inSettings){
-      if(locPrime){ locPrime=false; setLocation(true); return; }   // 用途説明のあと、A で許可要求
+      if(locPrime){ locPrime=false; setWeatherMode('here'); return; }   // 用途説明のあと、A で許可要求
+      if(inWeather){
+        const o = weatherOptions()[wSel];
+        inWeather = false;
+        if(o.k === 'off')       setWeatherMode('off');
+        else if(o.k === 'here') locPrime = true;                         // 説明を読んでからAで許可
+        else { cityIdx = o.i; setWeatherMode('city'); }                  // 都市は位置情報を使わない
+        return;
+      }
       const key = SETTINGS_KEYS[settingsSel];
       if(key==='sound') setSound(!soundOn);
       if(key==='language') toggleLang();
       if(key==='bodycolor'){ bodyColorIdx=(bodyColorIdx+1)%BODY_COLORS.length; applyBodyColor(); }
-      if(key==='location'){ if(locationOn) setLocation(false); else locPrime=true; }   // ONにする前に用途を説明
+      if(key==='weather'){ inWeather=true; wSel=weatherSelIndex(); }     // 選択肢をリストで見せる
       if(key==='debug'){
         debugMode=!debugMode;
         if(debugMode){
@@ -3596,7 +3783,7 @@
           confirmReset = false; locPrime = false;
           menuSel=0; menuScroll=0; settingsSel=0; inSettings=false; inPlay=false; inFeed=false; inStatus=false; bodyColorIdx=1; setSound(true);  // カラーはデフォルトのONYX（黒）
           weatherFetched=false; weather='clear'; debugMode=false;
-          setLocation(false);
+          setWeatherMode('off'); cityIdx = 0; inWeather = false;
           clearInterval(debugTimer);
           timeOfDay=getTimeOfDay();
           try{ localStorage.removeItem(SAVE_KEY); }catch(e){}
@@ -3656,7 +3843,8 @@
   onPress(document.getElementById('nb'),()=>{
     playClick(); btnAnim(document.getElementById('nb'));
     if(inSettings){
-      if(locPrime){ locPrime=false; }           // 用途説明をキャンセル（ONにしない）
+      if(inWeather){ inWeather=false; }         // 天気の選択をキャンセル
+      else if(locPrime){ locPrime=false; }      // 用途説明をキャンセル（許可を求めない）
       else if(confirmReset){ confirmReset=false; }   // 確認ダイアログをキャンセル
       else inSettings=false;
     }
@@ -3667,7 +3855,7 @@
   });
   onPress(document.getElementById('nmenu'),()=>{
     playClick(); btnAnim(document.getElementById('nmenu'),1,0.93);
-    inSettings=false; inPlay=false; inFeed=false; inStatus=false; confirmReset=false; locPrime=false; showView('main');
+    inSettings=false; inPlay=false; inFeed=false; inStatus=false; confirmReset=false; locPrime=false; inWeather=false; showView('main');
   });
 
   // ════════════════════════════════════════
