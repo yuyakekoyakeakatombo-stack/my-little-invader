@@ -610,6 +610,7 @@
     sickCount:0, fullFeeds:0,             // 病気回数・満腹給餌回数（進化条件用）
     lowBDays:0, calDay:'',                // なつき度低下の連続日数（UFO帰還判定）
     dead:'', ufoFlag:false,               // 死因('starve'|'sick')・帰還トリガー
+    gone:false,                           // 帰還エンディングが終わった状態。ALL RESET まで解けない
     stage:'egg', lineage:'', form:'',     // 育成段階: egg→mid→larva→adult(系統)→final(形態)
     EP:0, ageMin:0, eggTargetEP:0,        // 進化ポイント/年齢(分)/NEWBORN→BABYの個体別目標EP
     finalAt:0, departFlag:false,          // 最終形態到達時刻・旅立ちエンド確定
@@ -775,7 +776,7 @@
   //  incubate=true のトリガーは、その場で発症させず潜伏期間をおいてから病気にする。
   //  「さっき食べ過ぎたのが、あとから効いてくる」という時間差をつけるため。
   function rollSick(p, incubate){
-    if(pet.dead || pet.health !== 'GOOD') return false;
+    if(pet.dead || pet.gone || pet.health !== 'GOOD') return false;
     if(Math.random() >= p * (isBadWeather() ? SICK_P.weatherMul : 1)) return false;
     if(incubate){
       if(!pet.incubAt){
@@ -819,7 +820,7 @@
   //  1項目だけ欠けている程度（例：よく褒めるがゲームはしない）では帰還させない。
   //  ただし「ふれあいゼロが続く」は単独でも明確な放置なので成立させる。
   function checkReturn(){
-    if(pet.dead || pet.ufoFlag) return;
+    if(pet.dead || pet.gone || pet.ufoFlag) return;
     const sg = returnSigns();
     const bad = sg.includes('notouch') || sg.length >= 2;
     if(bad){
@@ -906,7 +907,7 @@
     return (L==='grey'?'g':L==='tako'?'t':'i') + n;
   }
   function maybeEvolve(){
-    if(pet.dead || !pet.name) return;
+    if(pet.dead || pet.gone || !pet.name) return;
     if(effectiveAsleep()) return;                 // 進化は起きている時（起床時）に起こる
     if(pet.stage==='egg'){   // NEWBORN→BABY：EPが個体ごとの目標(30h±5h)に達したら。以後の段階はBABY起点で数えるためEPリセット
       if(!pet.eggTargetEP) pet.eggTargetEP = rollEggTarget();
@@ -945,7 +946,7 @@
       localStorage.removeItem('myvader_result');
       returnedFromGame = true;
       const r = JSON.parse(raw);
-      if(!r || !pet.name || pet.dead) return;
+      if(!r || !pet.name || pet.dead || pet.gone) return;
       if(Date.now() - r.at > 3600000) return;     // 1時間以上前の結果は無視
       raiseMood();                                // 遊んで楽しかった（汚れ・病気があるうちはMAXにならない）
       gainB(2);
@@ -972,6 +973,7 @@
   if(returnedFromGame && pet.name) showView('main');
   // 育成中（命名済みで生存）は、アプリを再起動してもオープニングを出さず育成画面から再開
   else if(pet.name && !pet.dead) showView('main');
+  // 帰還後（pet.gone）も main のまま。drawGone が主のいない庭を描く
 
   // ── ミニゲームを同一ページ内のフルスクリーンiframeで開く ──
   // ホーム画面アプリで別ファイルへ遷移するとSafariのUI付き表示に抜け出してしまうため、
@@ -1330,7 +1332,7 @@
   function advancePet(){
     if(!pet.name || !pet.lastTick) return;
     const now = Date.now();
-    if(pet.dead || ufoEnding || departEnding || inMiniGame){ pet.lastTick = now; return; }   // 死亡・エンディング後・ミニゲーム中は進行停止
+    if(pet.dead || pet.gone || ufoEnding || departEnding || inMiniGame){ pet.lastTick = now; return; }   // 死亡・帰還後・エンディング後・ミニゲーム中は進行停止
     let elapsed = now - pet.lastTick;
     if(elapsed < 60000) return;                    // 1分未満は持ち越し
     let remain = Math.min(elapsed, CATCHUP_CAP_MS);
@@ -1421,7 +1423,7 @@
     // ── 日記を書く：寝る前に、その日の出来事を書く ──
     //  日付が変わるタイミングで書くと寝ている間に日記が増えて不自然なので、就寝前に書かせる。
     //  やんちゃな子ほど寝る前に書きそびれ、翌日に「きのうのこと」として書く。
-    if(diaryWriting() && !pet.dead){
+    if(diaryWriting() && !pet.dead && !pet.gone){
       const tkNow = todayKey();
       if(pet.diaryDay !== tkNow && diaryAwake() && new Date().getHours() >= diaryWriteHour()){
         pet.diaryDay = tkNow;
@@ -1488,6 +1490,9 @@
     if(pet.stage==='final' && pet.finalAt && !pet.departFlag &&
        now - pet.finalAt >= 14*86400000 && pet.B >= 60 && pet.health === 'GOOD'){
       pet.departFlag = true;
+      // 帰還エンドと同じく、最後の一言を日記に書き残してから旅立つ。
+      //  演出のあとは主のいない画面で止まるので、読み返せるものが無いと画面が空のまま残ってしまう
+      addDiary({ d: petDay(), n: pet.name, t: ['farewell'], c: '', ts: Date.now(), cd: todayKey() });
     }
 
     maybeEvolve();   // 進化条件チェック（起きている時のみ発動）
@@ -2712,7 +2717,7 @@
   function plateOnScreen(){ return !!(pet.plateAt || pet.plateSpoiled); }
 
   function doCare(act){
-    if(pet.dead || ufoEnding || departEnding || !pet.name) return;  // おばけ・エンディング後・命名前は世話不可
+    if(pet.dead || pet.gone || ufoEnding || departEnding || !pet.name) return;  // おばけ・帰還後・エンディング後・命名前は世話不可
     if((act==='FEED' || act==='SNACK') && plateOnScreen()) return;  // 皿が残っている間は出せない
     const asleep = effectiveAsleep();
     switch(act){
@@ -2862,12 +2867,35 @@
       ctxM.fillText('GOODBYE...',(W*S)/2, 28*S);
     }
     ufoT++;
-    if(ufoT >= 130){   // 終了 → セーブ消去 → オープニング（新しいたまご）へ
-      try{ localStorage.removeItem(SAVE_KEY); }catch(e){}
-      pet = defaultPet(); nameBuf=''; nameCur=0; onSlots=false;
+    if(ufoT >= 130){
+      // 終了 → 「いなくなったあと」の画面で止める。
+      //  すぐ次の子が来ると、いなくなったことが流されてしまう。
+      //  最後の日記を読み返す時間を残し、ALL RESET を押すまでこのまま。
+      pet.gone = true; pet.ufoFlag = false;
       ufoEnding = false; ufoT = 0;
-      showView('opening'); fO = 0; openingReady = false;
+      savePet();
     }
+  }
+
+  // ── 帰還したあと：主のいない庭 ──
+  //  日記マークは残るので、ヘッダーから最後のことばを読み返せる
+  function drawGone(BG, DM, NK){
+    ctxM.fillStyle = BG; ctxM.fillRect(0,0,W*S,H*S);
+    ctxM.font='6px "Press Start 2P"'; ctxM.textBaseline='top'; ctxM.fillStyle=NK;
+    ctxM.font=nameFont(6, pet.name); ctxM.textAlign='left';  ctxM.fillText(pet.name||'------', 2*S, 2*S);
+    ctxM.font='6px "Press Start 2P"';
+    ctxM.textAlign='right'; ctxM.fillText(dayLabel(), (W-2)*S, 2*S);
+    // 未読の日記（別れのことば）があるあいだは、ヘッダーのノートを点滅させる
+    if(diaryUnread > 0){
+      const IX = 90, IY = 8;
+      if(diarySelActive){ ctxM.fillStyle = DM; ctxM.fillRect(IX-3, IY-3, 13, 14); }
+      if(diarySelActive || fM%16 < 10) stampPx(ctxM, DIARY_ICON, IX, IY, NK);
+    } else if(diarySelActive) diarySelActive = false;
+    for(let x=0;x<W;x++) dot(ctxM,x,HEADER_Y,DM);
+    STARS_M.forEach(([x,y],i)=>dot(ctxM,x,y+10,(fM+i*9)%28<20?DM:BG));
+    for(let x=0;x<W;x++) dot(ctxM,x,MAIN_GY,NK);
+    for(let x=0;x<W;x+=3) dot(ctxM,x,MAIN_GY-1,DM);
+    fM++;
   }
 
   // ── 旅立ちエンディング（E4・ハッピー）：仲間の艦隊が迎えに来る大団円 ──
@@ -2910,11 +2938,12 @@
       if(departT%10<7) stamp(ctxM, ICO_HEART, Math.floor(W/2)-2, 34, NK);
     }
     departT++;
-    if(departT >= 160){   // 大団円 → 新しいたまごへ
-      try{ localStorage.removeItem(SAVE_KEY); }catch(e){}
-      pet = defaultPet(); nameBuf=''; nameCur=0; onSlots=false;
+    if(departT >= 160){
+      // 帰還エンド（E3）と同じく、演出のあとは「いなくなったあと」で止める。
+      //  次の子は ALL RESET を押すまで来ない
+      pet.gone = true; pet.departFlag = false;
       departEnding = false; departT = 0;
-      showView('opening'); fO = 0; openingReady = false;
+      savePet();
     }
   }
 
@@ -3085,6 +3114,7 @@
     if(departEnding){ drawDepartEnding(BG, DM, NK); return; }  // 旅立ちエンディング再生中
     if(ufoEnding){ drawUfoEnding(BG, DM, NK); return; }   // 帰還エンディング再生中
     if(pet.dead){ drawGhost(BG, DM, NK); return; }        // おばけ状態
+    if(pet.gone){ drawGone(BG, DM, NK); return; }         // 帰還したあと（主のいない庭）
     if(arriveT >= 0){ drawArrival(BG, DM, NK); return; }  // 到着演出（新規ゲーム開始時）
     // 睡眠判定（しかられて起きた直後は起きている。DEBUG中は表示時間帯に連動）
     const asleep = effectiveAsleep();
@@ -3845,7 +3875,7 @@
         if(act==='GAME'){
           // 入口制御：おばけ・睡眠・病気・空腹・疎遠期・わがままは遊べない
           // （たまご段階でも遊べる：ミニゲームのデフォルメ6種にeggが含まれる設計）
-          if(pet.dead || departEnding || ufoEnding){ /* 操作不可 */ }
+          if(pet.dead || pet.gone || departEnding || ufoEnding){ /* 操作不可 */ }
           else if(!pet.name){ showView('main'); }   // 命名前は遊べない（点滅する名前欄へ誘導）
           else if(effectiveAsleep()){ showView('main'); }
           else if(pet.health==='SICK'){ setReaction('sick'); showView('main'); }
@@ -3853,7 +3883,7 @@
           else if(pet.tantrumAt || rollTantrum('game')){ setReaction('refuse'); showView('main'); savePet(); }
           else { inPlay=true; playSel=0; }
         }
-        else if(pet.dead){ /* おばけ：世話不可 */ }
+        else if(pet.dead || pet.gone){ /* おばけ・帰還後：世話不可 */ }
         else if(act==='FEED'){
           // ごはん／おやつの選択へ。世話が効かない状態では開かない（空の画面を見せない）。
           // 皿が画面に残っているあいだは、置き場所がひとつしかないので新しく出せない
@@ -3866,7 +3896,7 @@
         const sel = (menuList()[menuSel-6] || [])[0];
         if(sel==='SETTINGS'){ inSettings=true; settingsSel=0; }
         else if(sel==='DIARY'){ openDiary(); }        // 日記は死んだあと・帰還したあとも読める
-        else if(pet.dead){ /* おばけ：SETTINGS・DIARY以外は操作不可 */ }
+        else if(pet.dead || pet.gone){ /* おばけ・帰還後：SETTINGS・DIARY以外は操作不可 */ }
         else if(sel==='STATUS'){ inStatus=true; }
         else if(sel==='STORY'){ storyScrollY=H*S; showView('story'); }
       }
