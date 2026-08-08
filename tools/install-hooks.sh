@@ -10,7 +10,7 @@ cat > .git/hooks/pre-commit <<'HOOK'
 # これを忘れると、更新をpushしてもテスターの端末に古い版が出続ける。
 set -e
 WATCH='invader_game.html spacewalk_game.html shootingstar_game.html abduction_game.html index.html manual.html fonts.css register-sw.js manifest.json apple-touch-icon.png pressstart2p-latin.woff2'
-STAGED=$(git diff --cached --name-only)
+STAGED=$(git diff --cached --name-only | tr '\n' ' ')
 HIT=0
 for f in $WATCH; do
   case " $STAGED " in *" $f "*) HIT=1 ;; esac
