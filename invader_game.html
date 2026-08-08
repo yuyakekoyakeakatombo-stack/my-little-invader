@@ -826,7 +826,7 @@
       if(pet.estrangedDays >= RET_ESTR_DAYS){
         pet.ufoFlag = true;
         // 迎えが来る日。最後の一言を日記に書き残してから連れて行かれる
-        addDiary({ d: petDay(), n: pet.name, t: ['farewell'], c: '', ts: Date.now() });
+        addDiary({ d: petDay(), n: pet.name, t: ['farewell'], c: '', ts: Date.now(), cd: todayKey() });
       }
     } else {
       pet.estrangedDays = 0;                                 // 持ち直したら解除
@@ -1187,7 +1187,10 @@
   }
   // 材料から1日分を組み立てる（材料が無ければ書かない）。書くかどうかの抽選は呼び出し側。
   //  言い回しの番号もここで決めて保存する（読み返すたびに文面が変わらないように）
-  function buildDiary(d, dayNo){
+  //  cd＝その日記が「どの日のことを書いたか」の暦日（todayKey形式）。
+  //   書いた時刻(ts)とは別に持つ。翌日に持ち越して書いた日記は ts が翌朝になるので、
+  //   ts から日付を出すと「きのうのこと」なのに今日の日付が出てしまう
+  function buildDiary(d, dayNo, cd){
     const st = diaryStyle();
     const solo = d.solo || '';
     // ひとりごとを書く日は出来事を絞る。毎日おなじ密度の報告にならないようにするため
@@ -1196,7 +1199,7 @@
     if(!picked.length && !solo) return null;
     return { d: dayNo || petDay(), n: pet.name, t: picked,
              v: picked.map(t => Math.floor(Math.random() * DIARY_LINES[t].length)),
-             s: solo, c: solo ? '' : st.close, ts: Date.now() };
+             s: solo, c: solo ? '' : st.close, ts: Date.now(), cd: cd || todayKey() };
   }
   function addDiary(e){
     if(!e) return;
@@ -1428,7 +1431,8 @@
       //  夜更かし中の0時台や、しかって叩き起こした夜中ではなく、自然に目が覚めたあとに書かせる
       if(pet.diaryDue && pet.diaryDue.after !== todayKey() && diaryAwake()
          && new Date().getHours() >= (((sleepConfig().wake % 24) + 24) % 24)){
-        addDiary(buildDiary(pet.diaryDue.mat || {}, pet.diaryDue.day));
+        // after＝その材料が集まった暦日＝日記が書かれた対象の日。日付表示にはこちらを使う
+        addDiary(buildDiary(pet.diaryDue.mat || {}, pet.diaryDue.day, pet.diaryDue.after));
         pet.diaryDue = null;
       }
     }
@@ -3909,8 +3913,19 @@
 
   // ── 日記の画面（1ページ＝1日。十字上下でページを繰る）──
   const ctxT = initCanvas('lcd-t');
-  const DIARY_TITLE = { ja:'にっき', en:'DIARY' };
+  const DIARY_TITLE = { ja:'のにっき', en:"'S DIARY" };     // 名前のうしろに付ける
   const DIARY_EMPTY = { ja:['まだ なにも','かいていない'], en:['NOTHING WRITTEN','YET'] };
+  const MON_EN = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+  // 日記の日付。cd（対象の暦日）を優先し、古い日記は書いた時刻から補う
+  function diaryDate(e){
+    if(!e) return '';
+    let dt = null;
+    if(e.cd){ const p = String(e.cd).split('-'); if(p.length===3) dt = new Date(+p[0], +p[1]-1, +p[2]); }
+    if(!dt && e.ts) dt = new Date(e.ts);
+    if(!dt || isNaN(dt.getTime())) return '';
+    const m = dt.getMonth()+1, d = dt.getDate();
+    return (lang==='ja') ? (m + 'がつ' + d + 'にち') : (MON_EN[m-1] + ' ' + d);
+  }
   let diaryPage = 0;
   let diaryFrom = 'menu';        // どこから開いたか（閉じたらそこへ戻る）
   function openDiary(from){
@@ -3924,20 +3939,30 @@
     ctxT.fillStyle=OFF; ctxT.fillRect(0,0,W*S,H*S);
     ctxT.textAlign='center'; ctxT.textBaseline='top';
     const e = diaryLog[diaryPage];
-    // 見出し（何日目の日記か）
-    ctxT.font = uiFont(7); ctxT.fillStyle = ON;
-    ctxT.fillText(e ? ('DAY : ' + String(e.d||1).padStart(2,'0'))
-                    : (DIARY_TITLE[lang] || DIARY_TITLE.en), (W*S)/2, 6*S);
+    // 見出し1段目：「<なまえ>のにっき」。名前は英数字ならピクセル字体になるので、
+    //  2つの書体の幅を測ってから並べて中央に置く
+    const who = (e && e.n) || pet.name || '????';
+    const suf = DIARY_TITLE[lang] || DIARY_TITLE.en;
+    ctxT.textAlign = 'left'; ctxT.fillStyle = ON;
+    ctxT.font = nameFont(7, who); const wName = ctxT.measureText(who).width;
+    ctxT.font = uiFont(7);       const wSuf  = ctxT.measureText(suf).width;
+    const hx = Math.round((W*S - (wName + wSuf)) / 2);
+    ctxT.font = nameFont(7, who); ctxT.fillText(who, hx, 3*S);
+    ctxT.font = uiFont(7);        ctxT.fillText(suf, hx + wName, 3*S);
+    ctxT.textAlign = 'center';
+    // 見出し2段目：その日記が書かれた対象の日
+    const dstr = diaryDate(e);
+    if(dstr){ ctxT.font = uiFont(6); ctxT.fillStyle = ON; ctxT.fillText(dstr, (W*S)/2, 10*S); }
     // ページ位置（前後にまだ日があることを示す）。見出しの左右に置く
     if(e){
       ctxT.font = uiFont(6); ctxT.fillStyle = DIM;
-      if(diaryPage > 0)                 ctxT.fillText('<', 6*S, 6*S);
-      if(diaryPage < diaryLog.length-1) ctxT.fillText('>', (W-6)*S, 6*S);
+      if(diaryPage > 0)                 ctxT.fillText('<', 4*S, 7*S);
+      if(diaryPage < diaryLog.length-1) ctxT.fillText('>', (W-4)*S, 7*S);
     }
-    for(let x=6;x<W-6;x++) dot(ctxT, x, 14, DIM);
-    // 本文（材料から組み立てた行）。署名(y52)・案内(y59)に掛からないよう上下中央に置く
+    for(let x=6;x<W-6;x++) dot(ctxT, x, 17, DIM);
+    // 本文（材料から組み立てた行）。ページ数(y57)に掛からないよう上下中央に置く
     const body = e ? diaryBody(e) : (lang==='ja' ? DIARY_EMPTY.ja : DIARY_EMPTY.en);
-    const TOP = 18, BOT = 48;
+    const TOP = 20, BOT = 50;
     const LH = (body.length <= 5) ? 6 : 5;         // 行数が多い時だけ詰める
     const y0 = Math.max(TOP, Math.round((TOP + BOT)/2 - (body.length - 1)*LH/2));
     ctxT.font = (lang==='ja') ? ('10px '+JP_FONT) : '6px "Press Start 2P"';
@@ -3946,16 +3971,10 @@
       if(!line) return;
       ctxT.fillText(line, (W*S)/2, (y0 + i*LH)*S);
     });
+    // ページ数（本文の下）。書いた本人の名前は見出しに出るので、ここでは繰り返さない
     if(e){
-      // 書いた本人の名前（帰還後は前の子の日記も残るので、ページごとに出す）
-      ctxT.font = nameFont(6, e.n || pet.name);
-      ctxT.textAlign='right'; ctxT.fillStyle = ON;
-      ctxT.fillText(e.n || pet.name, (W-4)*S, 52*S);
-      ctxT.textAlign='center';
-    }
-    if(Math.floor(Date.now()/450)%2===0){
       ctxT.font = uiFont(6); ctxT.fillStyle = DIM;
-      ctxT.fillText(lang==='ja' ? 'A/B でとじる' : 'A/B : CLOSE', (W*S)/2, 60*S);
+      ctxT.fillText((diaryPage + 1) + ' / ' + diaryLog.length, (W*S)/2, 57*S);
     }
   }
   setInterval(tickDiary, 100);
