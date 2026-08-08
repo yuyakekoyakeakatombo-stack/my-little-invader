@@ -2848,11 +2848,18 @@
   //  真下が細くなりすぎないようにしてある。市松に打って光が透けている感じを出す
   const END_BEAM_APEX = 8;      // 頂点をUFOからどれだけ上に置くか
   const END_BEAM_HALF = 7;      // 地面際の半幅（ここが一番広い）
-  function drawEndBeam(cx, topY, DM){
+  // 周囲を一段暗くする。この上から地の明るさで円錐を切り抜くと、光の柱として浮かび上がる
+  function dimField(DM){
+    for(let y = 0; y < MAIN_GY; y++) for(let x = 0; x < W; x++) dot(ctxM, x, y, DM);
+  }
+  // ビーム本体。prog=0で出ておらず、1で地面まで届く。
+  //  伸ばすときは0→1、消すときは1→0にすると、上から伸びて下から消えていく
+  function drawEndBeam(cx, topY, prog, BG){
     const bot = MAIN_GY - 1, apex = topY - END_BEAM_APEX;
-    for(let y = topY; y <= bot; y++){
+    const end = Math.round(topY + (bot - topY) * Math.max(0, Math.min(1, prog)));
+    for(let y = topY; y <= end; y++){
       const half = Math.round((y - apex) / (bot - apex) * END_BEAM_HALF);
-      for(let dx = -half; dx <= half; dx++) if((cx + dx + y) % 2 === 0) dot(ctxM, cx + dx, y, DM);
+      for(let dx = -half; dx <= half; dx++) dot(ctxM, cx + dx, y, BG);
     }
   }
   // 最近傍で縮めたスプライトを作る。範囲内に1つでも点があれば打つので、
@@ -2894,20 +2901,25 @@
     const ux1 = centerX(UFO_SPR[0].length);               // UFOも画面中央に置く
     const cX = centerX(cr[0].length), cY = MAIN_GY - cr.length;
     const bcx = END_AXIS;                                 // UFO・ビーム・キャラで共通の中心
-    const drawBeam = ()=>drawEndBeam(bcx, uy+7, DM);
+    const beam = (prog)=>{ dimField(DM); drawEndBeam(bcx, uy+7, prog, BG); };
     if(t < 25){        // UFOが迎えに来る
       const ux = Math.round((W+2) + (ux1-(W+2))*(t/25));
       stamp(ctxM, UFO_SPR, ux, uy, NK);
       stamp(ctxM, cr, cX, cY, NK);
-    } else if(t < 50){ // ビーム照射
-      stamp(ctxM, UFO_SPR, ux1, uy, NK); drawBeam();
+    } else if(t < 40){ // ビームが上から伸びてくる
+      beam((t-24)/15);        // t=39 でちょうど地面に届く
+      stamp(ctxM, UFO_SPR, ux1, uy, NK);
       stamp(ctxM, cr, cX, cY, NK);
-    } else if(t < 70){ // 吸い上げ（振り返らない）。昇るにつれて小さくなる
-      stamp(ctxM, UFO_SPR, ux1, uy, NK); drawBeam();
-      const p = (t-50)/20;
+    } else if(t < 60){ // 吸い上げ（振り返らない）。昇るにつれて小さくなる
+      beam(1);
+      stamp(ctxM, UFO_SPR, ux1, uy, NK);
+      const p = (t-40)/20;
       stampLifted(cr, bcx, Math.round(cY + (uy+7-cY)*p), p, NK, 0);
-    } else if(t < 90){ // 去る
-      const p = (t-70)/20;
+    } else if(t < 72){ // ビームが下から消えていく
+      beam(1 - (t-59)/12);    // t=71 でちょうど消え切る
+      stamp(ctxM, UFO_SPR, ux1, uy, NK);
+    } else if(t < 92){ // 去る
+      const p = (t-72)/20;
       stamp(ctxM, UFO_SPR, Math.round(ux1+(W+6-ux1)*p), Math.round(uy-10*p), NK);
     } else {           // 別れの言葉
       ctxM.font='7px "Press Start 2P"'; ctxM.fillStyle=NK;
@@ -2957,7 +2969,7 @@
     const uxC = centerX(UFO_SPR[0].length);               // 中央の1機を画面中央に置く
     const cX = centerX(cr[0].length), cY = MAIN_GY - cr.length;
     const bcx = END_AXIS;                                 // UFO・ビーム・キャラで共通の中心
-    const drawBeam = ()=>drawEndBeam(bcx, uy+9, DM);
+    const beam = (prog)=>{ dimField(DM); drawEndBeam(bcx, uy+9, prog, BG); };
     const fleet = (p)=>{   // 3機の艦隊（中央大＋左右）
       const ux = Math.round((W+4) + (uxC-(W+4))*p);
       stamp(ctxM, UFO_SPR, ux, uy, NK);
@@ -2967,16 +2979,23 @@
     if(t < 30){        // 艦隊が迎えに来る
       fleet(t/30);
       stamp(ctxM, cr, cX, cY, NK);
-    } else if(t < 60){ // キャラが跳ねて喜ぶ＋ハート
+    } else if(t < 55){ // キャラが跳ねて喜ぶ＋ハート
       fleet(1);
       stamp(ctxM, cr, cX, cY + ((t%8<4)?-2:0), NK);
       if(t%10<7) stamp(ctxM, ICO_HEART, cX-6, cY-4, NK);
-    } else if(t < 85){ // ビームで昇っていく（手を振る＝小刻み揺れ）。昇るにつれて小さくなる
-      fleet(1); drawBeam();
-      const p = (t-60)/25;
+    } else if(t < 70){ // ビームが上から伸びてくる
+      beam((t-54)/15);        // t=69 でちょうど地面に届く
+      fleet(1);
+      stamp(ctxM, cr, cX, cY, NK);
+    } else if(t < 95){ // ビームで昇っていく（手を振る＝小刻み揺れ）。昇るにつれて小さくなる
+      beam(1); fleet(1);
+      const p = (t-70)/25;
       stampLifted(cr, bcx, Math.round(cY + (uy+9-cY)*p), p, NK, (t%4<2)?-1:1);
-    } else if(t < 110){ // 艦隊が去る
-      const p = (t-85)/25;
+    } else if(t < 107){ // ビームが下から消えていく
+      beam(1 - (t-94)/12);    // t=106 でちょうど消え切る
+      fleet(1);
+    } else if(t < 132){ // 艦隊が去る
+      const p = (t-107)/25;
       const ux = Math.round(uxC + (W+6-uxC)*p), uy2 = Math.round(uy - 12*p);
       stamp(ctxM, UFO_SPR, ux, uy2, NK);
       stamp(ctxM, UFO_SPR, ux-16, uy2+6, NK);
