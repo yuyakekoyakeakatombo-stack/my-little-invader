@@ -1028,8 +1028,13 @@
   //  選んだ番号は日記に保存するので、あとから読み返しても文面は変わらない。
   //  ひらがな主体のたどたどしい口調。英語も短縮形を使わず、同じ幼さになるよう揃える。
   const DIARY_LINES = {
-    farewell: [ { ja:['むかえが きた','たのしかったよ','ありがとう'],
-                  en:['THEY CAME FOR ME.','IT WAS FUN.','THANK YOU'] } ],
+    // 別れのことばは2種類。同じ「むかえが きた」から始めて、その後で分かれる。
+    //  farewell＝帰還（E3）：育ちきる前に連れ戻される。名残と、言えなかった気もち
+    //  departed＝旅立ち（E4）：育ちきって送り出される。ひとり立ちの報告と感謝
+    farewell: [ { ja:['むかえが きた','まだ ここに','いたかったな'],
+                  en:['THEY CAME FOR ME.','I WANTED TO STAY','A BIT LONGER'] } ],
+    departed: [ { ja:['むかえが きた','もう ひとりでも','だいじょうぶ','そだててくれて ありがとう'],
+                  en:['THEY CAME FOR ME.','I CAN MANAGE NOW.','THANK YOU FOR','RAISING ME'] } ],
     hungry:   [ { ja:['きのう ずっと','おなかが すいてた'], en:['I WAS HUNGRY','ALL DAY'] },
                 { ja:['おなかの おとが','なりつづけていた'], en:['MY TUMMY MADE','NOISES ALL DAY'] },
                 { ja:['たべものの ことばかり','かんがえていた'], en:['I ONLY THOUGHT','ABOUT FOOD'] } ],
@@ -1122,7 +1127,7 @@
     lively: { ja:['あしたは なにを','しようかな'],        en:['WHAT SHOULD I DO','TOMORROW?'] },
   };
   // 印象の強い順。上から拾って載せる
-  const DIARY_PRIORITY = ['farewell','evolved','sick','cured','hungry','lonely','woken','scolded','dirty',
+  const DIARY_PRIORITY = ['farewell','departed','evolved','sick','cured','hungry','lonely','woken','scolded','dirty',
                           'snackMany','tantrum','cleaned','praised','playSw','playSs','playAb',
                           'snack','fed','noPlay','rain','snow','clear','slept'];
 
@@ -1492,7 +1497,7 @@
       pet.departFlag = true;
       // 帰還エンドと同じく、最後の一言を日記に書き残してから旅立つ。
       //  演出のあとは主のいない画面で止まるので、読み返せるものが無いと画面が空のまま残ってしまう
-      addDiary({ d: petDay(), n: pet.name, t: ['farewell'], c: '', ts: Date.now(), cd: todayKey() });
+      addDiary({ d: petDay(), n: pet.name, t: ['departed'], c: '', ts: Date.now(), cd: todayKey() });
     }
 
     maybeEvolve();   // 進化条件チェック（起きている時のみ発動）
@@ -2838,6 +2843,43 @@
     fM++;
   }
 
+  // ── エンディング共通：吸い上げのビームと、小さくなるキャラ ──
+  //  ビームはオープニングと同じ「下が広がる三角形」。UFOの少し上を頂点に取り、
+  //  真下が細くなりすぎないようにしてある。市松に打って光が透けている感じを出す
+  const END_BEAM_APEX = 8;      // 頂点をUFOからどれだけ上に置くか
+  const END_BEAM_HALF = 7;      // 地面際の半幅（ここが一番広い）
+  function drawEndBeam(cx, topY, DM){
+    const bot = MAIN_GY - 1, apex = topY - END_BEAM_APEX;
+    for(let y = topY; y <= bot; y++){
+      const half = Math.round((y - apex) / (bot - apex) * END_BEAM_HALF);
+      for(let dx = -half; dx <= half; dx++) if((cx + dx + y) % 2 === 0) dot(ctxM, cx + dx, y, DM);
+    }
+  }
+  // 最近傍で縮めたスプライトを作る。範囲内に1つでも点があれば打つので、
+  //  小さくしても輪郭が消えずにシルエットが残る
+  function shrinkGrid(g, sc){
+    const h = g.length, w = g[0].length;
+    const nh = Math.max(1, Math.round(h * sc)), nw = Math.max(1, Math.round(w * sc));
+    const out = [];
+    for(let y = 0; y < nh; y++){
+      const row = [], y0 = Math.floor(y * h / nh), y1 = Math.max(y0 + 1, Math.floor((y + 1) * h / nh));
+      for(let x = 0; x < nw; x++){
+        const x0 = Math.floor(x * w / nw), x1 = Math.max(x0 + 1, Math.floor((x + 1) * w / nw));
+        let v = 0;
+        for(let yy = y0; yy < y1 && !v; yy++) for(let xx = x0; xx < x1; xx++) if(g[yy][xx]){ v = 1; break; }
+        row.push(v);
+      }
+      out.push(row);
+    }
+    return out;
+  }
+  // 吸い上げ中のキャラ：p=0で元の大きさ、p=1で END_SHRINK まで縮む。中心は動かさない
+  const END_SHRINK = 0.34;
+  function stampLifted(grid, cx, y, p, NK, wobble){
+    const sp = shrinkGrid(grid, 1 - (1 - END_SHRINK) * p);
+    stamp(ctxM, sp, cx - Math.floor(sp[0].length / 2) + (wobble || 0), y, NK);
+  }
+
   // ── UFO帰還エンディング（世話不足）：迎えに来て去る → 新しいたまごへ ──
   function drawUfoEnding(BG, DM, NK){
     ctxM.fillStyle = BG; ctxM.fillRect(0,0,W*S,H*S);
@@ -2846,7 +2888,8 @@
     const t = ufoT, ux1 = 20, uy = 6;
     const cr = charSprites().rest;
     const cX = Math.floor((W - cr[0].length)/2), cY = MAIN_GY - cr.length;
-    const drawBeam = ()=>{ for(let y=uy+7;y<MAIN_GY;y++) for(let x=23;x<=28;x++) if((x+y)%2===0) dot(ctxM,x,y,DM); };
+    const bcx = cX + Math.floor(cr[0].length/2);          // ビームの中心＝キャラの中心
+    const drawBeam = ()=>drawEndBeam(bcx, uy+7, DM);
     if(t < 25){        // UFOが迎えに来る
       const ux = Math.round((W+2) + (ux1-(W+2))*(t/25));
       stamp(ctxM, UFO_SPR, ux, uy, NK);
@@ -2854,10 +2897,10 @@
     } else if(t < 50){ // ビーム照射
       stamp(ctxM, UFO_SPR, ux1, uy, NK); drawBeam();
       stamp(ctxM, cr, cX, cY, NK);
-    } else if(t < 70){ // 吸い上げ（振り返らない）
+    } else if(t < 70){ // 吸い上げ（振り返らない）。昇るにつれて小さくなる
       stamp(ctxM, UFO_SPR, ux1, uy, NK); drawBeam();
       const p = (t-50)/20;
-      stamp(ctxM, cr, cX, Math.round(cY + (uy+7-cY)*p), NK);
+      stampLifted(cr, bcx, Math.round(cY + (uy+7-cY)*p), p, NK, 0);
     } else if(t < 90){ // 去る
       const p = (t-70)/20;
       stamp(ctxM, UFO_SPR, Math.round(ux1+(W+6-ux1)*p), Math.round(uy-10*p), NK);
@@ -2907,7 +2950,8 @@
     const t = departT, uy = 5;
     const cr = charSprites().a;
     const cX = Math.floor((W - cr[0].length)/2), cY = MAIN_GY - cr.length;
-    const drawBeam = ()=>{ for(let y=uy+9;y<MAIN_GY;y++) for(let x=cX+1;x<cX+cr[0].length-1;x++) if((x+y)%2===0) dot(ctxM,x,y,DM); };
+    const bcx = cX + Math.floor(cr[0].length/2);          // ビームの中心＝キャラの中心
+    const drawBeam = ()=>drawEndBeam(bcx, uy+9, DM);
     const fleet = (p)=>{   // 3機の艦隊（中央大＋左右）
       const ux = Math.round((W+4) + (17-(W+4))*p);
       stamp(ctxM, UFO_SPR, ux, uy, NK);
@@ -2921,10 +2965,10 @@
       fleet(1);
       stamp(ctxM, cr, cX, cY + ((t%8<4)?-2:0), NK);
       if(t%10<7) stamp(ctxM, ICO_HEART, cX-6, cY-4, NK);
-    } else if(t < 85){ // ビームで昇っていく（手を振る＝小刻み揺れ）
+    } else if(t < 85){ // ビームで昇っていく（手を振る＝小刻み揺れ）。昇るにつれて小さくなる
       fleet(1); drawBeam();
       const p = (t-60)/25;
-      stamp(ctxM, cr, cX + ((t%4<2)?-1:1), Math.round(cY + (uy+9-cY)*p), NK);
+      stampLifted(cr, bcx, Math.round(cY + (uy+9-cY)*p), p, NK, (t%4<2)?-1:1);
     } else if(t < 110){ // 艦隊が去る
       const p = (t-85)/25;
       const ux = Math.round(17 + (W+6-17)*p), uy2 = Math.round(uy - 12*p);
