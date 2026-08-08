@@ -610,7 +610,8 @@
     sickCount:0, fullFeeds:0,             // 病気回数・満腹給餌回数（進化条件用）
     lowBDays:0, calDay:'',                // なつき度低下の連続日数（UFO帰還判定）
     dead:'', ufoFlag:false,               // 死因('starve'|'sick')・帰還トリガー
-    gone:false,                           // 帰還エンディングが終わった状態。ALL RESET まで解けない
+    gone:false, goneBy:'',                // 帰還/旅立ちが終わった状態。ALL RESET まで解けない
+                                          //  goneBy: 'return'=帰還 / 'depart'=旅立ち（残す言葉が変わる）
     stage:'egg', lineage:'', form:'',     // 育成段階: egg→mid→larva→adult(系統)→final(形態)
     EP:0, ageMin:0, eggTargetEP:0,        // 進化ポイント/年齢(分)/NEWBORN→BABYの個体別目標EP
     finalAt:0, departFlag:false,          // 最終形態到達時刻・旅立ちエンド確定
@@ -2931,7 +2932,7 @@
       // 終了 → 「いなくなったあと」の画面で止める。
       //  すぐ次の子が来ると、いなくなったことが流されてしまう。
       //  最後の日記を読み返す時間を残し、ALL RESET を押すまでこのまま。
-      pet.gone = true; pet.ufoFlag = false;
+      pet.gone = true; pet.goneBy = 'return'; pet.ufoFlag = false;
       ufoEnding = false; ufoT = 0;
       savePet();
     }
@@ -2953,6 +2954,14 @@
     } else if(diarySelActive) diarySelActive = false;
     for(let x=0;x<W;x++) dot(ctxM,x,HEADER_Y,DM);
     STARS_M.forEach(([x,y],i)=>dot(ctxM,x,y+10,(fM+i*9)%28<20?DM:BG));
+    // 演出で出した言葉を、リセットするまで残す。
+    //  点滅はさせない。もう変化しない画面だと分かるように、静かに置いておく
+    const msg = pet.goneBy==='depart' ? 'THANK YOU!' : (pet.goneBy==='return' ? 'GOODBYE...' : '');
+    if(msg){
+      ctxM.font='7px "Press Start 2P"'; ctxM.fillStyle=NK;
+      ctxM.textAlign='center'; ctxM.textBaseline='top';
+      ctxM.fillText(msg,(W*S)/2, 32*S);
+    }
     for(let x=0;x<W;x++) dot(ctxM,x,MAIN_GY,NK);
     for(let x=0;x<W;x+=3) dot(ctxM,x,MAIN_GY-1,DM);
     fM++;
@@ -3010,7 +3019,7 @@
     if(departT >= 160){
       // 帰還エンド（E3）と同じく、演出のあとは「いなくなったあと」で止める。
       //  次の子は ALL RESET を押すまで来ない
-      pet.gone = true; pet.departFlag = false;
+      pet.gone = true; pet.goneBy = 'depart'; pet.departFlag = false;
       departEnding = false; departT = 0;
       savePet();
     }
