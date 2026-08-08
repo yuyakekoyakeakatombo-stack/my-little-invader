@@ -1081,7 +1081,7 @@
 
   // ひとりごと：世話とは関係のない、プレイヤーが見ていない時間の一面。
   //  条件（天気・成長段階・なつき度・性格）に合うものから1つ選ぶ。
-  //  s = {clear, rain, snow, young, grown, bond, trait}
+  //  s = {clear, cloudy, rain, snow, young, grown, bond, trait}
   const DIARY_MUSINGS = {
     star1:  { when:s=>s.clear, ja:['よぞらに ながれぼしが','ひとつ とんだ'], en:['ONE SHOOTING STAR','CROSSED THE SKY'] },
     star2:  { when:s=>s.clear&&s.grown, ja:['ほしを みていたら','なつかしく なった'], en:['I LOOKED AT THE STARS','AND FELT HOMESICK'] },
@@ -1096,6 +1096,10 @@
     alone2: { when:s=>true, ja:['へんな むしが いた','ともだちに なれるかな'], en:['A STRANGE BUG CAME.','CAN WE BE FRIENDS?'] },
     alone3: { when:s=>true, ja:['ひとりで うたを','うたって みた'], en:['I TRIED SINGING','TO MYSELF'] },
     alone4: { when:s=>true, ja:['くもの かたちが','かおに みえてきた'], en:['A CLOUD UP THERE','LOOKED LIKE A FACE'] },
+    // 曇りの夜のUFO。ながれぼし（star1）と同じで、実際に出たかではなく その日の空模様で選ぶ
+    ufo1:   { when:s=>s.cloudy, ja:['くもの きれまに','ひかるものが みえた'], en:['SOMETHING GLOWED','IN A GAP IN THE CLOUDS'] },
+    ufo2:   { when:s=>s.cloudy&&s.grown, ja:['さっきの ひかりは','むかえに きたのかな'], en:['THAT LIGHT EARLIER','WAS IT COMING FOR ME?'] },
+    ufo3:   { when:s=>s.cloudy&&s.bond>=70, ja:['そらを みあげたけど','ここに いることにした'], en:['I LOOKED UP AT IT.','I CHOSE TO STAY HERE'] },
     bond1:  { when:s=>s.bond>=70, ja:['きみの あしおとが','わかるように なった'], en:['I KNOW YOUR STEPS','WHEN YOU COME'] },
     bond2:  { when:s=>s.bond>=70, ja:['ここは あんぜんだ','そう おもう'], en:['THIS PLACE IS SAFE.','I THINK SO NOW'] },
     bond3:  { when:s=>s.bond<30, ja:['きみは だれ だっけ','わすれそうに なる'], en:['WHO ARE YOU AGAIN?','I ALMOST FORGOT'] },
@@ -1174,9 +1178,10 @@
     if(Math.random() >= DIARY_MUSING_RATE) return '';
     const st = pet.stage;
     const s = {
-      clear: weatherFetched && weather==='clear',
-      rain:  weatherFetched && weather==='rain',
-      snow:  weatherFetched && weather==='snow',
+      clear:  weatherFetched && weather==='clear',
+      cloudy: weatherFetched && weather==='cloudy',
+      rain:   weatherFetched && weather==='rain',
+      snow:   weatherFetched && weather==='snow',
       young: st==='mid' || st==='larva',
       grown: st==='adult' || st==='final',
       bond:  pet.B || 0,
@@ -2477,13 +2482,34 @@
     if(shootStar.x < -SHOOT_LEN || shootStar.y > MAIN_GY-3) shootStar = null;
   }
 
-  // 雲：位置と高さをずらした並びを用意し、必要な数だけ流す。
-  //  曇り＝CLOUD_N.cloudy 個／雨＝CLOUD_N.rain 個（雨のほうが厚い空になる）
+  // ── 曇りの夜のUFO（雲の切れ間をゆっくり横切る） ──
+  //  出現頻度は晴れた夜の流れ星と同じ（SHOOT_CHANCE）。流れ星が一瞬で消えるのに対して、
+  //  こちらはゆっくり流して「雲の隙間に入った時だけ姿が見える」ようにする。
+  //  描くのは雲より先。あとから雲を上に重ねるので、雲に隠れた部分は自然に見えなくなる。
+  //  進む向きは雲と逆（雲は右→左、UFOは左→右）。流れに逆らって進むので、雲とは別のものだと分かる
+  const UFO_N_SPEED = 0.22;      // ドット/フレーム。雲（4フレームで1ドット）より速い
+  const UFO_N_Y = 10;            // 雲の帯（y11〜18）に掛かる高さ
+  const UFO_N_BOB = 22;          // 上下のゆらぎの周期（フレーム）
+  let nightUfo = null;           // {x,t} 横切っている間だけ入る
+  function updateNightUfo(DM){
+    if(!nightUfo){
+      if(Math.random() < SHOOT_CHANCE) nightUfo = { x: -UFO_SPR[0].length, t: 0 };
+      return;
+    }
+    // ふわりと上下に揺れながら流れる。ヘッダー（y8）に掛からないよう振れ幅は1ドットに留める
+    const uy = UFO_N_Y + Math.round(Math.sin(nightUfo.t / UFO_N_BOB));
+    stamp(ctxM, UFO_SPR, Math.round(nightUfo.x), uy, DM);
+    nightUfo.x += UFO_N_SPEED; nightUfo.t++;
+    if(nightUfo.x > W + 1) nightUfo = null;
+  }
+
+  // 雲：位置と高さをずらした並びを用意し、必要な数だけ右から左へ流す。
+  //  出すのは曇りの日だけ（雨の日は雨粒だけで空を表す）
   const CLOUDS = [
     {spr:0, y:11}, {spr:1, y:16}, {spr:0, y:13},
     {spr:1, y:18}, {spr:0, y:15}, {spr:1, y:12},
   ];
-  const CLOUD_N = {cloudy:4, rain:6};
+  const CLOUD_N = 4;
   const CLOUD_PERIOD = 72;      // 1周する距離（画面幅＋はみ出しぶん）
   let cloudX = 30;
   function drawClouds(n, DM){
@@ -2973,7 +2999,9 @@
     if (hideSky) {
       /* 到着演出中は天体も天気も出さない */
     } else if (weather === 'cloudy' || weather === 'rain') {
-      /* 曇り・雨の日は空が雲に覆われているので、太陽も月も星も出さない */
+      // 曇り・雨の日は空が雲に覆われているので、太陽も月も星も出さない。
+      //  ただし曇りの夜だけ、雲の切れ間をUFOがよぎることがある（雲はこのあと上から描かれる）
+      if (weather === 'cloudy' && timeOfDay === 'night') updateNightUfo(DM);
     } else if (timeOfDay==='night') {
       STARS_M.forEach(([x,y],i)=>dot(ctxM,x,y+10,(fM+i*9)%28<20?DM:BG));
       stamp(ctxM, MOON, W-10, 11, NK);
@@ -2987,12 +3015,11 @@
     if (hideSky) {
       /* 到着演出中は出さない */
     } else if (weather === 'rain') {
-      drawClouds(CLOUD_N.rain, DM);     // 雨の日は雲と雨を同時に。雲は曇りより多く
-      updateRain(BG, DM);
+      updateRain(BG, DM);               // 雨の日は雲を出さず、雨粒だけで空を表す
     } else if (weather === 'snow') {
       updateSnow(BG, DM);
     } else if (weather === 'cloudy') {
-      drawClouds(CLOUD_N.cloudy, DM);
+      drawClouds(CLOUD_N, DM);
     }
 
     // 地面（下部お世話バーのぶん上げる）
