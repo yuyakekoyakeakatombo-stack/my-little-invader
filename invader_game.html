@@ -607,7 +607,8 @@
     incubAt:0,                            // 病気の潜伏：この時刻になったら発症する
     starveAcc:0,                          // 空腹MAX継続時間（分。1080=衰弱, 1800=死）
     sickAcc:0,                            // 病気放置時間（分。2160=死）
-    sickCount:0, fullFeeds:0,             // 病気回数・満腹給餌回数（進化条件用）
+    sickCount:0, fullFeeds:0,             // 病気回数・満腹給餌回数（進化条件用・累計）
+    overAcc:0,                            // 最近の食べすぎ具合（毎日減衰。病気のなりやすさに効く）
     lowBDays:0, calDay:'',                // なつき度低下の連続日数（UFO帰還判定）
     dead:'', ufoFlag:false,               // 死因('starve'|'sick')・帰還トリガー
     gone:false, goneBy:'',                // 帰還/旅立ちが終わった状態。ALL RESET まで解けない
@@ -752,6 +753,11 @@
     const m = pet.mealCount||0, s = pet.snackCount||0;
     return (m + s) >= SNACK_MIN_SAMPLE && s > m;
   }
+  // 食べすぎの度合い 0〜1。満腹なのに食べさせた回数（毎日減衰）で決まる。
+  //  一度なら軽いが、続けると胃に来る——という効かせ方にする
+  const OVER_FULL = 4;            // これだけ続けると度合いが最大
+  function overeatSeverity(){ return Math.max(0, Math.min(1, (pet.overAcc||0) / OVER_FULL)); }
+
   function snackSeverity(){       // 過剰の度合い 0〜1（おやつ比率50%で0、100%で1）
     const m = pet.mealCount||0, s = pet.snackCount||0, t = m + s;
     if(t < SNACK_MIN_SAMPLE) return 0;
@@ -769,7 +775,8 @@
     starve:    0.12,   // 空腹MAXを放置
     snackIdle: 0.15,   // おやつ漬けのまま時間が経つ（度合いで最大2倍）
     snackNow:  0.08,   // おやつ漬けの状態でさらにおやつ（度合いで最大+0.12）
-    overeat:   0.10,   // 満腹なのに食べた
+    overeat:   0.18,   // 満腹なのに食べた（続けると最大2.5倍まで上がる）
+    overeatMul:1.5,    // 食べすぎの度合いぶんの割増（度合い1.0で 1+1.5=2.5倍）
     weatherMul:1.3,    // 雨・雪の日の割増
   };
   const SICK_DIRT_MIN = 240, SICK_STARVE_MIN = 360, SICK_SNACK_MIN = 360;  // 各抽選の間隔（分）
@@ -1494,6 +1501,7 @@
         // ごはん／おやつの回数を減衰させ、最近の与え方が判定に効くようにする
         pet.mealCount  = (pet.mealCount||0)  * SNACK_DECAY;
         pet.snackCount = (pet.snackCount||0) * SNACK_DECAY;
+        pet.overAcc    = (pet.overAcc||0)    * SNACK_DECAY;   // 食べすぎも日がたてば戻る
         checkReturn();                                  // 帰還の兆候（疎遠期）と確定を判定
 
         // ── 日記：寝る前に書けなかったぶんは持ち越して、翌日「きのうのこと」として書く ──
@@ -2762,9 +2770,12 @@
         else if(pet.hunger >= 5){
           if(pTrait() <= -0.5){                                     // おっとり：満腹でも食べてしまう
             pet.fullFeeds++; addA(A_ADJ.feedFull);
-            rollSick(SICK_P.overeat, true);                         // 食べ過ぎ：あとから効いてくる
+            pet.overAcc = (pet.overAcc||0) + 1;
+            // 食べ過ぎ：あとから効いてくる。続けるほど当たりやすい
+            rollSick(SICK_P.overeat * (1 + overeatSeverity() * SICK_P.overeatMul), true);
             schedulePoop(); eatReaction('meal');
-          } else { leavePlate('meal'); setReaction('refuse'); }     // 拒否、皿が残る
+          } else { leavePlate('meal'); }                            // 満腹：無反応で皿だけ残す
+            //  ここで嫌がる仕草を出すと、わがままの拒否と区別がつかなくなる
         }
         else {
           if(pet.hunger <= 1) gainB(1);                             // 空腹時に食べさせるとなつく
