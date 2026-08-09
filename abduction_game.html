@@ -247,6 +247,10 @@
   const DIVE_START   = 15;    // ここまでの秒数は降りてこない（ビーム回避に集中させる）
   const CHARGE_START = 25;    // 体当たりが混ざり始める秒数
   const MAX_DIVE_STREAK = 2;  // 降下の連続はここまで。超えたら必ずビーム回を挟む
+  // ビーム幅：ずっと太くなり続けると、どこにいても避けられなくなる。
+  //  ここから先は毎回ふとさを引き直し、細い回・太い回が混ざるようにする
+  const BEAM_VARY_START = 20;   // この秒数から幅がばらつき始める
+  const BEAM_HALF_MIN   = 2;    // いちばん細い回の半幅
 
   // 経過時間（秒）に応じた難易度を返す
   function curDiff(){
@@ -257,7 +261,8 @@
       safeDur:  Math.max(20 - t*0.4, 8),        // 20→最小8フレーム
       // 降下：序盤0 → 中盤12% → 後半じわじわ増えて最大35%
       diveChance: (t < DIVE_START) ? 0 : Math.min(0.12 + (t-DIVE_START)*0.006, 0.35),
-      beamHalf: Math.min(3 + Math.floor(t/5), 9),
+      beamHalf: Math.min(3 + Math.floor(t/5), 7),   // 上限を9→7に。太い回はここから更に±で振る
+      beamVary: t >= BEAM_VARY_START,
       canCharge: t>=CHARGE_START,
       chargeSpeed: Math.min(1.4 + (t-CHARGE_START)*0.05, 2.6),
       chargeChance: Math.min(0.20 + (t-CHARGE_START)*0.008, 0.40), // 降下後に突進する確率
@@ -281,6 +286,23 @@
   // UFO
   const UFO_HIGH=11;            // 通常高度。ヘッダーの区切り線(y=10)に被らない位置
   let ufoX, ufoDir, ufoY, ufoYtarget;
+  // まっすぐ往復するだけだと次の位置が読めてしまうので、
+  //  ときどき気まぐれに向きを変え、脚ごとに速さも変える
+  let ufoTurnCD = 0;      // 次に向きを変えられるまでのフレーム
+  let ufoSpdMul = 1;      // いまの脚の速さ倍率
+  const UFO_TURN_P = 0.045;   // 1フレームあたりの気まぐれ確率
+  function rollUfoLeg(){
+    ufoTurnCD = 12 + Math.floor(Math.random()*28);   // 0.6〜2.0秒は向きを保つ
+    ufoSpdMul = 0.65 + Math.random()*0.75;           // 0.65〜1.4倍
+  }
+  function ufoWander(D, mul){
+    if(ufoTurnCD > 0) ufoTurnCD--;
+    else if(Math.random() < UFO_TURN_P){ ufoDir = -ufoDir; rollUfoLeg(); }
+    ufoX += ufoDir * D.ufoSpeed * ufoSpdMul * (mul || 1);
+    if(ufoX <= 1){ ufoX = 1; ufoDir = 1; rollUfoLeg(); }
+    else if(ufoX >= W-UFO_W-1){ ufoX = W-UFO_W-1; ufoDir = -1; rollUfoLeg(); }
+  }
+  let beamHalfNow = 3;    // この回のビームの半幅（warnに入るときに決める）
   let mode, modeTimer, beamX;
   let chargeDir=1;
   // 体当たりの間隔制御：突進のあとは必ず休みを入れ、続けざまに突っ込んでこないようにする
@@ -302,15 +324,22 @@
     chargeCD = D.chargeCD;
     forceBeamNext = true;
   }
+  // この回のビームの太さを決める。序盤は難易度どおり、中盤からは細い回・太い回が混ざる
+  function rollBeamHalf(D){
+    if(!D.beamVary){ beamHalfNow = D.beamHalf; return; }
+    const lo = BEAM_HALF_MIN, hi = D.beamHalf + 2;
+    beamHalfNow = lo + Math.floor(Math.random()*(hi-lo+1));
+  }
   function beamEdge(y){
     const y0=Math.round(ufoY)+UFO_H, y1=GY-1;
     if(y1<=y0) return 0;
-    return Math.round((y-y0)/(y1-y0)*curDiff().beamHalf);
+    return Math.round((y-y0)/(y1-y0)*beamHalfNow);
   }
 
   function startGame(){
     plyX=W/2-CH_W/2; plyY=GROUND_Y; vy=0; jumping=false;
     ufoX=21; ufoDir=1; ufoY=UFO_HIGH; ufoYtarget=UFO_HIGH;
+    rollUfoLeg(); beamHalfNow=3;
     mode='safe'; modeTimer=0; beamX=ufoCenter();
     chargeCD=0; forceBeamNext=false; diveStreak=0;
     graceFrames=6;
@@ -382,23 +411,21 @@
     // UFOロジック
     if(mode==='safe'){
       ufoYtarget=UFO_HIGH;
-      ufoX+=ufoDir*D.ufoSpeed;
-      if(ufoX<=1){ufoX=1;ufoDir=1;} if(ufoX>=W-UFO_W-1){ufoX=W-UFO_W-1;ufoDir=-1;}
+      ufoWander(D);
       if(modeTimer>D.safeDur){
         modeTimer=0;
         // 突進の直後は必ずビーム回を挟む（体当たりが連続しないように）。
         // 降下もMAX_DIVE_STREAK回続いたら、そこで一度ビームに戻す
         const dive = !forceBeamNext && diveStreak < MAX_DIVE_STREAK && Math.random()<D.diveChance;
         if(dive){ mode='dive'; ufoYtarget=GROUND_Y; diveStreak++; }
-        else { forceBeamNext=false; diveStreak=0; mode='warn'; beamX=ufoCenter(); }
+        else { forceBeamNext=false; diveStreak=0; mode='warn'; beamX=ufoCenter(); rollBeamHalf(D); }
       }
     } else if(mode==='warn'){
       if(modeTimer>4){ modeTimer=0; mode='beam'; beep(300,0.12); }
     } else if(mode==='beam'){
       if(modeTimer>D.beamDur){ modeTimer=0; mode='safe'; }
     } else if(mode==='dive'){
-      ufoX+=ufoDir*D.ufoSpeed*0.7;
-      if(ufoX<=1){ufoX=1;ufoDir=1;} if(ufoX>=W-UFO_W-1){ufoX=W-UFO_W-1;ufoDir=-1;}
+      ufoWander(D, 0.7);
       if(modeTimer>22){
         modeTimer=0;
         // 突進はクールダウンが明けている時だけ。明けていなければ通常復帰
@@ -421,8 +448,7 @@
     } else if(mode==='recover'){
       // 突進のあとは通常高度まで上がりきってから再開する（続けざまの体当たりを防ぐ）
       ufoYtarget=UFO_HIGH;
-      ufoX+=ufoDir*D.ufoSpeed*0.6;
-      if(ufoX<=1){ufoX=1;ufoDir=1;} if(ufoX>=W-UFO_W-1){ufoX=W-UFO_W-1;ufoDir=-1;}
+      ufoWander(D, 0.6);
       if(ufoY<=UFO_HIGH && modeTimer>12){ mode='safe'; modeTimer=0; }
     }
     if(ufoY<ufoYtarget) ufoY=Math.min(ufoY+2,ufoYtarget);
@@ -586,7 +612,7 @@
   press(elU,()=>{dpadAnim(elU); menuMove();});
   press(elD,()=>{dpadAnim(elD); menuMove();});
 
-  function confirmTitle(){ if(menuSel===0) startGame(); else state=STATE.HELP; }
+  function confirmTitle(){ beep(880,0.07); if(menuSel===0) startGame(); else state=STATE.HELP; }
   function onADown(){
     anim(document.getElementById('ba'));
     if(state===STATE.PLAY){ jump(); }
@@ -598,12 +624,19 @@
   }
   press(document.getElementById('ba'), onADown);
   release(document.getElementById('ba'), onAUp);
-  press(document.getElementById('bb'), ()=>{ anim(document.getElementById('bb')); if(state===STATE.HELP) state=STATE.TITLE; });
-  press(document.getElementById('bmenu'), ()=>{
-    const m=document.getElementById('bmenu'); m.style.transform='scale(.93)'; setTimeout(()=>m.style.transform='',100);
-    // iframe内なら親に通知して閉じる（ページ遷移しない）。単独で開いた時のみ遷移
+  press(document.getElementById('bb'), ()=>{ anim(document.getElementById('bb'));
+    if(state===STATE.HELP) state=STATE.TITLE;
+    else if(state===STATE.TITLE) exitToMenu();     // タイトルでBを押したら選択画面へ戻る
+  });
+  // ミニゲームを閉じて、本体のゲーム選択画面へ戻る
+  function exitToMenu(){
+    beep(700,0.06);
     if(window.parent && window.parent !== window) window.parent.postMessage({myvader:"exit"}, "*");
     else window.location.href='invader_game.html';
+  }
+  press(document.getElementById('bmenu'), ()=>{
+    const m=document.getElementById('bmenu'); m.style.transform='scale(.93)'; setTimeout(()=>m.style.transform='',100);
+    exitToMenu();   // iframe内なら親に通知して閉じる（ページ遷移しない）
   });
 
   // キーボード対応

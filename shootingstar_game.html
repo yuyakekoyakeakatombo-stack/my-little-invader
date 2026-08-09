@@ -248,6 +248,24 @@
   const CY=GY-CH_H;            // 自機の上端y
   const GUN_X_OFF=4;          // 砲口（中央、9幅）
 
+  // ── 隕石：一定時間ごとに現れる、何発も当てないと壊せない大物 ──
+  //  流れ星を撃ち続けるだけの単調さを崩す役。出ているあいだは流れ星を減らす
+  const METEOR=[
+    [0,0,2,2,2,2,0,0,0],
+    [0,2,2,1,2,2,2,0,0],
+    [2,2,1,2,2,2,1,2,0],
+    [2,1,2,2,2,2,2,2,2],
+    [2,2,2,2,1,2,2,1,2],
+    [0,2,2,2,2,2,2,2,0],
+    [0,0,2,1,2,2,2,0,0],
+    [0,0,0,2,2,2,0,0,0],
+  ];
+  const MET_W=9, MET_H=8;
+  const MET_FIRST = 35;        // 最初の隕石が出る秒数
+  const MET_EVERY = 30;        // 以降この秒数ごと
+  let meteor=null;             // {x,y,vx,vy,hp,max,hurt}
+  let metNext=MET_FIRST;       // 次に出す秒数
+
   let stars=[];               // {x,y,vx,vy}
   let beams=[];               // {x,y}
   let spawnTimer=0;
@@ -257,12 +275,18 @@
   const keys={left:false,right:false,fire:false};
 
   function level(){ return Math.floor(elapsed/FPS/15); }      // 15秒ごとにレベル+1
-  function spawnGap(){ return Math.max(20-level()*2, 6); }     // レベルで間隔短縮
-  function spawnBurst(){ return 1 + Math.floor(level()/2); }   // レベルで同時スポーン数増
+  // 出現量は「1秒あたり何個」で決める。
+  //  以前は「間隔を詰める」と「同時数を増やす」を別々に上げていたため掛け算になり、
+  //  レベル7で毎秒13個まで膨らんで手に負えなくなっていた。合計のペースに上限を置く。
+  const SPAWN_RATE_MAX = 3.5;                                  // 1秒あたりの最大出現数
+  function spawnRate(){ return Math.min(1.2 + level()*0.45, SPAWN_RATE_MAX); }
+  function spawnBurst(){ return level() >= 4 ? 2 : 1; }        // まとめて出すのは中盤から
+  function spawnGap(){ return Math.max(Math.round(FPS/spawnRate()*spawnBurst()), 5); }
 
   function startGame(){
     plyX=W/2-CH_W/2; score=0; elapsed=0; lives=MISS_MAX;
     stars=[]; beams=[]; flashes=[]; spawnTimer=0; fireTimer=0;
+    meteor=null; metNext=MET_FIRST;
     state=STATE.PLAY;
   }
 
@@ -307,12 +331,57 @@
     beams.forEach(b=>b.y-=3);
     beams=beams.filter(b=>b.y>11);
 
-    // 星スポーン
+    // 隕石の登場
+    if(!meteor && t >= metNext){
+      const hp = Math.min(4 + level(), 9);
+      meteor = { x: 4+Math.random()*(W-MET_W-8), y: -MET_H, vx: (Math.random()-0.5)*0.25,
+                 vy: 0.20 + level()*0.015, hp: hp, max: hp, hurt: 0 };
+      metNext = t + MET_EVERY;
+      beep(150,0.3,'sawtooth');
+    }
+
+    // 星スポーン（隕石が出ているあいだは半分に抑える）
     spawnTimer++;
-    if(spawnTimer>=spawnGap()){ spawnTimer=0; const n=spawnBurst(); for(let i=0;i<n;i++) spawnStar(); }
+    const gap = spawnGap() * (meteor ? 2 : 1);
+    if(spawnTimer>=gap){ spawnTimer=0; const n=spawnBurst(); for(let i=0;i<n;i++) spawnStar(); }
 
     // 星移動
     stars.forEach(s=>{ s.x+=s.vx; s.y+=s.vy; });
+
+    // ── 隕石 ──
+    if(meteor){
+      meteor.x += meteor.vx; meteor.y += meteor.vy;
+      if(meteor.x<1 || meteor.x>W-MET_W-1) meteor.vx = -meteor.vx;
+      if(meteor.hurt>0) meteor.hurt--;
+      // ビームが当たったら1発ぶん削る
+      beams.forEach(b=>{
+        if(b.hit) return;
+        if(b.x>=meteor.x && b.x<=meteor.x+MET_W-1 && b.y>=meteor.y && b.y<=meteor.y+MET_H-1){
+          b.hit=true; meteor.hp--; meteor.hurt=3; score+=3;
+          flashes.push({x:Math.round(b.x), y:Math.round(b.y), t:4, type:'hit'});
+          beep(meteor.hp>0?600:1400, 0.05);
+        }
+      });
+      if(meteor.hp<=0){                       // 破壊：大きく加点
+        score+=60;
+        for(let i=0;i<5;i++) flashes.push({x:Math.round(meteor.x+2+Math.random()*5),
+                                           y:Math.round(meteor.y+2+Math.random()*4), t:8+i, type:'hit'});
+        beep(1600,0.25); meteor=null;
+      } else if(meteor.y+MET_H>=GY){          // 落ちた：重い減点
+        score-=30;
+        flashes.push({x:Math.round(meteor.x+4), y:GY-1, t:10, type:'miss'});
+        beep(120,0.35,'sawtooth'); meteor=null;
+      } else {
+        // 自機に当たったら流れ星と同じくミス
+        const hitsPly = (meteor.x+MET_W>=plyX && meteor.x<=plyX+CH_W && meteor.y+MET_H>=CY && meteor.y<=CY+CH_H);
+        if(hitsPly){
+          score-=15; lives--;
+          flashes.push({x:Math.round(meteor.x+4), y:CY, t:8, type:'miss'});
+          beep(180,0.14,'sawtooth'); meteor=null;
+          if(lives<=0){ state=STATE.GAMEOVER; reportScore(); beep(140,0.4,'sawtooth'); }
+        }
+      }
+    }
 
     // ビーム×星 命中判定
     const starHitSet=new Set();
@@ -384,6 +453,19 @@
     }
   }
 
+  // 隕石。被弾直後は薄色にして手応えを出し、上に残りの固さを目盛りで見せる
+  function drawMeteor(){
+    if(!meteor) return;
+    const ox=Math.round(meteor.x), oy=Math.round(meteor.y);
+    for(let ry=0;ry<MET_H;ry++) for(let rx=0;rx<MET_W;rx++){
+      const v=METEOR[ry][rx]; if(!v) continue;
+      if(oy+ry <= HDR_Y) continue;
+      d(ox+rx, oy+ry, meteor.hurt>0 ? DIM : SC[v]);
+    }
+    const by=oy-2;
+    if(by>HDR_Y) for(let i=0;i<meteor.max;i++) d(ox+i, by, i<meteor.hp ? ON : DIM);
+  }
+
   function draw(){
     if(state===STATE.TITLE){
       ct.fillStyle=OFF; ct.fillRect(0,0,W*S,H*S);
@@ -408,15 +490,18 @@
     if(state===STATE.HELP){
       ct.fillStyle=OFF; ct.fillRect(0,0,W*S,H*S);
       // 本文は視認性優先で 5px → 7px。行間も広げて再レイアウト
-      txtC('HOW TO PLAY',3,7,ON);
-      hl(12,ON);
-      txt('MOVE',2,15,7,ON);  txt('< >',30,15,7,ON);
-      txt('SHOOT',2,24,7,ON); txt('A',30,24,7,ON);
-      hl(33,ON);
-      txt('HIT STAR',2,36,7,ON);  txt('+5',W-8,36,7,ON);
-      txt('MISSED',2,45,7,ON);    txt('-10',W-11,45,7,ON);
-      txt('GET HIT',2,54,7,ON);   txt('-15',W-11,54,7,ON);
-      if(Math.floor(Date.now()/450)%2===0) txtC('A/B : BACK',61,6,ON);
+      // 隕石の行を足したぶん、行間を1〜2ドットずつ詰めて画面(H=65)に収める
+      txtC('HOW TO PLAY',2,7,ON);
+      hl(10,ON);
+      txt('MOVE',2,13,7,ON);  txt('< >',30,13,7,ON);
+      txt('SHOOT',2,21,7,ON); txt('A',30,21,7,ON);
+      hl(28,ON);
+      txt('HIT STAR',2,31,7,ON);  txt('+5',W-8,31,7,ON);
+      txt('MISSED',2,39,7,ON);    txt('-10',W-11,39,7,ON);
+      txt('GET HIT',2,47,7,ON);   txt('-15',W-11,47,7,ON);
+      hl(54,ON);
+      txt('METEOR = MANY HITS',2,57,6,ON);
+      if(Math.floor(Date.now()/450)%2===0) txtC('A/B : BACK',63,5,ON);
       return;
     }
     if(state===STATE.PLAY){
@@ -431,6 +516,7 @@
 
       // 星＋尾
       stars.forEach(s=>{ tail(s); star(Math.round(s.x),Math.round(s.y)); });
+      drawMeteor();
       // ビーム
       beams.forEach(b=>{ d(b.x,b.y,ON); d(b.x,b.y+1,DIM); });
       // 自機
@@ -495,6 +581,7 @@
 
   const ba=document.getElementById('ba');
   function confirmTitle(){
+    beep(880,0.07);                       // 決定音。以前は無音で、押せたのか分からなかった
     if(menuSel===0) startGame();
     else state=STATE.HELP;
   }
@@ -510,8 +597,17 @@
     if(state===STATE.GAMEOVER){ state=STATE.TITLE; menuSel=0; return; }
   }
   press(ba,onADown); release(ba,onAUp);
-  press(document.getElementById('bb'), ()=>{ anim(document.getElementById('bb')); if(state===STATE.HELP) state=STATE.TITLE; });
-  press(document.getElementById('bmenu'), ()=>{ const m=document.getElementById('bmenu'); m.style.transform='scale(.93)'; setTimeout(()=>m.style.transform='',100); if(window.parent && window.parent !== window) window.parent.postMessage({myvader:"exit"}, "*"); else window.location.href='invader_game.html'; });
+  press(document.getElementById('bb'), ()=>{ anim(document.getElementById('bb'));
+    if(state===STATE.HELP) state=STATE.TITLE;
+    else if(state===STATE.TITLE) exitToMenu();     // タイトルでBを押したら選択画面へ戻る
+  });
+  // ミニゲームを閉じて、本体のゲーム選択画面へ戻る
+  function exitToMenu(){
+    beep(700,0.06);
+    if(window.parent && window.parent !== window) window.parent.postMessage({myvader:"exit"}, "*");
+    else window.location.href='invader_game.html';
+  }
+  press(document.getElementById('bmenu'), ()=>{ const m=document.getElementById('bmenu'); m.style.transform='scale(.93)'; setTimeout(()=>m.style.transform='',100); exitToMenu(); });
 
   // キーボード
   document.addEventListener('keydown',e=>{

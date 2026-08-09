@@ -700,7 +700,7 @@
       hl(14,ON);
       txt('MOVE',2,18,7,ON); txt('< > ^ v',22,18,7,ON);
       hl(28,ON);
-      txt('DODGE DEBRIS',2,32,7,ON);
+      txt('DODGE STARS',2,32,7,ON);
       txt('UFO BOSS 30s',2,41,7,ON);
       txt('5 MISS = OVER',2,50,7,ON);
       if(Math.floor(Date.now()/450)%2===0) txtC('A/B : BACK',60,6,ON);
@@ -789,7 +789,7 @@
   press(eD,()=>{ dAnim(eD); if(state===STATE.TITLE) menuMove(); else keys.down=true; });
   release(eD,()=>keys.down=false);
 
-  function confirmTitle(){ if(menuSel===0) startGame(); else state=STATE.HELP; }
+  function confirmTitle(){ beep(880,0.07); if(menuSel===0) startGame(); else state=STATE.HELP; }
   function onADown(){ anim(document.getElementById('ba')); }
   function onAUp(){
     if(state===STATE.TITLE) confirmTitle();
@@ -798,12 +798,19 @@
   }
   press(document.getElementById('ba'), onADown);
   release(document.getElementById('ba'), onAUp);
-  press(document.getElementById('bb'), ()=>{ anim(document.getElementById('bb')); if(state===STATE.HELP) state=STATE.TITLE; });
-  press(document.getElementById('bmenu'), ()=>{
-    const m=document.getElementById('bmenu'); m.style.transform='scale(.93)'; setTimeout(()=>m.style.transform='',100);
-    // iframe内なら親に通知して閉じる（ページ遷移しない）。単独で開いた時のみ遷移
+  // ミニゲームを閉じて、本体のゲーム選択画面へ戻る
+  function exitToMenu(){
+    beep(700,0.06);
     if(window.parent && window.parent !== window) window.parent.postMessage({myvader:"exit"}, "*");
     else window.location.href='invader_game.html';
+  }
+  press(document.getElementById('bb'), ()=>{ anim(document.getElementById('bb'));
+    if(state===STATE.HELP) state=STATE.TITLE;
+    else if(state===STATE.TITLE) exitToMenu();     // タイトルでBを押したら選択画面へ戻る
+  });
+  press(document.getElementById('bmenu'), ()=>{
+    const m=document.getElementById('bmenu'); m.style.transform='scale(.93)'; setTimeout(()=>m.style.transform='',100);
+    exitToMenu();   // iframe内なら親に通知して閉じる（ページ遷移しない）
   });
 
   document.addEventListener('keydown',e=>{
