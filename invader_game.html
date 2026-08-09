@@ -715,7 +715,19 @@
   function pTrait(){ return Math.max(-1, Math.min(1, (pet.P||0) / 60)); }
 
   // ── 時間進行（企画書§4 ドラフト値）──
-  const HUNGER_MIN = 144;   // 2.4時間でおなか●1減。5段階×144分＝12時間で満腹→空腹（4段階×180分と同じ）
+  // ── 空腹サイクル（企画書§4）──
+  //  段階と系統で基準が変わり、そのうえで性格が少し前後させる。
+  //  以前は全段階いちりつ144分で、企画書の段階別の差が入っていなかった。
+  const HUNGER_BASE = { young: 180, tako: 240, other: 300 };   // 幼体まで3時間／マーシャン4時間／他5時間
+  const HUNGER_P    = 0.15;  // 性格でこの割合まで前後（やんちゃ＝早く減る／おっとり＝もつ）
+  function hungerMin(){
+    const st = pet.stage;
+    const base = (st==='egg' || st==='mid' || st==='larva') ? HUNGER_BASE.young
+               : (pet.lineage==='tako')                     ? HUNGER_BASE.tako
+               :                                              HUNGER_BASE.other;
+    // やんちゃはよく動くぶん早くすく、おっとりは長持ちする
+    return Math.round(base * (1 - pTrait() * HUNGER_P));
+  }
   const MOOD_MIN   = 192;   // 3.2時間でごきげん♪1減。5段階×192分＝16時間（4段階×240分と同じ）
   // ミニゲームで消耗する空腹。時間経過の進行タイマー(hungerAcc)に足すので、
   //  遊べば遊ぶほど次の「おなか1減」が早く来る。立て続けだと1回あたりの消耗が増える
@@ -972,7 +984,8 @@
       pet.playStreak = (gap <= PLAY_STREAK_MS) ? Math.min(PLAY_STREAK_MAX, (pet.playStreak||0) + 1) : 0;
       pet.lastPlayAt = r.at;
       pet.hungerAcc = (pet.hungerAcc||0) + PLAY_HUNGER_MIN * (1 + 0.4 * pet.playStreak);
-      while(pet.hungerAcc >= HUNGER_MIN && pet.hunger > 0){ pet.hungerAcc -= HUNGER_MIN; pet.hunger--; }
+      const hm = hungerMin();
+      while(pet.hungerAcc >= hm && pet.hunger > 0){ pet.hungerAcc -= hm; pet.hunger--; }
       savePet();
     } catch(e){}
   }
@@ -1466,11 +1479,11 @@
       const careF = (pet.stage==='egg') ? (pet.mood>=4 ? 1.15 : (pet.mood<=1 ? 0.85 : 1)) : 1;
       pet.EP += mult / 1440 * (1 + wb) * careF;
       // 系統の癖：マーシャン＝のんびり（きげんは減りにくいが、よく食べる）
-      const Lh = (pet.lineage==='tako') ? 1.2 : 1;
-      const Lm = (pet.lineage==='tako') ? 0.8 : 1;
-      pet.hungerAcc += gameMin * Lh;
+      const Lm = (pet.lineage==='tako') ? 0.8 : 1;           // マーシャンはきげんが減りにくい
+      pet.hungerAcc += gameMin;                              // 空腹の速さは hungerMin() 側で見る
       pet.moodAcc   += gameMin * Lm * (dirtN > 0 ? 2 : 1);   // 汚れ放置中はごきげん低下が2倍
-      if(pet.hungerAcc >= HUNGER_MIN){ pet.hungerAcc -= HUNGER_MIN; if(pet.hunger > 0) pet.hunger--; }
+      const hm = hungerMin();
+      if(pet.hungerAcc >= hm){ pet.hungerAcc -= hm; if(pet.hunger > 0) pet.hunger--; }
       if(pet.moodAcc   >= MOOD_MIN)  { pet.moodAcc   -= MOOD_MIN;   if(pet.mood   > 0) pet.mood--;   }
       clampMood();   // 汚れが出た・病気になった瞬間に、満タンだったきげんも上限まで下がる
 
