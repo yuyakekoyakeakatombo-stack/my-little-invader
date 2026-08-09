@@ -83,12 +83,22 @@ td.k{ white-space:nowrap; font-weight:700; background:rgba(0,0,0,.045) }
 
 /* ── アイコン一覧 ── */
 .en{ font-size:11.5px; color:var(--ink2); letter-spacing:.03em; font-family:ui-monospace,monospace }
-.icons{ display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:12px; margin:14px 0 20px }
-.icard{ border:2px solid var(--rule); padding:12px; background:rgba(255,255,255,.36); text-align:center }
-.icard .box{ background:var(--lcd); border:2px solid #6a6f5c; padding:8px; display:flex;
-             align-items:center; justify-content:center; height:70px; margin-bottom:9px }
-.icard b{ display:block; font-size:14px }
-.icard span{ font-size:12.5px; color:var(--ink2); line-height:2.2; display:block; margin-top:3px }
+/* ゲームのMENUと同じ 2段×3列 に固定する。画面の並びとそのまま見くらべられるように */
+.icons{ display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin:14px 0 20px }
+.icard{ border:2px solid var(--rule); padding:8px 5px; background:rgba(255,255,255,.36); text-align:center }
+.icard .box{ background:var(--lcd); border:2px solid #6a6f5c; padding:5px; display:flex;
+             align-items:center; justify-content:center; height:56px; margin-bottom:7px }
+.icard .box svg{ max-width:100%; height:auto }
+.icard b{ display:block; font-size:13px; line-height:1.9 }
+.icard span{ font-size:11px; color:var(--ink2); line-height:1.95; display:block; margin-top:2px }
+.icard rt{ font-size:.5em }
+@media (min-width:520px){
+  .icons{ gap:12px }
+  .icard{ padding:12px 8px }
+  .icard .box{ height:70px; padding:8px }
+  .icard b{ font-size:14px }
+  .icard span{ font-size:12.5px; line-height:2.1 }
+}
 
 /* ── キャラの並び ── */
 .chars{ display:flex; align-items:flex-end; justify-content:center; gap:6px; flex-wrap:wrap;
