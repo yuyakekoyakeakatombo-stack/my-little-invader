@@ -3,6 +3,9 @@
 //  （プレイ中に画面が入れ替わらないように）。
 (function () {
   if (!('serviceWorker' in navigator)) return;   // 非対応でも通常どおり遊べる
+  // 説明書はゲームの中に重ねて開くことがある。埋め込みで動くときは何もしない
+  //  （親ページがすでに登録しているし、枠の中で更新バーが出ても押しどころがない）
+  if (window.top !== window.self) return;
 
   window.addEventListener('load', function () {
     navigator.serviceWorker.register('sw.js').then(function (reg) {

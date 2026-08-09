@@ -9,7 +9,7 @@
 //    上げ忘れると、更新をpushしてもテスターの端末に古い版が出続ける。
 //    tools/bump-sw.sh が自動で書き換える（pre-commitフックから呼ばれる）。
 // ════════════════════════════════════════════════════════════
-const VERSION = '2026-08-09-10';
+const VERSION = '2026-08-09-13';
 const CACHE = 'mli-' + VERSION;
 
 // 初回訪問時にまとめて取りに行くファイル
@@ -34,7 +34,14 @@ const ASSETS = [
 self.addEventListener('install', (e) => {
   e.waitUntil((async () => {
     const c = await caches.open(CACHE);
-    await Promise.all(ASSETS.map(u => c.add(u).catch(() => {})));
+    // cache.add() はブラウザのHTTPキャッシュを経由するので、版数を上げても
+    //  古いファイルがそのまま新しいキャッシュに入ってしまうことがある。
+    //  reload を指定してサーバーから取り直す（更新が届かない事故の防止）
+    await Promise.all(ASSETS.map(u =>
+      fetch(new Request(u, { cache: 'reload' }))
+        .then(r => { if (r && r.ok) return c.put(u, r); })
+        .catch(() => {})
+    ));
     // ここで skipWaiting() は呼ばない。
     //  呼ぶと新しい版が即座に有効になり、遊んでいる最中にページが勝手にリロードされる。
     //  待機させておいて、画面に出した「よみこみなおす」を押されたときだけ切り替える。

@@ -339,7 +339,7 @@
     en: {
       feed:'FEED', clean:'CLEAN', med:'MEDICINE', pet:'PRAISE', scold:'SCOLD', game:'MINI GAME',
       meal:'MEAL', snack:'TREAT',
-      status:'STATUS', story:'STORY', settings:'SETTINGS', play:'PLAY', diary:'DIARY',
+      status:'STATUS', story:'STORY', settings:'SETTINGS', play:'PLAY', diary:'DIARY', manual:'MANUAL',
       sound:'SOUND', bodycolor:'BODY COLOR', weather:'WEATHER', language:'LANGUAGE', debug:'DEBUG', reset:'ALL RESET',
       where:'HERE',
       on:'ON', off:'OFF', sure:'SURE?', yesno:'A:YES  B:NO',
@@ -353,7 +353,7 @@
     ja: {
       feed:'ごはん', clean:'そうじ', med:'くすり', pet:'ほめる', scold:'しかる', game:'ゲーム',
       meal:'ごはん', snack:'おやつ',
-      status:'ステータス', story:'ストーリー', settings:'せってい', play:'あそぶ', diary:'にっき',
+      status:'ステータス', story:'ストーリー', settings:'せってい', play:'あそぶ', diary:'にっき', manual:'せつめいしょ',
       sound:'サウンド', bodycolor:'カラー', weather:'てんき', language:'げんご', debug:'デバッグ', reset:'リセット',
       where:'げんざいち',
       on:'オン', off:'オフ', sure:'ほんとうに？', yesno:'A:はい B:いいえ',
@@ -991,6 +991,32 @@
     document.body.appendChild(f);
     miniFrame = f;
   }
+  // ── 取扱説明書：別ファイルへ遷移するとホーム画面アプリの全画面表示から
+  //    抜けてしまうので、ミニゲームと同じく重ねて開く ──
+  let manualFrame = null;
+  function openManual(){
+    if(manualFrame) return;
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'position:fixed;inset:0;z-index:9998;background:#efe7d2;display:flex;flex-direction:column';
+    const bar = document.createElement('div');
+    bar.style.cssText = 'flex:none;display:flex;justify-content:flex-end;background:#26261e;' +
+      'padding:calc(8px + env(safe-area-inset-top)) 12px 8px';
+    const btn = document.createElement('button');
+    btn.textContent = (lang==='ja') ? '✕ とじる' : '✕ CLOSE';
+    btn.style.cssText = 'font-family:"Hiragino Maru Gothic ProN","Hiragino Sans",sans-serif;font-size:13px;' +
+      'background:#efe7d2;color:#26261e;border:0;border-radius:5px;padding:8px 16px;cursor:pointer';
+    btn.onclick = closeManual;
+    const f = document.createElement('iframe');
+    f.src = 'manual.html';
+    f.style.cssText = 'flex:1;width:100%;border:none;background:#efe7d2';
+    bar.appendChild(btn); wrap.appendChild(bar); wrap.appendChild(f);
+    document.body.appendChild(wrap);
+    manualFrame = wrap;
+  }
+  function closeManual(){
+    if(manualFrame){ manualFrame.remove(); manualFrame = null; }
+  }
+
   function closeMiniGame(){
     if(miniFrame){ miniFrame.remove(); miniFrame = null; }
     inMiniGame = false;
@@ -3516,10 +3542,10 @@
   // ════════════════════════════════════════
   const ctxN = initCanvas('lcd-n');
   // FEED/PLAY/CLEANはアクションバーに移管済み。DIARY は中間体になってから並ぶ
-  const MENU_BASE = [['STATUS','status'], ['SETTINGS','settings'], ['STORY','story']];
+  const MENU_BASE = [['STATUS','status'], ['SETTINGS','settings'], ['STORY','story'], ['MANUAL','manual']];
   function menuList(){
     if(!diaryUnlocked()) return MENU_BASE;
-    return [MENU_BASE[0], ['DIARY','diary'], MENU_BASE[1], MENU_BASE[2]];
+    return [MENU_BASE[0], ['DIARY','diary'], ...MENU_BASE.slice(1)];   // STATUS の次に DIARY を挟む
   }
   const PLAY_ITEMS=['SPACEWALK','SHOOTING STAR','ABDUCTION'];
   const PLAY_FILES={'SPACEWALK':'spacewalk_game.html','SHOOTING STAR':'shootingstar_game.html','ABDUCTION':'abduction_game.html'};
@@ -3812,9 +3838,11 @@
       if(menuSel < 6) ctxN.fillText(T(CARE_ORDER[menuSel].toLowerCase()), (W*S)/2, 36*S);
       for(let x=1;x<W-1;x++) dot(ctxN,x,40,DIM);
 
-      // サブ項目（STATUS / DIARY / SETTINGS / STORY）。DIARYが並ぶ4項目時は行間を詰める
+      // サブ項目（STATUS / DIARY / SETTINGS / STORY / MANUAL）。
+      //  DIARYの有無で4〜5項目になるので、いちばん下の行が画面(y=64)に収まるよう行間を決める
       const list = menuList();
-      const HL_H = (list.length >= 4) ? 6 : 7, Y0 = (list.length >= 4) ? 41 : 43;
+      const HL_H = (list.length >= 5) ? 5 : (list.length >= 4 ? 6 : 7);
+      const Y0   = (list.length >= 5) ? 40 : (list.length >= 4 ? 41 : 43);
       list.forEach(([item,key],i)=>{
         const y = Y0 + i*HL_H;
         const isSel = (menuSel === 6+i);
@@ -3974,7 +4002,8 @@
         const sel = (menuList()[menuSel-6] || [])[0];
         if(sel==='SETTINGS'){ inSettings=true; settingsSel=0; }
         else if(sel==='DIARY'){ openDiary(); }        // 日記は死んだあと・帰還したあとも読める
-        else if(pet.dead || pet.gone){ /* おばけ・帰還後：SETTINGS・DIARY以外は操作不可 */ }
+        else if(sel==='MANUAL'){ openManual(); }      // 説明書もいつでも読める
+        else if(pet.dead || pet.gone){ /* おばけ・帰還後：上記以外は操作不可 */ }
         else if(sel==='STATUS'){ inStatus=true; }
         else if(sel==='STORY'){ storyScrollY=H*S; showView('story'); }
       }
