@@ -2723,6 +2723,22 @@
 ....##.##....`)
   };
   const CARE_ORDER  = ['FEED','CLEAN','MED','PET','SCOLD','GAME'];
+  // いま押しても何も起きないお世話を返す。MENUではこれを薄い色で描いて、
+  //  押せないことが見て分かるようにする（実行側の条件と食い違わないよう、判定はここに集約）
+  function careDisabled(act){
+    if(!pet.name) return true;                             // 命名前はすべて不可
+    if(pet.dead || pet.gone || ufoEnding || departEnding) return true;   // おばけ・エンディング後
+    const asleep = effectiveAsleep();
+    switch(act){
+      case 'FEED':  return plateOnScreen();                // 皿が残っているあいだは出せない
+      case 'CLEAN': return !(pet.W > 0 || pet.plateAt || pet.plateSpoiled);   // 片づけるものが無い
+      case 'MED':   return asleep || pet.health !== 'SICK';// 就寝中と、病気でないとき
+      case 'PET':   return asleep;                         // 寝ているあいだは無反応
+      case 'SCOLD': return false;                          // 寝ていても起こせるので常に可
+      case 'GAME':  return asleep || pet.health === 'SICK' || pet.hunger <= 1;
+    }
+    return false;
+  }
   const CARE_LABELS = {FEED:'FEED',CLEAN:'CLEAN',MED:'MEDICINE',PET:'PRAISE',SCOLD:'SCOLD',GAME:'MINI GAME'};  // PET=褒める
   let careFlash = 0; // （旧・点滅用。現在未使用）
 
@@ -2806,14 +2822,22 @@
 
   // わがまま拒否（Stage2まで）。しつけDが低いほど起きやすい（基準20%）
   function isYoung(){ return pet.stage==='mid' || pet.stage==='larva'; }
+  // 大人になってもわがままは残るが、子どものときよりは減る。
+  //  おっとりなほど残りやすく、やんちゃなほど早く抜ける
+  function tantrumStageMul(){
+    if(isYoung()) return 1;
+    const t = pTrait();                                 // -1=おっとり … +1=やんちゃ
+    return Math.max(0, 0.35 - t*0.25);                  // おっとり0.60 ／ 標準0.35 ／ やんちゃ0.10
+  }
   function rollTantrum(type){
     if(type==='snack') return false;                    // おやつは絶対に拒否しない
-    if(!isYoung() || pet.tantrumAt) return false;
+    if(pet.tantrumAt) return false;
     let chance = Math.min(0.5, Math.max(0.05, 0.2 + (50 - pet.D) * 0.004));
     chance *= 1 + snackSeverity() * 0.8;                             // おやつ漬けだとわがままが出やすい
     // 甘やかしすぎると、つけあがってわがままが増える（甘やかしの唯一のペナルティ）
     const st = careStyle((pet.A||0) / Math.max(1, daysSince(pet.birth)));
     chance = Math.min(0.75, chance * (1 + st.spoil/100 * 0.6));
+    chance *= tantrumStageMul();                        // 大人は控えめに（性格で残り方が変わる）
     if(Math.random() < chance){
       pet.tantrumAt = Date.now(); pet.tantrumType = type;
       return true;
@@ -2889,7 +2913,12 @@
         // 掃除するものが無い時は無反応（退屈マークを出さない）
         break;
       case 'MED':
-        if(pet.health === 'SICK'){
+        // 寝ているあいだは何もしない。以前は寝たまま嫌がる仕草が出ていた
+        if(asleep) break;
+        // わがまま：くすりも飲まない。しかって聞かせるか、収まるのを待つ
+        //  （わがままは最長1時間で自然に解ける。病気の死亡は36時間なので詰みにはならない）
+        else if(pet.tantrumAt || rollTantrum('med')){ setReaction('refuse'); }
+        else if(pet.health === 'SICK'){
           pet.health = 'GOOD'; pet.sickAcc = 0; pet.sickCount++;    // 治療（回数は進化条件に使用）
           note('cured');
           addA(A_ADJ.med); markTouch();
@@ -3909,16 +3938,21 @@
         const gh = grid.length, gw = grid[0].length;   // アイコンごとに大きさが違うので枠の中央に置く
         const ox = cx0*S + Math.round((CELL_W*S - gw*HS)/2);
         const oy = cy0*S + Math.round((CELL_H*S - gh*HS)/2);
+        const off = careDisabled(CARE_ORDER[i]);       // 使えないものは薄く
         for(let y=0;y<gh;y++) for(let x=0;x<gw;x++){
           const v = grid[y][x]; if(!v) continue;
-          ctxN.fillStyle = (v===2?ON:DIM);
+          ctxN.fillStyle = off ? DIM : (v===2?ON:DIM);
           ctxN.fillRect(ox+x*HS, oy+y*HS, HS, HS);
         }
       }
       // 選択中アクション名ラベル
       ctxN.font=uiFont(6);
       ctxN.fillStyle=ON; ctxN.textAlign='center'; ctxN.textBaseline='top';
-      if(menuSel < 6) ctxN.fillText(T(CARE_ORDER[menuSel].toLowerCase()), (W*S)/2, 36*S);
+      if(menuSel < 6){
+        ctxN.fillStyle = careDisabled(CARE_ORDER[menuSel]) ? DIM : ON;
+        ctxN.fillText(T(CARE_ORDER[menuSel].toLowerCase()), (W*S)/2, 36*S);
+        ctxN.fillStyle = ON;
+      }
       for(let x=1;x<W-1;x++) dot(ctxN,x,40,DIM);
 
       // サブ項目（STATUS / DIARY / SETTINGS / STORY / MANUAL）。
