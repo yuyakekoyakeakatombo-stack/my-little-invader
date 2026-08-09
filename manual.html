@@ -82,6 +82,7 @@ td.k{ white-space:nowrap; font-weight:700; background:rgba(0,0,0,.045) }
       overflow-x:auto; white-space:pre }
 
 /* ── アイコン一覧 ── */
+.en{ font-size:11.5px; color:var(--ink2); letter-spacing:.03em; font-family:ui-monospace,monospace }
 .icons{ display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:12px; margin:14px 0 20px }
 .icard{ border:2px solid var(--rule); padding:12px; background:rgba(255,255,255,.36); text-align:center }
 .icard .box{ background:var(--lcd); border:2px solid #6a6f5c; padding:8px; display:flex;
@@ -242,9 +243,9 @@ footer{ margin-top:52px; border-top:3px solid var(--rule); padding-top:18px;
   <li><ruby>十字<rt>じゅうじ</rt></ruby>ボタンの <b><ruby>上<rt>うえ</rt></ruby></b>を おすと「????」が えらばれます</li>
   <li><b>A</b>を おすと <ruby>名前<rt>なまえ</rt></ruby>を つける<ruby>画面<rt>がめん</rt></ruby>に なります</li>
   <li><ruby>十字<rt>じゅうじ</rt></ruby>ボタンで <ruby>文字<rt>もじ</rt></ruby>を えらび、<b>A</b>で 1<ruby>文字<rt>もじ</rt></ruby>ずつ <ruby>入<rt>い</rt></ruby>れていきます</li>
-  <li><ruby>入<rt>い</rt></ruby>れおわったら <b>「けってい」</b>を えらんで <b>A</b></li>
+  <li><ruby>入<rt>い</rt></ruby>れおわったら <b>「けってい」</b>（<span class="en">DONE</span>）を えらんで <b>A</b></li>
 </ol>
-<p><ruby>名前<rt>なまえ</rt></ruby>は <b>アルファベットと <ruby>数字<rt>すうじ</rt></ruby>で 1〜7<ruby>文字<rt>もじ</rt></ruby></b>です。まちがえたら「けす」で <ruby>消<rt>け</rt></ruby>せます。</p>
+<p><ruby>名前<rt>なまえ</rt></ruby>は <b>アルファベットと <ruby>数字<rt>すうじ</rt></ruby>で 1〜7<ruby>文字<rt>もじ</rt></ruby></b>です。まちがえたら「けす」（<span class="en">DELETE</span>）で <ruby>消<rt>け</rt></ruby>せます。</p>
 
 <div class="note warn">
   <span class="t">ごちゅうい</span>
@@ -314,12 +315,12 @@ STATUS<ruby>画面<rt>がめん</rt></ruby>（→ 7<ruby>章<rt>しょう</rt></
 <b><ruby>病気<rt>びょうき</rt></ruby>の あいだは ミニゲームで あそべません。</b>まず なおしてあげましょう。</p>
 
 <h2 id="s7"><span class="no">7</span>メニューの <ruby>中身<rt>なかみ</rt></ruby></h2>
-<p>6つの アイコンの <ruby>下<rt>した</rt></ruby>に、いくつかの こうもくが ならんでいます。</p>
+<p>6つの アイコンの <ruby>下<rt>した</rt></ruby>に、いくつかの こうもくが ならんでいます。<br><span class="en">（<ruby>下<rt>した</rt></ruby>の<ruby>段<rt>だん</rt></ruby>は <ruby>日本語<rt>にほんご</rt></ruby> / ENGLISH。SETTINGS の「げんご」で <ruby>切<rt>き</rt></ruby>りかわります）</span></p>
 <table>
   <tr><th>こうもく</th><th>ないよう</th></tr>
-  <tr><td class="k">STATUS</td><td>いまの ようすを <ruby>見<rt>み</rt></ruby>ます。おなか／きげん／なかよし／けんこう／せいちょう／タイプ。</td></tr>
-  <tr><td class="k">SETTINGS</td><td>ことば・お<ruby>天気<rt>てんき</rt></ruby>・<ruby>音<rt>おと</rt></ruby>・<ruby>本体<rt>ほんたい</rt></ruby>の<ruby>色<rt>いろ</rt></ruby>・さいしょから やりなおす。</td></tr>
-  <tr><td class="k">STORY</td><td>この<ruby>子<rt>こ</rt></ruby>が やってきた いきさつを <ruby>読<rt>よ</rt></ruby>めます。</td></tr>
+  <tr><td class="k">ステータス<br><span class="en">STATUS</span></td><td>いまの ようすを <ruby>見<rt>み</rt></ruby>ます。<br>おなか／きげん／なかよし／けんこう／せいちょう／タイプ<br><span class="en">HUNGRY / MOOD / BOND / HEALTH / STAGE / TYPE</span></td></tr>
+  <tr><td class="k">せってい<br><span class="en">SETTINGS</span></td><td>ことば・お<ruby>天気<rt>てんき</rt></ruby>・<ruby>音<rt>おと</rt></ruby>・<ruby>本体<rt>ほんたい</rt></ruby>の<ruby>色<rt>いろ</rt></ruby>・さいしょから やりなおす。</td></tr>
+  <tr><td class="k">ストーリー<br><span class="en">STORY</span></td><td>この<ruby>子<rt>こ</rt></ruby>が やってきた いきさつを <ruby>読<rt>よ</rt></ruby>めます。</td></tr>
 </table>
 <p class="lead" style="margin-top:-6px">そだてていくうちに、こうもくが <b>ひとつ ふえる</b>ことが あります。
 なにが <ruby>出<rt>で</rt></ruby>てくるかは、そのときの おたのしみに しておいてください。</p>
@@ -327,9 +328,9 @@ STATUS<ruby>画面<rt>がめん</rt></ruby>（→ 7<ruby>章<rt>しょう</rt></
 <h3>お<ruby>天気<rt>てんき</rt></ruby>の せってい</h3>
 <p>SETTINGS →「てんき」で、3つから えらべます。</p>
 <table>
-  <tr><td class="k">オフ</td><td>お<ruby>天気<rt>てんき</rt></ruby>を つかいません</td></tr>
-  <tr><td class="k">とし</td><td><ruby>世界<rt>せかい</rt></ruby>の <ruby>主要<rt>しゅよう</rt></ruby>12<ruby>都市<rt>とし</rt></ruby>から えらびます。<b><ruby>位置情報<rt>いちじょうほう</rt></ruby>は つかいません</b></td></tr>
-  <tr><td class="k">げんざいち</td><td>いまいる <ruby>場所<rt>ばしょ</rt></ruby>の お<ruby>天気<rt>てんき</rt></ruby>を つかいます</td></tr>
+  <tr><td class="k">オフ<br><span class="en">OFF</span></td><td>お<ruby>天気<rt>てんき</rt></ruby>を つかいません</td></tr>
+  <tr><td class="k">とし<br><span class="en">トウキョウ / TOKYO …</span></td><td><ruby>世界<rt>せかい</rt></ruby>の <ruby>主要<rt>しゅよう</rt></ruby>12<ruby>都市<rt>とし</rt></ruby>から えらびます（リストには <ruby>都市<rt>とし</rt></ruby>の<ruby>名前<rt>なまえ</rt></ruby>が そのまま ならびます）。<b><ruby>位置情報<rt>いちじょうほう</rt></ruby>は つかいません</b></td></tr>
+  <tr><td class="k">げんざいち<br><span class="en">HERE</span></td><td>いまいる <ruby>場所<rt>ばしょ</rt></ruby>の お<ruby>天気<rt>てんき</rt></ruby>を つかいます</td></tr>
 </table>
 <div class="note">
   <span class="t"><ruby>位置情報<rt>いちじょうほう</rt></ruby>に ついて</span>
