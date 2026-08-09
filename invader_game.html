@@ -1629,15 +1629,17 @@
   let diarySelActive = false;   // 育成画面で日記マークを選択中（Aで日記を開く）
   // 日記マーク（ノート）。ヘッダーの文字（6px）と並ぶので、1pxきざみの細かいドットで小さく描く。
   //  論理ドット（4px）で描くと文字の3倍の高さになって浮くため、ここだけ文字と同じ細かさにしてある
+  // ヘッダーの文字（7px）と釣り合う大きさ。1pxきざみで置くので実寸は 8×9px
   const DIARY_ICON = [
-    [1,1,1,1,1,1,1],
-    [1,1,0,0,0,0,1],
-    [1,1,0,1,1,0,1],
-    [1,1,0,0,0,0,1],
-    [1,1,0,1,1,0,1],
-    [1,1,0,0,0,0,1],
-    [1,1,0,0,0,0,1],
-    [1,1,1,1,1,1,1],
+    [1,1,1,1,1,1,1,1],
+    [1,1,0,0,0,0,0,1],
+    [1,1,0,1,1,1,0,1],
+    [1,1,0,0,0,0,0,1],
+    [1,1,0,1,1,1,0,1],
+    [1,1,0,0,0,0,0,1],
+    [1,1,0,1,1,1,0,1],
+    [1,1,0,0,0,0,0,1],
+    [1,1,1,1,1,1,1,1],
   ];
   // 1キャンバスpxきざみで絵を置く（座標もpx）。文字と並べる小さなアイコン用
   function stampPx(ctx, g, px0, py0, col){
@@ -2969,9 +2971,9 @@
   // ── おばけ画面（餓死・病死後）：漂うだけ。SETTINGSとリセットのみ操作可 ──
   function drawGhost(BG, DM, NK){
     ctxM.fillStyle = BG; ctxM.fillRect(0,0,W*S,H*S);
-    ctxM.font='6px "Press Start 2P"'; ctxM.textBaseline='top'; ctxM.fillStyle=NK;
-    ctxM.font=nameFont(6, pet.name); ctxM.textAlign='left';  ctxM.fillText(pet.name||'------', 2*S, 2*S);
-    ctxM.font='6px "Press Start 2P"';   // DAYカウントは常にピクセル字体
+    ctxM.font='7px "Press Start 2P"'; ctxM.textBaseline='top'; ctxM.fillStyle=NK;
+    ctxM.font=nameFont(7, pet.name); ctxM.textAlign='left';  ctxM.fillText(pet.name||'------', 2*S, 2*S);
+    ctxM.font='7px "Press Start 2P"';   // DAYカウントは常にピクセル字体
     ctxM.textAlign='right'; ctxM.fillText(dayLabel(), (W-2)*S, 2*S);
     for(let x=0;x<W;x++) dot(ctxM,x,HEADER_Y,DM);
     for(let x=0;x<W;x++) dot(ctxM,x,MAIN_GY,NK);
@@ -3080,14 +3082,14 @@
   //  日記マークは残るので、ヘッダーから最後のことばを読み返せる
   function drawGone(BG, DM, NK){
     ctxM.fillStyle = BG; ctxM.fillRect(0,0,W*S,H*S);
-    ctxM.font='6px "Press Start 2P"'; ctxM.textBaseline='top'; ctxM.fillStyle=NK;
-    ctxM.font=nameFont(6, pet.name); ctxM.textAlign='left';  ctxM.fillText(pet.name||'------', 2*S, 2*S);
-    ctxM.font='6px "Press Start 2P"';
+    ctxM.font='7px "Press Start 2P"'; ctxM.textBaseline='top'; ctxM.fillStyle=NK;
+    ctxM.font=nameFont(7, pet.name); ctxM.textAlign='left';  ctxM.fillText(pet.name||'------', 2*S, 2*S);
+    ctxM.font='7px "Press Start 2P"';
     ctxM.textAlign='right'; ctxM.fillText(dayLabel(), (W-2)*S, 2*S);
     // 未読の日記（別れのことば）があるあいだは、ヘッダーのノートを点滅させる
     if(diaryUnread > 0){
-      const IX = 90, IY = 8;
-      if(diarySelActive){ ctxM.fillStyle = DM; ctxM.fillRect(IX-3, IY-3, 13, 14); }
+      const IX = 100, IY = 7;
+      if(diarySelActive){ ctxM.fillStyle = DM; ctxM.fillRect(IX-2, IY-2, 12, 13); }
       if(diarySelActive || fM%16 < 10) stampPx(ctxM, DIARY_ICON, IX, IY, NK);
     } else if(diarySelActive) diarySelActive = false;
     for(let x=0;x<W;x++) dot(ctxM,x,HEADER_Y,DM);
@@ -3215,27 +3217,27 @@
     ctxM.fillStyle = BG; ctxM.fillRect(0,0,W*S,H*S);
 
     // 名前と日数（未命名時は NAME:???? の????を黒/薄緑で点滅。十字上で選択→Aで命名画面へ）
-    ctxM.font='6px "Press Start 2P"';
+    ctxM.font='7px "Press Start 2P"';
     ctxM.textBaseline='top'; ctxM.textAlign='left';
     if(pet.name){
-      ctxM.font=nameFont(6, pet.name); ctxM.fillStyle=NK; ctxM.fillText(pet.name, 2*S, 2*S);
+      ctxM.font=nameFont(7, pet.name); ctxM.fillStyle=NK; ctxM.fillText(pet.name, 2*S, 2*S);
     } else if(nameSelActive){
       // 選択中：黒塗り帯に白抜き（反転）で明示
-      for(let dx=1;dx<17;dx++) for(let dy=1;dy<5;dy++) dot(ctxM,dx,dy,NK);
+      for(let dx=1;dx<19;dx++) for(let dy=1;dy<5;dy++) dot(ctxM,dx,dy,NK);
       ctxM.fillStyle=BG; ctxM.fillText('NAME:????', 2*S, 2*S);
     } else {
       ctxM.fillStyle=NK; ctxM.fillText('NAME:', 2*S, 2*S);
       ctxM.fillStyle=(fM%10<5) ? NK : DM;
-      ctxM.fillText('????', 2*S + 30, 2*S);   // 'NAME:'=5文字×6px
+      ctxM.fillText('????', 2*S + 35, 2*S);   // 'NAME:'=5文字×7px
     }
-    ctxM.font='6px "Press Start 2P"';   // DAYカウントは常にピクセル字体（名前がかなでも影響させない）
+    ctxM.font='7px "Press Start 2P"';   // DAYカウントは常にピクセル字体（名前がかなでも影響させない）
     ctxM.fillStyle=NK;
     ctxM.textAlign='right'; ctxM.fillText(dayLabel(),  (W-2)*S, 2*S);
     // 名前と日数のあいだに日記マーク。未読のあいだは点滅する（十字上で選択→Aで開く）
     if(diaryUnread > 0){                          // 読み終わると消える（読み返すのは MENU→DIARY）
-      const IX = 90, IY = 8;                      // px。名前と日数のあいだ、文字の高さに揃える
+      const IX = 100, IY = 7;                     // px。名前と日数のあいだ、文字の高さに揃える
       if(diarySelActive){                         // 選択中は薄色の枠で囲む
-        ctxM.fillStyle = DM; ctxM.fillRect(IX-3, IY-3, 13, 14);
+        ctxM.fillStyle = DM; ctxM.fillRect(IX-2, IY-2, 12, 13);
       }
       if(diarySelActive || fM%16 < 10) stampPx(ctxM, DIARY_ICON, IX, IY, NK);
     } else if(diarySelActive) diarySelActive = false;
@@ -3733,11 +3735,11 @@
   function tickMenu(){
     ctxN.fillStyle=OFF; ctxN.fillRect(0,0,W*S,H*S);
     // 名前と日数
-    ctxN.font='6px "Press Start 2P"';
+    ctxN.font='7px "Press Start 2P"';
     ctxN.textBaseline='top'; ctxN.fillStyle=ON;
-    ctxN.font=nameFont(6, pet.name); ctxN.textAlign='left';  ctxN.fillText(pet.name||'????', 2*S, 2*S); ctxN.font='6px "Press Start 2P"';
+    ctxN.font=nameFont(7, pet.name); ctxN.textAlign='left';  ctxN.fillText(pet.name||'????', 2*S, 2*S); ctxN.font='7px "Press Start 2P"';
     ctxN.textAlign='right'; ctxN.fillText(dayLabel(),  (W-2)*S, 2*S);
-    for(let x=0;x<W;x++) dot(ctxN,x,9,DIM);
+    for(let x=0;x<W;x++) dot(ctxN,x,HEADER_Y,DIM);   // 育成画面と同じ位置（以前は1ドット下だった）
 
     if (inSettings) {
       // ── SETTINGS サブ画面 ──
