@@ -109,10 +109,16 @@ td.k{ white-space:nowrap; font-weight:700; background:rgba(0,0,0,.045) }
 .chars .mystery{ font-size:26px; color:#5b6b47; padding-bottom:20px; letter-spacing:.1em }
 
 /* ── 感情マーク ── */
-.moods{ display:grid; grid-template-columns:repeat(auto-fill,minmax(128px,1fr)); gap:9px; margin:12px 0 18px }
-.mood{ display:flex; align-items:center; gap:9px; border:1px solid var(--rule); padding:7px 9px;
-       background:rgba(255,255,255,.34); font-size:12.5px }
+/* 8つあるので、2列（4段）か4列（2段）。どちらでも端数が出ず、最後の段が欠けない */
+.moods{ display:grid; grid-template-columns:repeat(2,1fr); gap:8px; margin:12px 0 18px }
+.mood{ display:flex; align-items:center; gap:7px; border:1px solid var(--rule); padding:7px 6px;
+       background:rgba(255,255,255,.34); font-size:11.5px; line-height:1.9 }
 .mood .m{ background:var(--lcd); border:1px solid #6a6f5c; padding:4px 5px; display:flex; flex:none }
+.mood .m svg{ max-width:100%; height:auto }
+@media (min-width:520px){
+  .moods{ grid-template-columns:repeat(4,1fr); gap:10px }
+  .mood{ font-size:12.5px; padding:8px 10px }
+}
 
 /* ── QR ── */
 .access{ border:3px solid var(--rule); padding:18px; margin:16px 0; background:rgba(255,255,255,.45);
