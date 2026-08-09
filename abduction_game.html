@@ -522,15 +522,17 @@
     if(state===STATE.HELP){
       ct.fillStyle=OFF; ct.fillRect(0,0,W*S,H*S);
       // 本文は視認性優先で 5px → 7px。行間も広げて再レイアウト
-      txtC('HOW TO PLAY',3,7,ON);
-      hl(12,ON);
-      txt('MOVE',2,16,7,ON); txt('< >',30,16,7,ON);
-      txt('JUMP',2,25,7,ON); txt('A',30,25,7,ON);
-      hl(34,ON);
-      txt('BEAM = CAUGHT',2,38,7,ON);
-      txt('JUMP OVER UFO',2,47,7,ON);
-      txt('SURVIVE LONG!',2,56,7,ON);
-      if(Math.floor(Date.now()/450)%2===0) txtC('A/B : BACK',61,6,ON);
+      txtC('HOW TO PLAY',2,7,ON);
+      hl(10,ON);
+      txt('MOVE',2,13,7,ON); txt('< >',30,13,7,ON);
+      txt('JUMP',2,21,7,ON); txt('A',30,21,7,ON);
+      hl(29,ON);
+      txt('SURVIVE LONG!',2,32,7,ON);
+      txt('BEAM = CAUGHT',2,41,6,ON);
+      // 体当たりは即終了ではなく減点。「当たっても平気」と誤解されないよう点数を出す
+      txt('UFO HITS YOU',2,48,6,ON);  txt('-30',W-11,48,6,ON);
+      txt('JUMP OVER IT',2,54,6,DIM);
+      if(Math.floor(Date.now()/450)%2===0) txtC('A/B : BACK',61,5,ON);
       return;
     }
     if(state===STATE.PLAY){
@@ -624,14 +626,17 @@
   }
   press(document.getElementById('ba'), onADown);
   release(document.getElementById('ba'), onAUp);
-  press(document.getElementById('bb'), ()=>{ anim(document.getElementById('bb'));
+  function onBPress(){
+    anim(document.getElementById('bb'));
     if(state===STATE.HELP) state=STATE.TITLE;
     else if(state===STATE.TITLE) exitToMenu();     // タイトルでBを押したら選択画面へ戻る
-  });
+  }
+  press(document.getElementById('bb'), onBPress);
   // ミニゲームを閉じて、本体のゲーム選択画面へ戻る
   function exitToMenu(){
     beep(700,0.06);
-    if(window.parent && window.parent !== window) window.parent.postMessage({myvader:"exit"}, "*");
+    // 宛先は自分と同じオリジン（本体）に限定する
+    if(window.parent && window.parent !== window) window.parent.postMessage({myvader:"exit"}, window.location.origin);
     else window.location.href='invader_game.html';
   }
   press(document.getElementById('bmenu'), ()=>{
@@ -645,6 +650,8 @@
     if(e.key==='ArrowRight') keys.right=true;
     if((e.key==='ArrowUp'||e.key==='ArrowDown') && state===STATE.TITLE){ e.preventDefault(); menuMove(); return; }
     if(e.key===' '||e.key==='ArrowUp'||e.key.toLowerCase()==='a'){ e.preventDefault(); if(state===STATE.PLAY) jump(); }
+    // Bボタンもキーで押せるようにする（画面のBだけ効かないのは分かりにくい）
+    if((e.key.toLowerCase()==='b'||e.key==='Escape') && !e.repeat){ e.preventDefault(); onBPress(); }
   });
   document.addEventListener('keyup',e=>{
     if(e.key==='ArrowLeft') keys.left=false;

@@ -696,14 +696,17 @@
     if(state===STATE.HELP){
       ct.fillStyle=OFF; ct.fillRect(0,0,W*S,H*S);
       // 本文は視認性優先で 5px → 7px。行間も広げて再レイアウト
-      txtC('HOW TO PLAY',4,7,ON);
-      hl(14,ON);
-      txt('MOVE',2,18,7,ON); txt('< > ^ v',22,18,7,ON);
-      hl(28,ON);
-      txt('DODGE STARS',2,32,7,ON);
-      txt('UFO BOSS 30s',2,41,7,ON);
-      txt('5 MISS = OVER',2,50,7,ON);
-      if(Math.floor(Date.now()/450)%2===0) txtC('A/B : BACK',60,6,ON);
+      txtC('HOW TO PLAY',2,7,ON);
+      hl(10,ON);
+      txt('MOVE',2,13,7,ON); txt('< > ^ v',22,13,7,ON);
+      hl(21,ON);
+      // 障害物は星だけでなく衛星やロケットも流れてくる。「星をよける」だけだと実物と食い違う
+      txt('DODGE ALL',2,24,7,ON);
+      txt('STARS SATELLITES',2,32,5,DIM);
+      txt('ROCKETS',2,38,5,DIM);
+      txt('UFO BOSS 30s',2,45,6,ON);
+      txt('5 MISS = OVER',2,52,6,ON);
+      if(Math.floor(Date.now()/450)%2===0) txtC('A/B : BACK',60,5,ON);
       return;
     }
     if(state===STATE.PLAY){
@@ -801,13 +804,16 @@
   // ミニゲームを閉じて、本体のゲーム選択画面へ戻る
   function exitToMenu(){
     beep(700,0.06);
-    if(window.parent && window.parent !== window) window.parent.postMessage({myvader:"exit"}, "*");
+    // 宛先は自分と同じオリジン（本体）に限定する
+    if(window.parent && window.parent !== window) window.parent.postMessage({myvader:"exit"}, window.location.origin);
     else window.location.href='invader_game.html';
   }
-  press(document.getElementById('bb'), ()=>{ anim(document.getElementById('bb'));
+  function onBPress(){
+    anim(document.getElementById('bb'));
     if(state===STATE.HELP) state=STATE.TITLE;
     else if(state===STATE.TITLE) exitToMenu();     // タイトルでBを押したら選択画面へ戻る
-  });
+  }
+  press(document.getElementById('bb'), onBPress);
   press(document.getElementById('bmenu'), ()=>{
     const m=document.getElementById('bmenu'); m.style.transform='scale(.93)'; setTimeout(()=>m.style.transform='',100);
     exitToMenu();   // iframe内なら親に通知して閉じる（ページ遷移しない）
@@ -818,6 +824,8 @@
     if((e.key==='ArrowUp'||e.key==='ArrowDown') && state===STATE.TITLE){ e.preventDefault(); menuMove(); return; }
     if(e.key==='ArrowUp')keys.up=true; if(e.key==='ArrowDown')keys.down=true;
     if(e.key===' '||e.key.toLowerCase()==='a'){ e.preventDefault(); }
+    // Bボタンもキーで押せるようにする（画面のBだけ効かないのは分かりにくい）
+    if((e.key.toLowerCase()==='b'||e.key==='Escape') && !e.repeat){ e.preventDefault(); onBPress(); }
   });
   document.addEventListener('keyup',e=>{
     if(e.key==='ArrowLeft')keys.left=false; if(e.key==='ArrowRight')keys.right=false;

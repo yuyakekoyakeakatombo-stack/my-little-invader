@@ -345,7 +345,7 @@
       on:'ON', off:'OFF', sure:'SURE?', yesno:'A:YES  B:NO',
       locok:'A:OK  B:CANCEL',
       hungry:'HUNGRY', mood:'MOOD', health:'HEALTH', stage:'STAGE', ptype:'TYPE',
-      good:'GOOD', sick:'SICK', weak:'CRITICAL', normal:'NORMAL', dead:'DEAD', friend:'BOND',
+      good:'GOOD', sick:'SICK', weak:'CRITICAL', normal:'NORMAL', starving:'STARVING', dead:'DEAD', friend:'BOND',
       newborn:'NEWBORN', baby:'BABY', child:'CHILD', adult:'ADULT', finalst:'FINAL',
       gray:'GRAY', martian:'MARTIAN', alien:'ALIEN',
       nameq:'NAME?', done:'DONE', del:'DELETE', langval:'ENGLISH',
@@ -359,7 +359,7 @@
       on:'オン', off:'オフ', sure:'ほんとうに？', yesno:'A:はい B:いいえ',
       locok:'A:OK  B:キャンセル',
       hungry:'おなか', mood:'きげん', health:'けんこう', stage:'せいちょう', ptype:'タイプ',
-      good:'げんき', sick:'びょうき', weak:'ひんし', normal:'ふつう', dead:'おばけ', friend:'なかよし',
+      good:'げんき', sick:'びょうき', weak:'ひんし', normal:'ふつう', starving:'はらぺこ', dead:'おばけ', friend:'なかよし',
       newborn:'うまれたて', baby:'あかちゃん', child:'こども', adult:'おとな', finalst:'さいしゅう',
       gray:'グレイ', martian:'マーシャン', alien:'エイリアン',
       nameq:'なまえは？', done:'けってい', del:'けす', langval:'にほんご',
@@ -647,17 +647,12 @@
     localStorage.setItem('myvader_lineage', gameLineage());
   } catch(e){} }
 
-  // ミニゲームへの遷移中はステータス進行を一時停止（戻ってきた時に差し引く）
-  let returnedFromGame = false;   // ミニゲームからの復帰時はオープニングを飛ばして育成画面へ
-  try {
-    const pz = localStorage.getItem('myvader_pause');
-    if(pz){
-      localStorage.removeItem('myvader_pause');
-      returnedFromGame = true;
-      const d = Date.now() - Number(pz);
-      if(pet.lastTick && d > 0) pet.lastTick = Math.min(Date.now(), pet.lastTick + d);
-    }
-  } catch(e){}
+  // ミニゲームからの復帰時はオープニングを飛ばして育成画面へ。
+  //  ミニゲームは同一ページ内のiframeで開くので、ページ遷移をまたぐ引き継ぎ（旧 myvader_pause）は不要。
+  //  プレイ中の時間の巻き戻しは closeMiniGame() が lastTick を直接更新して行う
+  let returnedFromGame = false;
+  // 旧バージョンが書き残したキーが端末に残っていれば片づける
+  try { localStorage.removeItem('myvader_pause'); } catch(e){}
 
   // UFO帰還エンディング：トリガー確定後、次回起動時に発火（企画書§8 E3）
   let ufoEnding = !!(pet.ufoFlag && !pet.dead), ufoT = 0;
@@ -737,7 +732,8 @@
   const PLAY_HUNGER_MIN = 40;        // 1回遊ぶと進む空腹（分）
   const PLAY_STREAK_MS  = 30*60000;  // 前回からこの時間内に遊んだら「立て続け」
   const PLAY_STREAK_MAX = 4;         // 連続の重みはここで頭打ち（最大2.6倍）
-  const CATCHUP_CAP_MS = 14*86400000;  // 起動時の経過計算は最大14日分
+  const CATCHUP_CAP_DAYS = 14;
+  const CATCHUP_CAP_MS = CATCHUP_CAP_DAYS*86400000;  // 起動時の経過計算は最大14日分
 
   const A_SPOIL_SCALE   = 30;     // 1日あたりのAがこの値で「甘やかし度100」
   const A_NEGLECT_SCALE = 15;     // 1日あたりの−Aがこの値で「放置度100」
@@ -975,7 +971,14 @@
       gainB(2);
       const h = new Date(r.at).getHours();
       if(h >= 22 || h < 4){ pet.nightPlays++; pet.nightPlayToday = true; addP(P_ADJ.nightPlay); }   // 夜更かしは生活リズムの話なのでPに効く
+      // 入れ子のオブジェクトは defaultPet() とマージされず丸ごとセーブ側の値になるので、
+      //  キーが増える前の古いセーブだと undefined のまま Math.max に入って NaN になる。ここで埋める
       if(!pet.plays) pet.plays = {sw:0,ss:0,ab:0};
+      if(!pet.best)  pet.best  = {sw:0,ss:0,ab:0};
+      ['sw','ss','ab'].forEach(k=>{
+        if(!Number.isFinite(pet.best[k]))  pet.best[k]  = 0;
+        if(!Number.isFinite(pet.plays[k])) pet.plays[k] = 0;
+      });
       // スコアはPに影響させない（遊ぶゲームの種類＝系統 と 性格 を独立させるため）
       if(r.game==='spacewalk'){    note('playSw'); pet.best.sw = Math.max(pet.best.sw, r.score); pet.plays.sw++; }
       if(r.game==='shootingstar'){ note('playSs'); pet.best.ss = Math.max(pet.best.ss, r.score); pet.plays.ss++; }
@@ -1050,7 +1053,11 @@
     showView('main');
   }
   window.addEventListener('message', function(e){
-    if(e && e.data && e.data.myvader === 'exit') closeMiniGame();
+    // 送り主を確かめる。ミニゲームは自分が開いた同一オリジンのiframeなので、
+    //  それ以外から来た「閉じろ」は聞かない
+    if(e.origin !== window.location.origin) return;
+    if(!miniFrame || e.source !== miniFrame.contentWindow) return;
+    if(e.data && e.data.myvader === 'exit') closeMiniGame();
   });
   // 経過日数：進化タイマー(EP/ageMin)とは別カウント。カレンダーの日付境界(0:00)で+1
   function startOfDay(t){ const d = new Date(t); d.setHours(0,0,0,0); return d.getTime(); }
@@ -1393,6 +1400,37 @@
     return Math.max(0, Math.min(100, v));
   }
 
+  // ── 1日ぶんの締め ──
+  //  d=その日の日記材料 / touched=ふれあいがあったか / nightPlay=夜更かしして遊んだか。
+  //  アプリを閉じたままだった日にも同じ処理を回すため、独立した関数にしてある
+  function closeOneDay(d, touched, nightPlay){
+    // ふれあい（ごはん以外の世話）が無い日が続くと、少しずつ心が離れる
+    if(touched){ pet.noTouchDays = 0; }
+    else { pet.noTouchDays = (pet.noTouchDays||0) + 1; addA(A_ADJ.noTouchDay); addP(P_ADJ.noTouchDay); pet.B = Math.max(0, pet.B - 5); }
+    pet.lowBDays = (pet.B < 20) ? pet.lowBDays + 1 : 0;
+    // 起こさず・夜更かしもさせず・ちゃんと構った日は、生活リズムが整っておっとり寄りに戻る。
+    //  これが無いとPは上がる一方になるので、性格の振り子はここで戻す
+    if(touched && !nightPlay && !d.woken) addP(P_ADJ.calmDay);
+    // しつけ度の移動平均。系統判定の直前に叱りまくって操作されないよう、こちらを使う
+    pet.Dm = Math.round(((pet.Dm != null) ? pet.Dm : (pet.D||50)) * (1 - D_SMOOTH) + (pet.D||50) * D_SMOOTH);
+    // ごはん／おやつの回数を減衰させ、最近の与え方が判定に効くようにする
+    pet.mealCount  = (pet.mealCount||0)  * SNACK_DECAY;
+    pet.snackCount = (pet.snackCount||0) * SNACK_DECAY;
+    pet.overAcc    = (pet.overAcc||0)    * SNACK_DECAY;   // 食べすぎも日がたてば戻る
+    checkReturn();                                        // 帰還の兆候（疎遠期）と確定を判定
+    // C（ケア充実度）：その日の丁寧さを採点して移動平均へ
+    pet.C = Math.round((pet.C||50) * (1 - C_SMOOTH) + dailyCareScore(d) * C_SMOOTH);
+  }
+  // 'YYYY-M-D' 形式の日付キーどうしの日数差。壊れた値なら1日として扱う
+  function keyToTime(k){
+    const p = String(k||'').split('-').map(Number);
+    return (p.length===3 && p.every(n=>Number.isFinite(n))) ? new Date(p[0], p[1]-1, p[2]).getTime() : 0;
+  }
+  function daysBetweenKeys(from, to){
+    const a = keyToTime(from), b = keyToTime(to);
+    return (a && b) ? Math.round((b - a) / DAY_MS) : 1;
+  }
+
 
 
   // ── 睡眠スケジュール（企画書§4：段階/系統別。毎日±ランダムでばらつく）──
@@ -1407,9 +1445,12 @@
   // 段階/系統別の睡眠設定：bed=就寝時,wake=起床時（inv=夜更かしで24=0時）,jit=±分ゆらぎ,nap種別
   function sleepConfig(){
     const st = pet.stage;
-    // 性格で就寝・起床を前後させる（やんちゃ＝遅寝早起きで睡眠が短い）
+    // 性格で就寝・起床を前後させる（やんちゃ＝遅寝早起きで睡眠が短い）。
+    //  Math.round は負の .5 を 0 方向へ丸める（round(-1.5) = -1）ため、そのまま使うと
+    //  やんちゃだけ2時間遅寝・おっとりは1時間早寝という非対称になる。絶対値で丸めて左右を揃える
+    const rnd = v => Math.sign(v) * Math.round(Math.abs(v));
     const shift = c => { const t = pTrait();
-      return {bed: c.bed + Math.round(t*1.5), wake: c.wake - Math.round(t), jit: c.jit, nap: c.nap}; };
+      return {bed: c.bed + rnd(t*1.5), wake: c.wake - rnd(t), jit: c.jit, nap: c.nap}; };
     if(st==='egg' || st==='mid') return {bed:19, wake:8, jit:45, nap:'baby'};   // 赤ちゃん：ほぼ寝ている
     if(st==='larva')             return {bed:20, wake:8, jit:40, nap:'young'};  // 幼体：夜＋昼寝（幅広）
     const L = pet.lineage;
@@ -1573,27 +1614,27 @@
     }
 
     // ── 日次処理：日付が変わった時に1回だけ ──
+    //  アプリを閉じていた日数ぶん、その回数だけ締める。
+    //  以前はここが追いつきループの外にあり、何日空けても1日ぶんしか進まなかった。
+    //  そのため「毎日開く人」と「とびとびに開く人」で、心が離れる速さもCの動きも変わってしまっていた
     const tk = todayKey();
     if(pet.calDay !== tk){
       let nextMat = {};   // 翌日に持ち込む材料（寝る前に書いたあとに起きたこと）
       if(pet.calDay){
-        // ふれあい（ごはん以外の世話）が無い日が続くと、少しずつ心が離れる
-        if(pet.touchedToday){ pet.noTouchDays = 0; }
-        else { pet.noTouchDays = (pet.noTouchDays||0) + 1; addA(A_ADJ.noTouchDay); addP(P_ADJ.noTouchDay); pet.B = Math.max(0, pet.B - 5); }
-        pet.lowBDays = (pet.B < 20) ? pet.lowBDays + 1 : 0;
-        // 起こさず・夜更かしもさせず・ちゃんと構った日は、生活リズムが整っておっとり寄りに戻る。
-        //  これが無いとPは上がる一方になるので、性格の振り子はここで戻す
-        if(pet.touchedToday && !pet.nightPlayToday && !(pet.diary||{}).woken) addP(P_ADJ.calmDay);
-        // しつけ度の移動平均。系統判定の直前に叱りまくって操作されないよう、こちらを使う
-        pet.Dm = Math.round(((pet.Dm != null) ? pet.Dm : (pet.D||50)) * (1 - D_SMOOTH) + (pet.D||50) * D_SMOOTH);
-        // ごはん／おやつの回数を減衰させ、最近の与え方が判定に効くようにする
-        pet.mealCount  = (pet.mealCount||0)  * SNACK_DECAY;
-        pet.snackCount = (pet.snackCount||0) * SNACK_DECAY;
-        pet.overAcc    = (pet.overAcc||0)    * SNACK_DECAY;   // 食べすぎも日がたてば戻る
-        checkReturn();                                  // 帰還の兆候（疎遠期）と確定を判定
+        const d = diaryFill(pet.diary || {});
+        // 1日目＝最後に遊んだ日。2日目以降＝アプリを一度も開かなかった日として締める。
+        //  空けた日のあいだ何が起きていたかは、追いつきループが note() で
+        //  pet.diary に積んでいる（ひもじかった・汚れていた・病気になった）ので、それを使う
+        const idle = {};
+        ['hungry','dirty','sick'].forEach(k=>{ if(d[k]) idle[k] = d[k]; });
+        const skipped = Math.min(CATCHUP_CAP_DAYS, Math.max(1, daysBetweenKeys(pet.calDay, tk)));
+        for(let i=0;i<skipped;i++){
+          if(pet.dead || pet.gone) break;               // 途中で亡くなった／連れて行かれたらそこで止める
+          const first = (i === 0);
+          closeOneDay(first ? d : idle, first && !!pet.touchedToday, first && !!pet.nightPlayToday);
+        }
 
         // ── 日記：寝る前に書けなかったぶんは持ち越して、翌日「きのうのこと」として書く ──
-        const d = diaryFill(pet.diary || {});
         //  「書かない日がある」性格はここでも同じように効かせる（夜に開いていたかで差が出ないように）
         if(diaryWriting() && pet.diaryDay !== pet.calDay && !pet.diaryDue
            && Math.random() >= diaryStyle().skip){
@@ -1605,9 +1646,6 @@
           for(const k in d){ const rest = (d[k]||0) - (pet.diaryMark[k]||0); if(rest > 0) nextMat[k] = rest; }
           pet.diaryMark = null;
         }
-
-        // ── C（ケア充実度）：その日の丁寧さを採点して移動平均へ ──
-        pet.C = Math.round((pet.C||50) * (1 - C_SMOOTH) + dailyCareScore(d) * C_SMOOTH);
       }
       pet.diary = nextMat;                              // 材料は日ごとにリセット（書いたあとのぶんだけ引き継ぐ）
       pet.calDay = tk;
@@ -2751,7 +2789,7 @@
     switch(act){
       case 'FEED':  return plateOnScreen();                // 皿が残っているあいだは出せない
       case 'CLEAN': return !(pet.W > 0 || pet.plateAt || pet.plateSpoiled);   // 片づけるものが無い
-      case 'MED':   return asleep || pet.health !== 'SICK';// 就寝中と、病気でないとき
+      case 'MED':   return asleep;                         // 就寝中だけ。健康な子に飲ませて嫌がられるのは有効な操作
       case 'PET':   return asleep;                         // 寝ているあいだは無反応
       case 'SCOLD': return false;                          // 寝ていても起こせるので常に可
       case 'GAME':  return asleep || pet.health === 'SICK' || pet.hunger <= 1;
@@ -2872,6 +2910,9 @@
   function plateOnScreen(){ return !!(pet.plateAt || pet.plateSpoiled); }
 
   function doCare(act){
+    // 薄く描いて「押せない」と見せているものは、実際にも効かないようにする。
+    //  以前はここに判定が無く、無効表示のくすりを押すときげんが下がっていた
+    if(careDisabled(act)) return;
     if(pet.dead || pet.gone || ufoEnding || departEnding || !pet.name) return;  // おばけ・帰還後・エンディング後・命名前は世話不可
     if((act==='FEED' || act==='SNACK') && plateOnScreen()) return;  // 皿が残っている間は出せない
     const asleep = effectiveAsleep();
@@ -2932,16 +2973,20 @@
         // 掃除するものが無い時は無反応（退屈マークを出さない）
         break;
       case 'MED':
-        // 寝ているあいだは何もしない。以前は寝たまま嫌がる仕草が出ていた
+        // 寝ているあいだは何もしない（careDisabled でも弾いている）
         if(asleep) break;
-        // わがまま：くすりも飲まない。しかって聞かせるか、収まるのを待つ
-        //  （わがままは最長1時間で自然に解ける。病気の死亡は36時間なので詰みにはならない）
-        else if(pet.tantrumAt || rollTantrum('med')){ setReaction('refuse'); }
         else if(pet.health === 'SICK'){
-          pet.health = 'GOOD'; pet.sickAcc = 0; pet.sickCount++;    // 治療（回数は進化条件に使用）
-          note('cured');
-          addA(A_ADJ.med); markTouch();
-          setReaction('cured');
+          // わがまま：くすりも飲まない。しかって聞かせるか、収まるのを待つ
+          //  （わがままは最長1時間で自然に解ける。病気の死亡は36時間なので詰みにはならない）
+          //  抽選は「本当にくすりが要る時」だけ。健康な子に飲ませただけで1時間も
+          //  ごはんを拒否されるのは、操作ミスに対する罰として重すぎる
+          if(pet.tantrumAt || rollTantrum('med')){ setReaction('refuse'); }
+          else {
+            pet.health = 'GOOD'; pet.sickAcc = 0; pet.sickCount++;  // 治療（回数は進化条件に使用）
+            note('cured');
+            addA(A_ADJ.med); markTouch();
+            setReaction('cured');
+          }
         }
         else { if(pet.mood > 0) pet.mood--; setReaction('anger'); } // 健康時は嫌がる
         break;
@@ -3050,6 +3095,17 @@
   }
 
   // ── UFO帰還エンディング（世話不足）：迎えに来て去る → 新しいたまごへ ──
+  // ── エンディングの最後に出す一言 ──
+  //  演出の最終画面と、そのあとリセットまで残る画面で同じ位置に描く。
+  //  以前はそれぞれ別のyを持っていて、演出が終わった瞬間に文字が数ドット飛んでいた
+  const END_MSG_Y = 32, END_MSG_HEART_Y = 42;
+  function drawEndMessage(msg, NK, heart){
+    ctxM.font='7px "Press Start 2P"'; ctxM.fillStyle=NK;
+    ctxM.textAlign='center'; ctxM.textBaseline='top';
+    ctxM.fillText(msg,(W*S)/2, END_MSG_Y*S);
+    if(heart) stamp(ctxM, ICO_HEART, Math.floor(W/2)-2, END_MSG_HEART_Y, NK);
+  }
+
   function drawUfoEnding(BG, DM, NK){
     ctxM.fillStyle = BG; ctxM.fillRect(0,0,W*S,H*S);
     for(let x=0;x<W;x++) dot(ctxM,x,MAIN_GY,NK);
@@ -3080,9 +3136,7 @@
       const p = (t-72)/20;
       stamp(ctxM, UFO_SPR, Math.round(ux1+(W+6-ux1)*p), Math.round(uy-10*p), NK);
     } else {           // 別れの言葉
-      ctxM.font='7px "Press Start 2P"'; ctxM.fillStyle=NK;
-      ctxM.textAlign='center'; ctxM.textBaseline='top';
-      ctxM.fillText('GOODBYE...',(W*S)/2, 28*S);
+      drawEndMessage('GOODBYE...', NK);
     }
     ufoT++;
     if(ufoT >= 130){
@@ -3111,14 +3165,11 @@
     } else if(diarySelActive) diarySelActive = false;
     for(let x=0;x<W;x++) dot(ctxM,x,HEADER_Y,DM);
     STARS_M.forEach(([x,y],i)=>dot(ctxM,x,y+10,(fM+i*9)%28<20?DM:BG));
-    // 演出で出した言葉を、リセットするまで残す。
+    // 演出で出した言葉を、リセットするまで残す。位置は演出の最終画面と同じ。
     //  点滅はさせない。もう変化しない画面だと分かるように、静かに置いておく
+    //  （旅立ちのハートも、消えてしまわないよう点滅を止めて残す）
     const msg = pet.goneBy==='depart' ? 'THANK YOU!' : (pet.goneBy==='return' ? 'GOODBYE...' : '');
-    if(msg){
-      ctxM.font='7px "Press Start 2P"'; ctxM.fillStyle=NK;
-      ctxM.textAlign='center'; ctxM.textBaseline='top';
-      ctxM.fillText(msg,(W*S)/2, 32*S);
-    }
+    if(msg) drawEndMessage(msg, NK, pet.goneBy==='depart');
     for(let x=0;x<W;x++) dot(ctxM,x,MAIN_GY,NK);
     for(let x=0;x<W;x+=3) dot(ctxM,x,MAIN_GY-1,DM);
     fM++;
@@ -3167,10 +3218,7 @@
       stamp(ctxM, UFO_SPR, ux-16, uy2+6, NK);
       stamp(ctxM, UFO_SPR, ux+16, uy2+6, NK);
     } else {           // 感謝のメッセージ
-      ctxM.font='7px "Press Start 2P"'; ctxM.fillStyle=NK;
-      ctxM.textAlign='center'; ctxM.textBaseline='top';
-      ctxM.fillText('THANK YOU!',(W*S)/2, 24*S);
-      if(departT%10<7) stamp(ctxM, ICO_HEART, Math.floor(W/2)-2, 34, NK);
+      drawEndMessage('THANK YOU!', NK, departT%10<7);
     }
     departT++;
     if(departT >= 160){
@@ -3861,7 +3909,9 @@
           pet.dead            ? T('dead')     // おばけ
         : isWeak()            ? T('weak')     // 衰弱（空腹18時間超。あと12時間で死）
         : pet.health==='SICK' ? T('sick')     // 病気（放置36時間で死）
-        : pet.hunger===0      ? T('normal')   // 空腹が続いている（このままだと衰弱）
+        // 空腹が続いている（このままだと衰弱）。以前は「ふつう」と出ていて、
+        //  けんこう欄だけ見た人には問題なしに読めてしまっていた
+        : pet.hunger===0      ? T('starving')
         :                       T('good');
       // なかよし度Bは0〜100なので、5段階に落としてハートで見せる
       const bondPips = Math.max(0, Math.min(5, Math.round((pet.B||0) / 20)));
@@ -4295,6 +4345,34 @@
   onPress(document.getElementById('sa'),()=>{ playClick(); btnAnim(document.getElementById('sa')); showView('menu'); });
   onPress(document.getElementById('sb'),()=>{ playClick(); btnAnim(document.getElementById('sb')); showView('menu'); });
   onPress(document.getElementById('smenu'),()=>{ playClick(); btnAnim(document.getElementById('smenu'),1,0.93); showView('menu'); });
+
+  // ── キーボード操作（PCで遊ぶ人向け）──
+  //  ミニゲーム3種は前から矢印キーに対応しているのに、本体だけマウス必須だった。
+  //  判定を書き足すと画面ごとの分岐が二重管理になるので、
+  //  表示中の画面の実ボタンをそのまま押して、既存の処理に流す
+  const KEY_PREFIX = {opening:'o', naming:'g', main:'m', menu:'n', diary:'t', story:'s'};
+  const KEY_DIR = {ArrowUp:'up', ArrowDown:'down', ArrowLeft:'left', ArrowRight:'right'};
+  document.addEventListener('keydown', e=>{
+    if(e.metaKey || e.ctrlKey || e.altKey) return;
+    if(miniFrame || manualFrame) return;              // 重ねて開いているあいだは本体を操作しない
+    const p = KEY_PREFIX[scene];
+    if(!p) return;
+    const dir = KEY_DIR[e.key];
+    if(dir){
+      // 十字キーは押しっぱなしの連続入力を活かす
+      const el = document.querySelector('#view-'+scene+' .dpad-arrow.'+dir);
+      if(el){ e.preventDefault(); el.click(); }
+      return;
+    }
+    if(e.repeat) return;                              // A/B/MENUは押しっぱなしで連打させない
+    const k = e.key.toLowerCase();
+    const id = (k==='a' || k===' ' || k==='enter') ? p+'a'
+             : (k==='b' || k==='escape' || k==='backspace') ? p+'b'
+             : (k==='m') ? p+'menu' : null;
+    if(!id) return;
+    const btn = document.getElementById(id);
+    if(btn){ e.preventDefault(); btn.click(); }
+  });
 
 })();
 </script>

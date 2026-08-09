@@ -386,6 +386,7 @@
     // ビーム×星 命中判定
     const starHitSet=new Set();
     beams.forEach((b,bi)=>{
+      if(b.hit) return;   // 隕石に当たって消えるビームは、同じフレームで流れ星まで壊さない
       stars.forEach((s,si)=>{
         if(starHitSet.has(si)) return;
         // 星の中心付近にビームが入ったか（簡易：星bbox内）
@@ -404,6 +405,9 @@
     // 星 落下/自機衝突 判定
     const survive=[];
     stars.forEach(s=>{
+      // ライフが尽きたあとは、同じフレームに残っている星で追い討ちをかけない
+      //  （ライフがマイナスまで減り、reportScore が何度も走っていた）
+      if(state!==STATE.PLAY){ survive.push(s); return; }
       // 自機に当たった
       const hitsPlayer = (s.x+STAR_W>=plyX && s.x<=plyX+CH_W && s.y+STAR_H>=CY && s.y<=CY+CH_H);
       // 地面に落ちた
@@ -489,19 +493,20 @@
     }
     if(state===STATE.HELP){
       ct.fillStyle=OFF; ct.fillRect(0,0,W*S,H*S);
-      // 本文は視認性優先で 5px → 7px。行間も広げて再レイアウト
-      // 隕石の行を足したぶん、行間を1〜2ドットずつ詰めて画面(H=65)に収める
+      // 本文は視認性優先で 5px → 7px。
+      // 隕石の得点・失点まで入れるため、点数表は6px・行間7ドットに詰めて画面(H=65)に収める
       txtC('HOW TO PLAY',2,7,ON);
-      hl(10,ON);
-      txt('MOVE',2,13,7,ON);  txt('< >',30,13,7,ON);
-      txt('SHOOT',2,21,7,ON); txt('A',30,21,7,ON);
-      hl(28,ON);
-      txt('HIT STAR',2,31,7,ON);  txt('+5',W-8,31,7,ON);
-      txt('MISSED',2,39,7,ON);    txt('-10',W-11,39,7,ON);
-      txt('GET HIT',2,47,7,ON);   txt('-15',W-11,47,7,ON);
-      hl(54,ON);
-      txt('METEOR = MANY HITS',2,57,6,ON);
-      if(Math.floor(Date.now()/450)%2===0) txtC('A/B : BACK',63,5,ON);
+      hl(9,ON);
+      txt('MOVE',2,12,7,ON);  txt('< >',30,12,7,ON);
+      txt('SHOOT',2,19,7,ON); txt('A',30,19,7,ON);
+      hl(26,ON);
+      txt('HIT STAR',2,30,6,ON);  txt('+5',W-8,30,6,ON);
+      txt('MISSED',2,36,6,ON);    txt('-10',W-11,36,6,ON);
+      txt('GET HIT',2,42,6,ON);   txt('-15',W-11,42,6,ON);
+      // 隕石は何発も当てないと壊せない。落とすといちばん重い減点なので、そこまで書く
+      txt('METEOR',2,48,6,ON);    txt('MANY HITS',14,49,5,DIM);  txt('+60',W-11,48,6,ON);
+      txt('DROPPED',2,54,6,ON);   txt('-30',W-11,54,6,ON);
+      if(Math.floor(Date.now()/450)%2===0) txtC('A/B : BACK',61,5,ON);
       return;
     }
     if(state===STATE.PLAY){
@@ -597,14 +602,17 @@
     if(state===STATE.GAMEOVER){ state=STATE.TITLE; menuSel=0; return; }
   }
   press(ba,onADown); release(ba,onAUp);
-  press(document.getElementById('bb'), ()=>{ anim(document.getElementById('bb'));
+  function onBPress(){
+    anim(document.getElementById('bb'));
     if(state===STATE.HELP) state=STATE.TITLE;
     else if(state===STATE.TITLE) exitToMenu();     // タイトルでBを押したら選択画面へ戻る
-  });
+  }
+  press(document.getElementById('bb'), onBPress);
   // ミニゲームを閉じて、本体のゲーム選択画面へ戻る
   function exitToMenu(){
     beep(700,0.06);
-    if(window.parent && window.parent !== window) window.parent.postMessage({myvader:"exit"}, "*");
+    // 宛先は自分と同じオリジン（本体）に限定する
+    if(window.parent && window.parent !== window) window.parent.postMessage({myvader:"exit"}, window.location.origin);
     else window.location.href='invader_game.html';
   }
   press(document.getElementById('bmenu'), ()=>{ const m=document.getElementById('bmenu'); m.style.transform='scale(.93)'; setTimeout(()=>m.style.transform='',100); exitToMenu(); });
@@ -616,6 +624,8 @@
     if(e.key===' '||e.key.toLowerCase()==='a'){ e.preventDefault();
       if(state===STATE.PLAY){ if(!keys.fire){ keys.fire=true; fire(); fireTimer=4; } }
     }
+    // Bボタンもキーで押せるようにする（画面のBだけ効かないのは分かりにくい）
+    if((e.key.toLowerCase()==='b'||e.key==='Escape') && !e.repeat){ e.preventDefault(); onBPress(); }
   });
   document.addEventListener('keyup',e=>{
     if(e.key==='ArrowLeft')keys.left=false; if(e.key==='ArrowRight')keys.right=false;
