@@ -153,6 +153,34 @@
   function hl(y,col,dash){ for(let x=0;x<W;x++) if(!dash||x%2===0) d(x,y,col||ON); }
   function txtC(s,py,sz,col){ ct.font=`${sz}px "Press Start 2P"`; ct.fillStyle=col||ON; ct.textAlign='center'; ct.textBaseline='top'; ct.fillText(s,(W*S)/2,py*S); }
 
+  // ── 十字キーの向きを示す三角 ──
+  //  ▲▼◀▶ は Press Start 2P（Latinのみ）に入っていない。'^' と 'v' で代用していたが、
+  //  片方は上に浮いた小さな山、もう片方は小文字で、'<' '>' と大きさも高さも揃っていなかった。
+  //  文字と同じ7px角のなかに、1pxずつ広がる三角を直接描く（ドット格子ではなく画素単位）
+  function arrow(dir, x, y, len, col){
+    ct.fillStyle = col || ON;
+    const t = Math.ceil(len/2);                 // 頂点から底辺までの段数
+    for(let i=0;i<t;i++){
+      const w = 2*i+1, off = (len-w)/2;         // その段の幅と、中央に寄せるためのずれ
+      if(dir==='up')    ct.fillRect(x+off,     y+i,       w, 1);
+      if(dir==='down')  ct.fillRect(x+off,     y+t-1-i,   w, 1);
+      if(dir==='left')  ct.fillRect(x+i,       y+off,     1, w);
+      if(dir==='right') ct.fillRect(x+t-1-i,   y+off,     1, w);
+    }
+  }
+  // MOVE 行の右側に ◀▶▲▼ を並べる。px,py はドット座標（txt と同じ基準）。
+  //  横向きは幅4px・縦向きは幅7pxと太さが違うので、等ピッチにすると隙間がばらつく。
+  //  実際に描く幅を足しながら送って、三角どうしの間隔のほうを揃える
+  function arrowRow(px, py, dirs, col){
+    const LEN = 7, T = Math.ceil(LEN/2), GAP = 5;   // T=4（三角の高さ／横向きの幅）
+    let x = px*S; const y0 = py*S, vOff = Math.round((LEN-T)/2);
+    dirs.forEach(dir=>{
+      const flat = (dir==='left' || dir==='right');
+      arrow(dir, x, y0 + (flat ? 0 : vOff), LEN, col);
+      x += (flat ? T : LEN) + GAP;
+    });
+  }
+
   // ── キャラ ──
   // ── ゲーム用デフォルメキャラ（全段階 9×8 統一） ──
   const CHARS={
@@ -698,7 +726,7 @@
       // 本文は視認性優先で 5px → 7px。行間も広げて再レイアウト
       txtC('HOW TO PLAY',2,7,ON);
       hl(10,ON);
-      txt('MOVE',2,13,7,ON); txt('< > ^ v',22,13,7,ON);
+      txt('MOVE',2,13,7,ON); arrowRow(22,13,['left','right','up','down'],ON);
       hl(21,ON);
       // 障害物は星だけでなく衛星やロケットも流れてくる。「星をよける」だけだと実物と食い違う
       txt('DODGE ALL',2,24,7,ON);

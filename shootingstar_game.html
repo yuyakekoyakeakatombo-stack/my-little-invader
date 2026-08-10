@@ -153,6 +153,34 @@
   function txt(s,px,py,sz,col){ ct.font=`${sz}px "Press Start 2P"`; ct.fillStyle=col||ON; ct.textAlign='left'; ct.textBaseline='top'; ct.fillText(s,px*S,py*S); }
   function txtC(s,py,sz,col){ ct.font=`${sz}px "Press Start 2P"`; ct.fillStyle=col||ON; ct.textAlign='center'; ct.textBaseline='top'; ct.fillText(s,(W*S)/2,py*S); }
 
+  // ── 十字キーの向きを示す三角 ──
+  //  ▲▼◀▶ は Press Start 2P（Latinのみ）に入っていない。'<' '>' で代用していたが、
+  //  spacewalk の上下を三角にしたので、3種そろえて同じ形にする。
+  //  ドット格子ではなく画素単位で、文字と同じ7px角のなかに1pxずつ広がる三角を描く
+  function arrow(dir, x, y, len, col){
+    ct.fillStyle = col || ON;
+    const t = Math.ceil(len/2);                 // 頂点から底辺までの段数
+    for(let i=0;i<t;i++){
+      const w = 2*i+1, off = (len-w)/2;         // その段の幅と、中央に寄せるためのずれ
+      if(dir==='up')    ct.fillRect(x+off,     y+i,       w, 1);
+      if(dir==='down')  ct.fillRect(x+off,     y+t-1-i,   w, 1);
+      if(dir==='left')  ct.fillRect(x+i,       y+off,     1, w);
+      if(dir==='right') ct.fillRect(x+t-1-i,   y+off,     1, w);
+    }
+  }
+  // MOVE 行の右側に三角を並べる。px,py はドット座標（txt と同じ基準）。
+  //  横向きは幅4px・縦向きは幅7pxと太さが違うので、等ピッチにすると隙間がばらつく。
+  //  実際に描く幅を足しながら送って、三角どうしの間隔のほうを揃える
+  function arrowRow(px, py, dirs, col){
+    const LEN = 7, T = Math.ceil(LEN/2), GAP = 5;   // T=4（三角の高さ／横向きの幅）
+    let x = px*S; const y0 = py*S, vOff = Math.round((LEN-T)/2);
+    dirs.forEach(dir=>{
+      const flat = (dir==='left' || dir==='right');
+      arrow(dir, x, y0 + (flat ? 0 : vOff), LEN, col);
+      x += (flat ? T : LEN) + GAP;
+    });
+  }
+
   // ── スプライト ──
   // ── 自機：育成中キャラ連動（9×8デフォルメ6種） ──
   const CHARS={
@@ -497,7 +525,7 @@
       // 隕石の得点・失点まで入れるため、点数表は6px・行間7ドットに詰めて画面(H=65)に収める
       txtC('HOW TO PLAY',2,7,ON);
       hl(9,ON);
-      txt('MOVE',2,12,7,ON);  txt('< >',30,12,7,ON);
+      txt('MOVE',2,12,7,ON);  arrowRow(30,12,['left','right'],ON);
       txt('SHOOT',2,19,7,ON); txt('A',30,19,7,ON);
       hl(26,ON);
       txt('HIT STAR',2,30,6,ON);  txt('+5',W-8,30,6,ON);
