@@ -1193,6 +1193,13 @@
     alone2: { when:s=>true, ja:['へんな むしが いた','ともだちに なれるかな'], en:['A STRANGE BUG CAME.','CAN WE BE FRIENDS?'] },
     alone3: { when:s=>true, ja:['ひとりで うたを','うたって みた'], en:['I TRIED SINGING','TO MYSELF'] },
     alone4: { when:s=>true, ja:['くもの かたちが','かおに みえてきた'], en:['A CLOUD UP THERE','LOOKED LIKE A FACE'] },
+    // 虫・鳥・草花・風。画面に描いていなくても、庭にいれば出会うもの。
+    //  天気の設定がOFFだと clear/rain などは全部falseになるので、
+    //  「雨・雪でないこと」を条件にして、OFFの人にも出るようにしてある
+    life1:  { when:s=>!s.rain&&!s.snow, ja:['ゆうがた むしが ないていた','なんて いって いたんだろう'], en:['BUGS SANG AT DUSK.','WHAT WERE THEY SAYING?'] },
+    life2:  { when:s=>!s.rain&&!s.snow, ja:['とりが とんでいった','あんなふうに とべたら'], en:['A BIRD FLEW PAST.','I WISH I COULD FLY'] },
+    life3:  { when:s=>!s.snow, ja:['ちいさな はなが さいていた','なまえは しらない'], en:['A SMALL FLOWER BLOOMED.','I DO NOT KNOW ITS NAME'] },
+    life4:  { when:s=>!s.rain&&!s.snow, ja:['かぜが きもち よかった','めを つぶって いた'], en:['THE WIND FELT NICE.','I CLOSED MY EYES'] },
     // 曇りの夜のUFO。ながれぼし（star1）と同じで、実際に出たかではなく その日の空模様で選ぶ
     ufo1:   { when:s=>s.cloudy, ja:['くもの きれまに','ひかるものが みえた'], en:['SOMETHING GLOWED','IN A GAP IN THE CLOUDS'] },
     ufo2:   { when:s=>s.cloudy&&s.grown, ja:['さっきの ひかりは','むかえに きたのかな'], en:['THAT LIGHT EARLIER','WAS IT COMING FOR ME?'] },
