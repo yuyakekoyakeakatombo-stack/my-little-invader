@@ -4231,47 +4231,128 @@
   // STORY
   // ════════════════════════════════════════
   const ctxS = initCanvas('lcd-s');
-  // {t:本文, st:'title'|''}。タイトルは言語に関わらず英語表記
-  const T_ = (t,st)=>({t, st:st||''});
-  const STORY_EN = [
-    T_(''),T_(''),T_('My Little Invader','title'),T_(''),T_(''),
-    T_('One day,'),T_('a tiny creature'),T_('fell from the sky.'),T_(''),
-    T_('Nothing like the armies'),T_('that once invaded Earth.'),T_(''),
-    T_('Frail,'),T_('without a hint of malice'),T_('it gazes at me'),T_('with innocent eyes.'),T_(''),
-    T_('That gaze'),T_('captured my heart.'),T_(''),
-    T_('Yes, this little one'),T_('is the invader'),T_('of my heart.'),T_(''),T_(''),T_(''),
-  ];
-  // 日本語版（LCD幅に収まるよう短く改行）
+  // ── 語り（短編小説の体裁）──
+  //  中央ぞろえで一行ずつ切ると、どうしても詩に見える。
+  //  左ぞろえ・段落・字下げにして、地の文として読ませる。
+  //  改行はここでは持たず、画面幅に合わせて描画時に折り返す
+  const STORY_TITLE = 'My Little Invader';
   const STORY_JA = [
-    T_(''),T_(''),T_('My Little Invader','title'),T_(''),T_(''),
-    T_('ある日、空から'),T_('小さな生き物が'),T_('落ちてきた。'),T_(''),
-    T_('それは、かつて'),T_('侵略のため大軍を成して'),T_('地球に攻め込んできた'),T_('"やつら"とは、'),T_('似ても似つかない。'),T_(''),
-    T_('か弱く、敵意の'),T_('かけらもないそれは、'),T_('つぶらな瞳で'),T_('私を見つめる。'),T_(''),
-    T_('その眼差しに、'),T_('私の心は奪われた。'),T_(''),
-    T_('そう、この子は、'),T_('私の心の"インベーダー"'),T_(''),T_(''),T_(''),
+    'その年の秋は、雨ばかりだった。',
+    '夜なかに雨音がやんで、かわりに庭のほうで小さな音がした。風だろうと思って寝返りを打ったが、もう一度、同じ音がした。草をかき分けるような音だった。',
+    '明かりを持って外へ出た。濡れた土のにおいがした。植え込みのかげに、それはいた。',
+    '片手にのるほどの大きさだった。丸い頭に、細い手足。どの図鑑にも載っていない生き物だった。',
+    'いや——私はそれを知っていた。',
+    '子どものころ、大人たちが空を指さして震えていた。同じかたちのものが、雲をうめつくすほど飛んでいた。街が焼けた。学校が閉まった。誰もが「やつら」と呼んだ。',
+    'その「やつら」が、いま、私の手のひらほどの大きさで、濡れた草の上にうずくまっている。',
+    '武器はなかった。船もなかった。仲間の影も、どこにもなかった。ただ、ひとりだった。',
+    '私は身構えた。逃げるべきか、誰かを呼ぶべきか。',
+    'けれどそれは、私を見上げて、まばたきをした。',
+    '敵意のかけらもない、つぶらな瞳だった。何かを訴えるでもなく、ただ、私がそこにいることを確かめるように。',
+    '気がつくと、私はしゃがみこんでいた。両手を、そっと差し出していた。',
+    '小さな体は、思っていたよりも温かかった。',
+    '名前を考えなければ。それが、私が最初に思ったことだった。',
+    '——そう。この子は、私の心を占領してしまった。私の、小さな「インベーダー」。',
   ];
-  function storyData(){ return lang==='ja' ? STORY_JA : STORY_EN; }
-  const S_LINE_H = 14;
+  const STORY_EN = [
+    'That autumn it rained almost every day.',
+    'One night the rain stopped, and I heard a small sound out in the garden. The wind, I thought, and turned over. Then I heard it again. Something moving through the grass.',
+    'I took a light and went outside. The earth smelled wet. There, in the shadow of the hedge, it was.',
+    'It was small enough to sit in one hand. A round head, thin arms and legs. Nothing like anything in any book I had read.',
+    'No. I knew what it was.',
+    'When I was a child the grown-ups pointed at the sky and shook. Things of that same shape had filled the clouds. The town burned. The schools closed. Everyone called them THEY.',
+    'And now one of THEY sat in the wet grass, no bigger than my palm.',
+    'It had no weapon. No ship. No sign of anyone coming for it. It was alone.',
+    'I braced myself. Should I run? Should I call for someone?',
+    'But it looked up at me, and blinked.',
+    'There was not a trace of malice in those round eyes. It asked for nothing. It only seemed to make sure that I was there.',
+    'Before I knew it I had crouched down, and held out both hands.',
+    'The small body was warmer than I expected.',
+    'I have to think of a name. That was the first thing I thought.',
+    'So. This little one has taken my heart. My own small INVADER.',
+  ];
+
+  // 行頭に置いてはいけない文字（ぶら下げる）
+  const KINSOKU = '、。，．・：；？！ー）」』】〉》ぁぃぅぇぉっゃゅょゎァィゥェォッャュョー';
+  // 画面幅に合わせて折り返す。日本語は1文字ずつ、英語は単語単位
+  function wrapStory(ctx, text, maxW, isJa){
+    const out = [];
+    let line = '';
+    if(isJa){
+      for(const ch of text){
+        if(ctx.measureText(line + ch).width <= maxW){ line += ch; continue; }
+        // あふれた文字が句読点なら、行頭に送らずぶら下げる
+        if(KINSOKU.includes(ch)){ out.push(line + ch); line = ''; continue; }
+        out.push(line); line = ch;
+      }
+    } else {
+      for(const wd of text.split(/\s+/)){
+        if(!wd) continue;
+        const t = line ? line + ' ' + wd : wd;
+        if(ctx.measureText(t).width <= maxW){ line = t; continue; }
+        if(line) out.push(line);
+        line = wd;
+      }
+    }
+    if(line) out.push(line);
+    return out;
+  }
+
+  // 折り返しは言語ごとに一度だけ計算して使い回す（毎フレームやると重い）
+  const STORY_PAD = 6;          // 左右の余白（px）
+  const STORY_PARA = 7;         // 段落のあいだ（px）
+  let storyCache = null, storyCacheLang = '';
+  function storyLayout(){
+    if(storyCache && storyCacheLang === lang) return storyCache;
+    const ja = lang === 'ja';
+    ctxS.font = ja ? '10px ' + JP_FONT : '6px "Press Start 2P"';
+    // 日本語は句読点を行末にぶら下げるので、その1文字ぶんを折り返し幅から引いておく。
+    //  引かないと、ぶら下げた行だけ右端に貼りついてしまう
+    const HANG = ja ? 10 : 0;
+    const maxW = W*S - STORY_PAD*2 - HANG, LH = ja ? 13 : 11;
+    const out = [];
+    let y = 34;
+    out.push({ t: STORY_TITLE, y, st: 'title' });        // タイトルだけ中央ぞろえ
+    y += 30;
+    (ja ? STORY_JA : STORY_EN).forEach((para, pi) => {
+      if(pi) y += STORY_PARA;
+      // 日本語は段落の1行目を字下げする。ここが「詩ではなく地の文」に見せる要。
+      //  英文は6pxだと字下げがほとんど効かないので、段落のあいだの空きだけで区切る
+      wrapStory(ctxS, (ja ? '　' : '') + para, maxW, ja).forEach(t => {
+        out.push({ t, y, st: '' }); y += LH;
+      });
+    });
+    storyCache = { lines: out, height: y + 40 };
+    storyCacheLang = lang;
+    return storyCache;
+  }
 
   function tickStory(){
     if(scene!=='story') return;
-    const lines = storyData();
+    const { lines, height } = storyLayout();
+    const ja = lang === 'ja';
     ctxS.fillStyle=OFF; ctxS.fillRect(0,0,W*S,H*S);
     ctxS.save();
     ctxS.beginPath(); ctxS.rect(0,0,W*S,H*S); ctxS.clip();
-    ctxS.textAlign='center'; ctxS.textBaseline='top';
-    lines.forEach((line,i)=>{
-      const y = storyScrollY + i * S_LINE_H;
-      if(y < -S_LINE_H || y > H*S) return;
-      // タイトルは英語ピクセル字体、本文は英語=ピクセル/日本語=大きめゴシック
-      ctxS.font = (line.st==='title') ? '9px "Press Start 2P"'
-                : (lang==='ja' ? '10px '+JP_FONT : '6px "Press Start 2P"');
-      ctxS.fillStyle = ON;
-      ctxS.fillText(line.t,(W*S)/2,y);
+    ctxS.textBaseline='top'; ctxS.fillStyle = ON;
+    lines.forEach(line=>{
+      const y = storyScrollY + line.y;
+      if(y < -20 || y > H*S) return;
+      if(line.st==='title'){
+        ctxS.font='9px "Press Start 2P"'; ctxS.textAlign='center';
+        ctxS.fillText(line.t,(W*S)/2,y);
+      } else {
+        ctxS.font = ja ? '10px ' + JP_FONT : '6px "Press Start 2P"';
+        ctxS.textAlign='left';
+        ctxS.fillText(line.t, STORY_PAD, y);
+      }
     });
     ctxS.restore();
-    if(!storyDone){ storyScrollY-=0.8; if(storyScrollY < -(lines.length*S_LINE_H)){ storyDone=true; setTimeout(()=>{ showView('menu'); }, 500); } }
+    if(!storyDone){
+      storyScrollY -= STORY_SPEED;
+      if(storyScrollY < -height){ storyDone=true; setTimeout(()=>{ showView('menu'); }, 500); }
+    }
   }
+  const STORY_SPEED = 1.1;   // 1tick(80ms)あたりのスクロール量
   setInterval(tickStory, 80);
 
 
