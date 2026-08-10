@@ -4164,24 +4164,22 @@
       if(menuSel < 6){
         // お世話アクション実行 → 育成画面に戻ってリアクション表示
         const act = CARE_ORDER[menuSel];
-        if(act==='GAME'){
-          // 入口制御：おばけ・睡眠・病気・空腹・疎遠期・わがままは遊べない
+        // 薄く描いているアイコンは、押しても画面を切り替えない（MENUに留まる）。
+        //  何も起きないのに育成画面へ飛ばされると「いま何か起きたのか？」と迷わせるうえ、
+        //  隣のアイコンを試したいときにもう一度MENUを開き直すことになる
+        //  Aを押した時点で 900Hz が鳴っているので、少し待ってから低い音を足す。
+        //  同時に鳴らすと重なって和音になり、断られた感じにならない
+        if(careDisabled(act)){ setTimeout(()=>playClick(300), 60); }
+        else if(act==='GAME'){
+          // 入口制御：わがままは遊べない（アイコンは薄くしていないので、断られたことを見せる）。
+          //  睡眠・病気・空腹・おばけ・エンディング後は careDisabled 側で弾いている
           // （たまご段階でも遊べる：ミニゲームのデフォルメ6種にeggが含まれる設計）
-          if(pet.dead || pet.gone || departEnding || ufoEnding){ /* 操作不可 */ }
-          else if(!pet.name){ showView('main'); }   // 命名前は遊べない（点滅する名前欄へ誘導）
-          else if(effectiveAsleep()){ showView('main'); }
-          else if(pet.health==='SICK'){ setReaction('sick'); showView('main'); }
-          else if(pet.hunger <= 1){ setReaction('hungry'); showView('main'); }
-          else if(pet.tantrumAt || rollTantrum('game')){ setReaction('refuse'); showView('main'); savePet(); }
+          if(pet.tantrumAt || rollTantrum('game')){ setReaction('refuse'); showView('main'); savePet(); }
           else { inPlay=true; playSel=0; }
         }
-        else if(pet.dead || pet.gone){ /* おばけ・帰還後：世話不可 */ }
         else if(act==='FEED'){
-          // ごはん／おやつの選択へ。世話が効かない状態では開かない（空の画面を見せない）。
-          // 皿が画面に残っているあいだは、置き場所がひとつしかないので新しく出せない
-          //  （出すと皿の絵はそのままで中身だけ食べる、という不自然なことになる）
-          if(!pet.name || ufoEnding || departEnding || plateOnScreen()) showView('main');
-          else { inFeed=true; feedSel=0; }
+          // ごはん／おやつの選択へ。皿が残っている等は careDisabled 側で弾いている
+          inFeed=true; feedSel=0;
         }
         else { doCare(act); showView('main'); }
       } else {
