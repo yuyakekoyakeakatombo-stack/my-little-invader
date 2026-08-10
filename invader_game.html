@@ -405,14 +405,12 @@
 
   // ── 遷移 ──
   let scene = 'opening';
-  let storyScrollY = 0;
-  let storyDone = false;
 
   function showView(id) {
     document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
     document.getElementById('view-'+id).classList.add('active');
     scene = id;
-    if(id==='story'){ storyScrollY=H*S; storyDone=false; }
+    if(id==='story'){ storyPage=0; fS=0; }
     if(window.__placeLed) window.__placeLed();   // 表示中LCDの上に電源LEDを合わせ直す
   }
 
@@ -4204,7 +4202,7 @@
         else if(sel==='MANUAL'){ openManual(); }      // 説明書もいつでも読める
         else if(pet.dead || pet.gone){ /* おばけ・帰還後：上記以外は操作不可 */ }
         else if(sel==='STATUS'){ inStatus=true; }
-        else if(sel==='STORY'){ storyScrollY=H*S; showView('story'); }
+        else if(sel==='STORY'){ showView('story'); }
       }
     }
   });
@@ -4231,48 +4229,120 @@
   // STORY
   // ════════════════════════════════════════
   const ctxS = initCanvas('lcd-s');
-  // ── 語り（短編小説の体裁）──
-  //  中央ぞろえで一行ずつ切ると、どうしても詩に見える。
-  //  左ぞろえ・段落・字下げにして、地の文として読ませる。
-  //  改行はここでは持たず、画面幅に合わせて描画時に折り返す
+  // ── 語り（短編小説の体裁・ページ送り）──
+  //  流し読みのスクロールではなく、1画面ずつ読ませて A で送る（携帯機の見せ方）。
+  //  次があるあいだは右下の▼を点滅させる。
+  //  本文は改行を持たず段落の配列で持ち、画面幅に合わせて描画時に折り返す
   const STORY_TITLE = 'My Little Invader';
   const STORY_JA = [
-    'その年の秋は、雨ばかりだった。',
-    '夜なかに雨音がやんで、かわりに庭のほうで小さな音がした。風だろうと思って寝返りを打ったが、もう一度、同じ音がした。草をかき分けるような音だった。',
-    '明かりを持って外へ出た。濡れた土のにおいがした。植え込みのかげに、それはいた。',
-    '片手にのるほどの大きさだった。丸い頭に、細い手足。どの図鑑にも載っていない生き物だった。',
-    'いや——私はそれを知っていた。',
-    '子どものころ、大人たちが空を指さして震えていた。同じかたちのものが、雲をうめつくすほど飛んでいた。街が焼けた。学校が閉まった。誰もが「やつら」と呼んだ。',
-    'その「やつら」が、いま、私の手のひらほどの大きさで、濡れた草の上にうずくまっている。',
-    '武器はなかった。船もなかった。仲間の影も、どこにもなかった。ただ、ひとりだった。',
-    '私は身構えた。逃げるべきか、誰かを呼ぶべきか。',
-    'けれどそれは、私を見上げて、まばたきをした。',
-    '敵意のかけらもない、つぶらな瞳だった。何かを訴えるでもなく、ただ、私がそこにいることを確かめるように。',
-    '気がつくと、私はしゃがみこんでいた。両手を、そっと差し出していた。',
-    '小さな体は、思っていたよりも温かかった。',
-    '名前を考えなければ。それが、私が最初に思ったことだった。',
-    '——そう。この子は、私の心を占領してしまった。私の、小さな「インベーダー」。',
+    'その年は、雨ばかりだった。',
+    '私がそう感じていただけかもしれないが、その日も一日中雨が降り続いていた雨は、',
+    '音のない雷の後、ぴたりと止んだ。',
+    'ふと、庭のほうから小さな音がした。風だろうと思ってねがえりを打ったけれど、しばらくすると、また同じ音が聞こえてきた。',
+    '草をかき分けるような、かすかな音だった。',
+    'さっきの雷といい、突然止んだ雨といい、何か変な予感がする。',
+    '気になって、明かりを持って外へ出ると、柔らかな夜風に乗って、ぬれた土のにおいがした。',
+    '耳をすますと、さっきの音がまだ聞こえている。',
+    '庭を見回してみる。',
+    'すると、うえこみのかげで、何かが小さく動いた。',
+    '近づいてみると、それは片手にのるほどの大きさだった。',
+    '丸く小さな体に、目がふたつ。',
+    '地球のどの生き物とも似ていない。',
+    '私は、少し身がまえた。',
+    '',
+    'かつて、地球には空からたくさんの ”それ” がやってきた。',
+    '子どものころ、大人たちが空を見上げていたのを覚えている。',
+    'あれは何だったのか。どこから来たのか。',
+    'いまでも、はっきりとはわからない。',
+    'ただ、あの頃の話をするとき、大人たちは決まって、',
+    '「あいつらは地球に攻め込んできたのだ」と言った。',
+    '目の前にいるものが、その「やつら」なのかはわからない。',
+    '似ているような気もする。',
+    'けれど、それはあまりにも小さかった。',
+    '武器もない。',
+    '乗り物もない。',
+    '仲間らしき姿もない。',
+    'ただ、ぬれた草の上で、ひとりでじっとしていた。',
+    '私は、逃げるべきかもしれないと思った。',
+    '誰かを呼ぶべきだろうか。',
+    'と、そのとき、それが顔を上げた。',
+    'つぶらなひとみが、こちらを見た。',
+    '何かを訴えているわけではなかった。',
+    'ただ、そこにいる私を見つけて、',
+    '小さくまばたきをした。',
+    'それだけだった。',
+    'なのに、なぜだろうか。',
+    'さっきまであったけいかいしんが、',
+    '急に溶けていくのがわかった。',
+    '気がつくと、私はそれの前にしゃがみこんでいた。',
+    '両手をそっと差し出す。',
+    'それは逃げなかった。',
+    '小さな体を手のひらに乗せると、',
+    '思っていたよりも温かかった。',
+    'このまま、ここに置いていくことはできない。',
+    '「名前は、何がいいだろう。」',
+    '気がつくと、私はそんなことを考え始めていた。',
+    'かつて地球にやってきた「やつら」と、',
+    'この子が同じものなのかは、わからない。',
+    'けれど、私はもう、この小さな生き物を放ってはおけなくなっていた。',
+    '私の心は、すっかり占領されていたのだ。',
+    'この、小さなインベーダーに。',
   ];
   const STORY_EN = [
-    'That autumn it rained almost every day.',
-    'One night the rain stopped, and I heard a small sound out in the garden. The wind, I thought, and turned over. Then I heard it again. Something moving through the grass.',
-    'I took a light and went outside. The earth smelled wet. There, in the shadow of the hedge, it was.',
-    'It was small enough to sit in one hand. A round head, thin arms and legs. Nothing like anything in any book I had read.',
-    'No. I knew what it was.',
-    'When I was a child the grown-ups pointed at the sky and shook. Things of that same shape had filled the clouds. The town burned. The schools closed. Everyone called them THEY.',
-    'And now one of THEY sat in the wet grass, no bigger than my palm.',
-    'It had no weapon. No ship. No sign of anyone coming for it. It was alone.',
-    'I braced myself. Should I run? Should I call for someone?',
-    'But it looked up at me, and blinked.',
-    'There was not a trace of malice in those round eyes. It asked for nothing. It only seemed to make sure that I was there.',
-    'Before I knew it I had crouched down, and held out both hands.',
-    'The small body was warmer than I expected.',
-    'I have to think of a name. That was the first thing I thought.',
-    'So. This little one has taken my heart. My own small INVADER.',
+    'That year, it seemed to rain all the time.',
+    'Perhaps it only felt that way to me, but it had been raining all day that day as well. Then, after a silent flash of thunder, the rain stopped all at once.',
+    'Suddenly, I heard a faint sound coming from the garden. I thought it was the wind and turned over in bed, but after a while, I heard it again.',
+    'It was a soft, rustling sound, as if something were pushing its way through the grass.',
+    'Between the strange thunder and the rain stopping so suddenly, I had the uneasy feeling that something was not quite right.',
+    'Unable to ignore it, I took a light and stepped outside. The gentle night breeze carried with it the scent of wet earth.',
+    'I listened carefully. The sound was still there.',
+    'I looked around the garden.',
+    'Then, something moved slightly in the shadows of the bushes.',
+    'When I came closer, I saw that it was small enough to fit in the palm of my hand.',
+    'A small, round body, with two eyes.',
+    'It looked like nothing else I had ever seen on Earth.',
+    'I tensed slightly.',
+    'Long ago, many of them had come to Earth from the sky.',
+    'I remember, when I was a child, watching the adults look up at the sky.',
+    'What were they?',
+    'Where had they come from?',
+    'Even now, no one really knows.',
+    'But whenever people spoke about those days, the adults always said the same thing.',
+    '“They came to invade Earth.”',
+    'I didn’t know if the thing in front of me was one of them.',
+    'It did look somewhat similar.',
+    'But it was far too small.',
+    'No weapons.',
+    'No spacecraft.',
+    'No sign of anyone else.',
+    'It was simply sitting there, alone on the wet grass.',
+    'I thought perhaps I should run.',
+    'Perhaps I should call someone.',
+    'And then, it looked up.',
+    'Two round, innocent eyes met mine.',
+    'It wasn’t trying to tell me anything.',
+    'It simply noticed that I was there,',
+    'and blinked softly.',
+    'That was all.',
+    'And yet, I don’t know why.',
+    'The wariness I had felt only moments before',
+    'seemed to melt away all at once.',
+    'Before I knew it, I was crouching in front of it.',
+    'I slowly held out both hands.',
+    'It didn’t run.',
+    'When I lifted its little body into my hands,',
+    'it was warmer than I had expected.',
+    'I couldn’t leave it there.',
+    '“What should I name you?”',
+    'Before I knew it, I had already begun thinking about a name.',
+    'I still didn’t know whether this little creature was the same kind of thing as those that had once come to Earth.',
+    'But by then, I could no longer bring myself to leave it alone.',
+    'My heart had already been completely taken over.',
+    'By this little invader.',
   ];
 
-  // 行頭に置いてはいけない文字（ぶら下げる）
-  const KINSOKU = '、。，．・：；？！ー）」』】〉》ぁぃぅぇぉっゃゅょゎァィゥェォッャュョー';
+  // 行頭に置いてはいけない文字（行末にぶら下げる）
+  const KINSOKU = '、。，．・：；？！ー）」』】〉》”’ぁぃぅぇぉっゃゅょゎァィゥェォッャュョ';
   // 画面幅に合わせて折り返す。日本語は1文字ずつ、英語は単語単位
   function wrapStory(ctx, text, maxW, isJa){
     const out = [];
@@ -4297,62 +4367,79 @@
     return out;
   }
 
-  // 折り返しは言語ごとに一度だけ計算して使い回す（毎フレームやると重い）
-  const STORY_PAD = 6;          // 左右の余白（px）
-  const STORY_PARA = 7;         // 段落のあいだ（px）
-  let storyCache = null, storyCacheLang = '';
-  function storyLayout(){
-    if(storyCache && storyCacheLang === lang) return storyCache;
+  const STORY_PAD = 6;      // 左右の余白(px)
+  const STORY_TOP = 8;      // 本文の開始y(px)
+  const STORY_BOT = 218;    // 本文の下限y(px)。この下に▼を置く
+  // 折り返しとページ割りは言語ごとに一度だけ計算して使い回す
+  let storyPages = null, storyPagesLang = '', storyPage = 0, fS = 0;
+  function buildStory(){
+    if(storyPages && storyPagesLang === lang) return storyPages;
     const ja = lang === 'ja';
     ctxS.font = ja ? '10px ' + JP_FONT : '6px "Press Start 2P"';
-    // 日本語は句読点を行末にぶら下げるので、その1文字ぶんを折り返し幅から引いておく。
-    //  引かないと、ぶら下げた行だけ右端に貼りついてしまう
+    // 日本語は句読点をぶら下げるぶん、1文字ぶん折り返し幅を狭めておく。
+    //  引かないと、ぶら下げた行だけ右端に貼りつく
     const HANG = ja ? 10 : 0;
-    const maxW = W*S - STORY_PAD*2 - HANG, LH = ja ? 13 : 11;
-    const out = [];
-    let y = 34;
-    out.push({ t: STORY_TITLE, y, st: 'title' });        // タイトルだけ中央ぞろえ
-    y += 30;
-    (ja ? STORY_JA : STORY_EN).forEach((para, pi) => {
-      if(pi) y += STORY_PARA;
-      // 日本語は段落の1行目を字下げする。ここが「詩ではなく地の文」に見せる要。
-      //  英文は6pxだと字下げがほとんど効かないので、段落のあいだの空きだけで区切る
-      wrapStory(ctxS, (ja ? '　' : '') + para, maxW, ja).forEach(t => {
-        out.push({ t, y, st: '' }); y += LH;
-      });
+    const maxW = W*S - STORY_PAD*2 - HANG;
+    const LH   = ja ? 13 : 11;
+    const per  = Math.floor((STORY_BOT - STORY_TOP) / LH);   // 1ページの行数
+    // 段落 → 行（段落の1行目は字下げ。ここが「詩ではなく地の文」に見せる要）
+    const rows = [];
+    (ja ? STORY_JA : STORY_EN).forEach(para => {
+      if(!para){ rows.push({t:'', head:false}); return; }    // 原文の空行は1行あける
+      wrapStory(ctxS, (ja ? '\u3000' : '') + para, maxW, ja)
+        .forEach((t,i) => rows.push({t, head: i===0}));
     });
-    storyCache = { lines: out, height: y + 40 };
-    storyCacheLang = lang;
-    return storyCache;
+    // 行 → ページ
+    const pages = []; let cur = [];
+    rows.forEach(r => {
+      // 段落の1行目がページの最終行に1行だけ残ると、次のページと切れて読みにくい
+      if(cur.length >= per || (r.head && cur.length === per-1)){ pages.push(cur); cur = []; }
+      if(!cur.length && !r.t) return;                        // ページ頭の空行は捨てる
+      cur.push(r);
+    });
+    if(cur.length) pages.push(cur);
+    storyPages = { pages, LH };
+    storyPagesLang = lang;
+    return storyPages;
   }
+  function storyPageCount(){ return buildStory().pages.length + 1; }   // +1 は扉
 
+  // 次のページがあることを知らせる▼（携帯機の「送り」表示）
+  const STORY_ARROW = [
+    [1,1,1,1,1],
+    [0,1,1,1,0],
+    [0,0,1,0,0],
+  ];
   function tickStory(){
     if(scene!=='story') return;
-    const { lines, height } = storyLayout();
+    const { pages, LH } = buildStory();
     const ja = lang === 'ja';
     ctxS.fillStyle=OFF; ctxS.fillRect(0,0,W*S,H*S);
-    ctxS.save();
-    ctxS.beginPath(); ctxS.rect(0,0,W*S,H*S); ctxS.clip();
     ctxS.textBaseline='top'; ctxS.fillStyle = ON;
-    lines.forEach(line=>{
-      const y = storyScrollY + line.y;
-      if(y < -20 || y > H*S) return;
-      if(line.st==='title'){
-        ctxS.font='9px "Press Start 2P"'; ctxS.textAlign='center';
-        ctxS.fillText(line.t,(W*S)/2,y);
-      } else {
-        ctxS.font = ja ? '10px ' + JP_FONT : '6px "Press Start 2P"';
-        ctxS.textAlign='left';
-        ctxS.fillText(line.t, STORY_PAD, y);
-      }
-    });
-    ctxS.restore();
-    if(!storyDone){
-      storyScrollY -= STORY_SPEED;
-      if(storyScrollY < -height){ storyDone=true; setTimeout(()=>{ showView('menu'); }, 500); }
+    if(storyPage === 0){
+      // 扉：タイトルだけを中央に置く
+      ctxS.font='9px "Press Start 2P"'; ctxS.textAlign='center';
+      ctxS.fillText(STORY_TITLE,(W*S)/2, 28*S);
+    } else {
+      ctxS.font = ja ? '10px ' + JP_FONT : '6px "Press Start 2P"';
+      ctxS.textAlign='left';
+      (pages[storyPage-1]||[]).forEach((r,i)=>{
+        if(r.t) ctxS.fillText(r.t, STORY_PAD, STORY_TOP + i*LH);
+      });
     }
+    // 次がある間だけ▼を点滅。最後のページでは出さない（そこで終わりだと分かる）
+    if(storyPage < pages.length && (fS % 16) < 10) stamp(ctxS, STORY_ARROW, W-8, 59, ON);
+    fS++;
   }
-  const STORY_SPEED = 1.1;   // 1tick(80ms)あたりのスクロール量
+  function storyNext(){
+    const n = buildStory().pages.length;
+    if(storyPage < n) storyPage++;
+    else showView('menu');                 // 最後のページで押したら終わり
+  }
+  function storyPrev(){
+    if(storyPage > 0) storyPage--;
+    else showView('menu');                 // 扉で戻ると終わり
+  }
   setInterval(tickStory, 80);
 
 
@@ -4436,9 +4523,17 @@
     });
   });
 
-  onPress(document.getElementById('sa'),()=>{ playClick(); btnAnim(document.getElementById('sa')); showView('menu'); });
-  onPress(document.getElementById('sb'),()=>{ playClick(); btnAnim(document.getElementById('sb')); showView('menu'); });
+  // A・右・下＝次のページ／B・左・上＝前のページ／MENU＝読むのをやめる
+  onPress(document.getElementById('sa'),()=>{ playClick(); btnAnim(document.getElementById('sa')); storyNext(); });
+  onPress(document.getElementById('sb'),()=>{ playClick(); btnAnim(document.getElementById('sb')); storyPrev(); });
   onPress(document.getElementById('smenu'),()=>{ playClick(); btnAnim(document.getElementById('smenu'),1,0.93); showView('menu'); });
+  document.querySelectorAll('#view-story .dpad-arrow').forEach(el=>{
+    onPress(el,()=>{
+      playClick(900); dpadAnim(el);
+      if(el.classList.contains('right') || el.classList.contains('down')) storyNext();
+      else storyPrev();
+    });
+  });
 
   // ── キーボード操作（PCで遊ぶ人向け）──
   //  ミニゲーム3種は前から矢印キーに対応しているのに、本体だけマウス必須だった。
