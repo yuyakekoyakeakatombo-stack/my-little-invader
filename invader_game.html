@@ -2792,7 +2792,10 @@
       case 'MED':   return asleep;                         // 就寝中だけ。健康な子に飲ませて嫌がられるのは有効な操作
       case 'PET':   return asleep;                         // 寝ているあいだは無反応
       case 'SCOLD': return false;                          // 寝ていても起こせるので常に可
-      case 'GAME':  return asleep || pet.health === 'SICK' || pet.hunger <= 1;
+      // ゲームは就寝中だけ薄くする。病気・空腹でも薄くしないのは、
+      //  押したときに育成画面へ移って「なぜ遊べないか」（具合が悪い／おなかがすいた）を
+      //  仕草で見せたいため。薄くして MENU に留めると、その理由を伝える場が無くなる
+      case 'GAME':  return asleep;
     }
     return false;
   }
@@ -4171,10 +4174,12 @@
         //  同時に鳴らすと重なって和音になり、断られた感じにならない
         if(careDisabled(act)){ setTimeout(()=>playClick(300), 60); }
         else if(act==='GAME'){
-          // 入口制御：わがままは遊べない（アイコンは薄くしていないので、断られたことを見せる）。
-          //  睡眠・病気・空腹・おばけ・エンディング後は careDisabled 側で弾いている
+          // 遊べない理由は、育成画面へ移って仕草で見せる（アイコンを薄くしていない3つ）。
+          //  就寝中・おばけ・命名前・エンディング後は careDisabled 側で弾いている
           // （たまご段階でも遊べる：ミニゲームのデフォルメ6種にeggが含まれる設計）
-          if(pet.tantrumAt || rollTantrum('game')){ setReaction('refuse'); showView('main'); savePet(); }
+          if(pet.health==='SICK'){ setReaction('sick'); showView('main'); }
+          else if(pet.hunger <= 1){ setReaction('hungry'); showView('main'); }
+          else if(pet.tantrumAt || rollTantrum('game')){ setReaction('refuse'); showView('main'); savePet(); }
           else { inPlay=true; playSel=0; }
         }
         else if(act==='FEED'){
