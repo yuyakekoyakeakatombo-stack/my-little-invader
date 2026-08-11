@@ -4358,8 +4358,8 @@
   }
 
   const STORY_PAD = 6;      // 左右の余白(px)
-  const STORY_TOP = 8;      // 本文の開始y(px)
-  const STORY_BOT = 218;    // 本文の下限y(px)。この下に▼を置く
+  const STORY_TOP = 20;     // 本文の開始y(px)。上に余白を取って、天に貼りついて見えないようにする
+  const STORY_BOT = 230;    // 本文の下限y(px)。この下に▼を置く
   // 折り返しとページ割りは言語ごとに一度だけ計算して使い回す
   let storyPages = null, storyPagesLang = '', storyPage = 0, fS = 0;
   function buildStory(){
@@ -4406,12 +4406,15 @@
   }
   function storyPageCount(){ return buildStory().pages.length + 1; }   // +1 は扉
 
-  // 次のページがあることを知らせる▼（携帯機の「送り」表示）
-  const STORY_ARROW = [
-    [1,1,1,1,1],
-    [0,1,1,1,0],
-    [0,0,1,0,0],
-  ];
+  // 次のページがあることを知らせる▼（携帯機の「送り」表示）。
+  //  ドット格子(1マス4px)で描くと本文10pxより大きくなって浮くので、画素単位で文字なみの大きさにする
+  const STORY_ARW_W = 7, STORY_ARW_H = 4, STORY_ARW_Y = 236;   // 下の余白(21px)が上(20px)と釣り合う位置
+  function drawStoryArrow(){
+    ctxS.fillStyle = ON;
+    const x = W*S - STORY_PAD - STORY_ARW_W;
+    for(let i=0;i<STORY_ARW_H;i++)
+      ctxS.fillRect(x + i, STORY_ARW_Y + i, STORY_ARW_W - i*2, 1);
+  }
   function tickStory(){
     if(scene!=='story') return;
     const { pages, LH } = buildStory();
@@ -4433,7 +4436,7 @@
       });
     }
     // 次がある間だけ▼を点滅。最後のページでは出さない（そこで終わりだと分かる）
-    if(storyPage < pages.length && (fS % 16) < 10) stamp(ctxS, STORY_ARROW, W-8, 59, ON);
+    if(storyPage < pages.length && (fS % 16) < 10) drawStoryArrow();
     fS++;
   }
   function storyNext(){
