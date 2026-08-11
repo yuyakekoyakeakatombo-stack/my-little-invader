@@ -1041,21 +1041,23 @@
     if(manualFrame){ manualFrame.remove(); manualFrame = null; }
   }
 
-  function closeMiniGame(){
+  //  back=true …… ミニゲームのタイトルでBを押した。一つ前＝ゲーム選択画面へ戻す
+  //  back=false …… 遊び終えた／MENUで抜けた。育成画面へ戻す
+  function closeMiniGame(back){
     if(miniFrame){ miniFrame.remove(); miniFrame = null; }
     inMiniGame = false;
     pet.lastTick = Date.now();     // プレイ中のぶんは進行させない
     processGameResult();           // スコアを育成に反映
     savePet();
-    inPlay = false;
-    showView('main');
+    if(back){ inPlay = true; showView('menu'); }   // 選んだ位置(playSel)はそのまま残す
+    else    { inPlay = false; showView('main'); }
   }
   window.addEventListener('message', function(e){
     // 送り主を確かめる。ミニゲームは自分が開いた同一オリジンのiframeなので、
     //  それ以外から来た「閉じろ」は聞かない
     if(e.origin !== window.location.origin) return;
     if(!miniFrame || e.source !== miniFrame.contentWindow) return;
-    if(e.data && e.data.myvader === 'exit') closeMiniGame();
+    if(e.data && e.data.myvader === 'exit') closeMiniGame(e.data.back);
   });
   // 経過日数：進化タイマー(EP/ageMin)とは別カウント。カレンダーの日付境界(0:00)で+1
   function startOfDay(t){ const d = new Date(t); d.setHours(0,0,0,0); return d.getTime(); }

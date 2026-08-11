@@ -633,14 +633,17 @@
   function onBPress(){
     anim(document.getElementById('bb'));
     if(state===STATE.HELP) state=STATE.TITLE;
-    else if(state===STATE.TITLE) exitToMenu();     // タイトルでBを押したら選択画面へ戻る
+    else if(state===STATE.TITLE) exitToMenu(true); // タイトルでBを押したら選択画面へ戻る
   }
   press(document.getElementById('bb'), onBPress);
   // ミニゲームを閉じて、本体のゲーム選択画面へ戻る
-  function exitToMenu(){
+  //  back=true …… タイトルでBを押した＝ゲーム選択画面へ戻る
+  //  back=false …… MENUボタン＝遊ぶのをやめて育成画面へ
+  function exitToMenu(back){
     beep(700,0.06);
     // 宛先は自分と同じオリジン（本体）に限定する
-    if(window.parent && window.parent !== window) window.parent.postMessage({myvader:"exit"}, window.location.origin);
+    if(window.parent && window.parent !== window)
+      window.parent.postMessage({myvader:"exit", back: !!back}, window.location.origin);
     else window.location.href='invader_game.html';
   }
   press(document.getElementById('bmenu'), ()=>{ const m=document.getElementById('bmenu'); m.style.transform='scale(.93)'; setTimeout(()=>m.style.transform='',100); exitToMenu(); });
