@@ -4236,8 +4236,7 @@
   const STORY_TITLE = 'My Little Invader';
   const STORY_JA = [
     'その年は、雨ばかりだった。',
-    '私がそう感じていただけかもしれないが、その日も一日中雨が降り続いていた雨は、',
-    '音のない雷の後、ぴたりと止んだ。',
+    '私がそう感じていただけかもしれないが、その日も一日中降り続いていた雨は、音のない雷の後、ぴたりと止んだ。',
     'ふと、庭のほうから小さな音がした。風だろうと思ってねがえりを打ったけれど、しばらくすると、また同じ音が聞こえてきた。',
     '草をかき分けるような、かすかな音だった。',
     'さっきの雷といい、突然止んだ雨といい、何か変な予感がする。',
@@ -4249,13 +4248,11 @@
     '丸く小さな体に、目がふたつ。',
     '地球のどの生き物とも似ていない。',
     '私は、少し身がまえた。',
-    '',
     'かつて、地球には空からたくさんの ”それ” がやってきた。',
     '子どものころ、大人たちが空を見上げていたのを覚えている。',
     'あれは何だったのか。どこから来たのか。',
     'いまでも、はっきりとはわからない。',
-    'ただ、あの頃の話をするとき、大人たちは決まって、',
-    '「あいつらは地球に攻め込んできたのだ」と言った。',
+    'ただ、あの頃の話をするとき、大人たちは決まって、「あいつらは地球に攻め込んできたのだ」と言った。',
     '目の前にいるものが、その「やつら」なのかはわからない。',
     '似ているような気もする。',
     'けれど、それはあまりにも小さかった。',
@@ -4268,22 +4265,18 @@
     'と、そのとき、それが顔を上げた。',
     'つぶらなひとみが、こちらを見た。',
     '何かを訴えているわけではなかった。',
-    'ただ、そこにいる私を見つけて、',
-    '小さくまばたきをした。',
+    'ただ、そこにいる私を見つけて、小さくまばたきをした。',
     'それだけだった。',
     'なのに、なぜだろうか。',
-    'さっきまであったけいかいしんが、',
-    '急に溶けていくのがわかった。',
+    'さっきまであったけいかいしんが、急に溶けていくのがわかった。',
     '気がつくと、私はそれの前にしゃがみこんでいた。',
     '両手をそっと差し出す。',
     'それは逃げなかった。',
-    '小さな体を手のひらに乗せると、',
-    '思っていたよりも温かかった。',
+    '小さな体を手のひらに乗せると、思っていたよりも温かかった。',
     'このまま、ここに置いていくことはできない。',
     '「名前は、何がいいだろう。」',
     '気がつくと、私はそんなことを考え始めていた。',
-    'かつて地球にやってきた「やつら」と、',
-    'この子が同じものなのかは、わからない。',
+    'かつて地球にやってきた「やつら」と、この子が同じものなのかは、わからない。',
     'けれど、私はもう、この小さな生き物を放ってはおけなくなっていた。',
     '私の心は、すっかり占領されていたのだ。',
     'この、小さなインベーダーに。',
@@ -4321,17 +4314,14 @@
     'And then, it looked up.',
     'Two round, innocent eyes met mine.',
     'It wasn’t trying to tell me anything.',
-    'It simply noticed that I was there,',
-    'and blinked softly.',
+    'It simply noticed that I was there,and blinked softly.',
     'That was all.',
     'And yet, I don’t know why.',
-    'The wariness I had felt only moments before',
-    'seemed to melt away all at once.',
+    'The wariness I had felt only moments beforeseemed to melt away all at once.',
     'Before I knew it, I was crouching in front of it.',
     'I slowly held out both hands.',
     'It didn’t run.',
-    'When I lifted its little body into my hands,',
-    'it was warmer than I had expected.',
+    'When I lifted its little body into my hands,it was warmer than I had expected.',
     'I couldn’t leave it there.',
     '“What should I name you?”',
     'Before I knew it, I had already begun thinking about a name.',
@@ -4380,22 +4370,34 @@
     //  引かないと、ぶら下げた行だけ右端に貼りつく
     const HANG = ja ? 10 : 0;
     const maxW = W*S - STORY_PAD*2 - HANG;
-    const LH   = ja ? 13 : 11;
+    // 行間は文字の高さの1.5倍。10pxに13pxだと詰まって塊に見えた
+    const LH   = ja ? 15 : 12;
     const per  = Math.floor((STORY_BOT - STORY_TOP) / LH);   // 1ページの行数
     // 段落 → 行（段落の1行目は字下げ。ここが「詩ではなく地の文」に見せる要）
     const rows = [];
-    (ja ? STORY_JA : STORY_EN).forEach(para => {
-      if(!para){ rows.push({t:'', head:false}); return; }    // 原文の空行は1行あける
+    (ja ? STORY_JA : STORY_EN).forEach((para, pi) => {
+      if(!para){ rows.push({t:'', head:false, pad:0}); return; }
       wrapStory(ctxS, (ja ? '\u3000' : '') + para, maxW, ja)
-        .forEach((t,i) => rows.push({t, head: i===0}));
+        .forEach((t,i) => rows.push({
+          t, head: i===0,
+          // 段落の切れ目に少し空きを入れる。字下げだけだと、
+          //  短い段落が続いたときに どこで切れているのか見えない
+          pad: (i===0 && pi>0) ? 5 : 0,
+        }));
     });
     // 行 → ページ
-    const pages = []; let cur = [];
+    const pages = []; let cur = [], hUsed = 0;
+    const avail = STORY_BOT - STORY_TOP;
     rows.forEach(r => {
+      const pad = cur.length ? r.pad : 0;                    // ページ頭では空きを付けない
+      const need = pad + LH;
       // 段落の1行目がページの最終行に1行だけ残ると、次のページと切れて読みにくい
-      if(cur.length >= per || (r.head && cur.length === per-1)){ pages.push(cur); cur = []; }
-      if(!cur.length && !r.t) return;                        // ページ頭の空行は捨てる
-      cur.push(r);
+      if(hUsed + need > avail || (r.head && hUsed + need + LH > avail)){
+        pages.push(cur); cur = []; hUsed = 0;
+        if(!r.t) return;                                     // ページ頭の空行は捨てる
+        cur.push({...r, pad:0}); hUsed = LH; return;
+      }
+      cur.push({...r, pad}); hUsed += need;
     });
     if(cur.length) pages.push(cur);
     storyPages = { pages, LH };
@@ -4423,8 +4425,11 @@
     } else {
       ctxS.font = ja ? '10px ' + JP_FONT : '6px "Press Start 2P"';
       ctxS.textAlign='left';
-      (pages[storyPage-1]||[]).forEach((r,i)=>{
-        if(r.t) ctxS.fillText(r.t, STORY_PAD, STORY_TOP + i*LH);
+      let y = STORY_TOP;
+      (pages[storyPage-1]||[]).forEach(r=>{
+        y += r.pad;
+        if(r.t) ctxS.fillText(r.t, STORY_PAD, y);
+        y += LH;
       });
     }
     // 次がある間だけ▼を点滅。最後のページでは出さない（そこで終わりだと分かる）
