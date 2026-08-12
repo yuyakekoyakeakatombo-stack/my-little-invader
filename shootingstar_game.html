@@ -294,6 +294,33 @@
   let meteor=null;             // {x,y,vx,vy,hp,max,hurt}
   let metNext=MET_FIRST;       // 次に出す秒数
 
+  // ── きらきら星（まれに流れてくるごほうび）──
+  //  撃っても消えない。自機で受け止めると、しばらく弾が二連になる。
+  //  他の星は「当たったらミス」なので、取りに行く物だと分かるよう、
+  //  形も動きも普通の星と変えて、2コマで強く瞬かせる
+  const GEM_A=[
+    [0,0,2,0,0],
+    [0,1,2,1,0],
+    [2,2,2,2,2],
+    [0,1,2,1,0],
+    [0,0,2,0,0],
+  ];
+  const GEM_B=[
+    [2,0,1,0,2],
+    [0,2,2,2,0],
+    [1,2,2,2,1],
+    [0,2,2,2,0],
+    [2,0,1,0,2],
+  ];
+  const GEM_W=5, GEM_H=5;
+  const GEM_FIRST = 40;        // 最初に出る秒数
+  const GEM_EVERY = 45;        // 以降この秒数ごと
+  const GEM_VY    = 0.32;      // 普通の星より遅く落とす（取りに行く余裕を作る）
+  const DBL_SEC   = 12;        // 二連射が続く秒数
+  let gem=null;                // {x,y,vx}
+  let gemNext=GEM_FIRST;
+  let dblT=0;                  // 二連射の残りフレーム
+
   let stars=[];               // {x,y,vx,vy}
   let beams=[];               // {x,y}
   let spawnTimer=0;
@@ -315,6 +342,7 @@
     plyX=W/2-CH_W/2; score=0; elapsed=0; lives=MISS_MAX;
     stars=[]; beams=[]; flashes=[]; spawnTimer=0; fireTimer=0;
     meteor=null; metNext=MET_FIRST;
+    gem=null; gemNext=GEM_FIRST; dblT=0;
     state=STATE.PLAY;
   }
 
@@ -331,9 +359,15 @@
   }
 
   function fire(){
-    // 自機の砲口から真上へ
-    beams.push({x:plyX+GUN_X_OFF, y:CY-1});
-    beep(880,0.04);
+    // 自機の砲口から真上へ。きらきら星を取っているあいだは左右に振って2発
+    if(dblT>0){
+      beams.push({x:plyX+GUN_X_OFF-2, y:CY-1});
+      beams.push({x:plyX+GUN_X_OFF+2, y:CY-1});
+      beep(1040,0.04);
+    } else {
+      beams.push({x:plyX+GUN_X_OFF, y:CY-1});
+      beep(880,0.04);
+    }
   }
 
   // ── 衝突 ──
@@ -367,6 +401,30 @@
       metNext = t + MET_EVERY;
       beep(150,0.3,'sawtooth');
     }
+
+    // ── きらきら星 ──
+    //  隕石と重ならないようにする（同時に出ると、どちらを追うか迷わせる）
+    if(!gem && !meteor && t >= gemNext){
+      gem = { x: 4+Math.random()*(W-GEM_W-8), y: -GEM_H, vx: (Math.random()-0.5)*0.3 };
+      gemNext = t + GEM_EVERY;
+      beep(1500,0.10);
+    }
+    if(gem){
+      gem.x += gem.vx; gem.y += GEM_VY;
+      if(gem.x<1 || gem.x>W-GEM_W-1) gem.vx = -gem.vx;
+      // 受け取り＝自機に触れること。撃っても消えない（連射中に消えると取りようがない）
+      if(gem.x+GEM_W>=plyX && gem.x<=plyX+CH_W && gem.y+GEM_H>=CY && gem.y<=CY+CH_H){
+        dblT = Math.round(DBL_SEC*FPS);
+        score += 20;
+        for(let i=0;i<5;i++) flashes.push({x:Math.round(gem.x+2+(Math.random()*4-2)),
+                                           y:Math.round(gem.y+2), t:6+i, type:'hit'});
+        beep(1200,0.05); beep(1800,0.12);
+        gem = null;
+      } else if(gem.y > GY){
+        gem = null;                      // 取り逃がしても減点はしない（ごほうびなので）
+      }
+    }
+    if(dblT>0) dblT--;
 
     // 星スポーン（隕石が出ているあいだは半分に抑える）
     spawnTimer++;
@@ -523,18 +581,20 @@
       ct.fillStyle=OFF; ct.fillRect(0,0,W*S,H*S);
       // 本文は視認性優先で 5px → 7px。
       // 隕石の得点・失点まで入れるため、点数表は6px・行間7ドットに詰めて画面(H=65)に収める
-      txtC('HOW TO PLAY',2,7,ON);
-      hl(9,ON);
-      txt('MOVE',2,12,7,ON);  arrowRow(30,12,['left','right'],ON);
-      txt('SHOOT',2,19,7,ON); txt('A',30,19,7,ON);
-      hl(26,ON);
-      txt('HIT STAR',2,30,6,ON);  txt('+5',W-8,30,6,ON);
-      txt('MISSED',2,36,6,ON);    txt('-10',W-11,36,6,ON);
-      txt('GET HIT',2,42,6,ON);   txt('-15',W-11,42,6,ON);
+      txtC('HOW TO PLAY',1,7,ON);
+      hl(8,ON);
+      txt('MOVE',2,11,7,ON);  arrowRow(30,11,['left','right'],ON);
+      txt('SHOOT',2,17,7,ON); txt('A',30,17,7,ON);
+      hl(24,ON);
+      txt('HIT STAR',2,26,6,ON);  txt('+5',W-8,26,6,ON);
+      txt('MISSED',2,32,6,ON);    txt('-10',W-11,32,6,ON);
+      txt('GET HIT',2,38,6,ON);   txt('-15',W-11,38,6,ON);
       // 隕石は何発も当てないと壊せない。落とすといちばん重い減点なので、そこまで書く
-      txt('METEOR',2,48,6,ON);    txt('MANY HITS',14,49,5,DIM);  txt('+60',W-11,48,6,ON);
-      txt('DROPPED',2,54,6,ON);   txt('-30',W-11,54,6,ON);
-      if(Math.floor(Date.now()/450)%2===0) txtC('A/B : BACK',61,5,ON);
+      txt('METEOR',2,44,6,ON);    txt('MANY HITS',14,45,5,DIM);  txt('+60',W-11,44,6,ON);
+      txt('DROPPED',2,50,6,ON);   txt('-30',W-11,50,6,ON);
+      // きらきら星は「当たったらミス」ではない。取りに行く物だと分かるよう明記する
+      txt('CATCH SPARKLE',2,56,6,ON); txt('2 SHOTS',W-14,56,6,ON);
+      if(Math.floor(Date.now()/450)%2===0) txtC('A/B : BACK',62,5,ON);
       return;
     }
     if(state===STATE.PLAY){
@@ -550,6 +610,20 @@
       // 星＋尾
       stars.forEach(s=>{ tail(s); star(Math.round(s.x),Math.round(s.y)); });
       drawMeteor();
+      // きらきら星：2コマを速く入れ替えて瞬かせる
+      if(gem){
+        const g = (Math.floor(elapsed/3)%2) ? GEM_B : GEM_A;
+        const gx = Math.round(gem.x), gy = Math.round(gem.y);
+        for(let ry=0;ry<GEM_H;ry++) for(let rx=0;rx<GEM_W;rx++){
+          const v=g[ry][rx];
+          if(v && gy+ry > HDR_Y) d(gx+rx, gy+ry, SC[v]);
+        }
+      }
+      // 二連射の残り時間：ヘッダーの下に減っていく帯で出す
+      if(dblT>0){
+        const len = Math.round((W-2) * dblT / (DBL_SEC*FPS));
+        for(let x=1;x<1+len;x++) d(x, HDR_Y+1, ON);
+      }
       // ビーム
       beams.forEach(b=>{ d(b.x,b.y,ON); d(b.x,b.y+1,DIM); });
       // 自機
