@@ -313,13 +313,14 @@
     [2,0,1,0,2],
   ];
   const GEM_W=5, GEM_H=5;
-  const GEM_FIRST = 40;        // 最初に出る秒数
-  const GEM_EVERY = 45;        // 以降この秒数ごと
+  const GEM_FIRST = 80;        // 最初に出る秒数
+  const GEM_EVERY = 90;        // 以降この秒数ごと
   const GEM_VY    = 0.32;      // 普通の星より遅く落とす（取りに行く余裕を作る）
   const DBL_SEC   = 12;        // 二連射が続く秒数
   let gem=null;                // {x,y,vx}
   let gemNext=GEM_FIRST;
-  let dblT=0;                  // 二連射の残りフレーム
+  let dblT=0;                  // 強化射撃の残りフレーム
+  let dblSide=0;               // 交互に出す砲口（0=左 1=右）
 
   let stars=[];               // {x,y,vx,vy}
   let beams=[];               // {x,y}
@@ -342,7 +343,7 @@
     plyX=W/2-CH_W/2; score=0; elapsed=0; lives=MISS_MAX;
     stars=[]; beams=[]; flashes=[]; spawnTimer=0; fireTimer=0;
     meteor=null; metNext=MET_FIRST;
-    gem=null; gemNext=GEM_FIRST; dblT=0;
+    gem=null; gemNext=GEM_FIRST; dblT=0; dblSide=0;
     state=STATE.PLAY;
   }
 
@@ -358,12 +359,16 @@
     stars.push(p);
   }
 
+  //  発射の間隔。強化中は倍の速さで撃つ。
+  //   1発ずつ左右に振り分けるので、間隔まで元のままだと弾数が増えず、
+  //   ごほうびなのに真上を撃てなくなるぶん弱くなってしまう
+  function fireGap(){ return dblT>0 ? 2 : 4; }
   function fire(){
-    // 自機の砲口から真上へ。きらきら星を取っているあいだは左右に振って2発
     if(dblT>0){
-      beams.push({x:plyX+GUN_X_OFF-2, y:CY-1});
-      beams.push({x:plyX+GUN_X_OFF+2, y:CY-1});
-      beep(1040,0.04);
+      // 左右の砲口から交互に。同時に2発出すより、撃っている感じが出る
+      beams.push({x:plyX+GUN_X_OFF+(dblSide?2:-2), y:CY-1});
+      dblSide ^= 1;
+      beep(dblSide?1040:960, 0.04);
     } else {
       beams.push({x:plyX+GUN_X_OFF, y:CY-1});
       beep(880,0.04);
@@ -386,7 +391,7 @@
     if(plyX>PLY_MAX) plyX=PLY_MAX;
 
     // 連射
-    if(keys.fire){ fireTimer--; if(fireTimer<=0){ fire(); fireTimer=4; } }
+    if(keys.fire){ fireTimer--; if(fireTimer<=0){ fire(); fireTimer=fireGap(); } }
     else fireTimer=0;
 
     // ビーム移動
@@ -695,7 +700,7 @@
   function onADown(){
     anim(ba);
     // プレイ中のみ押した瞬間に発射。状態遷移は離した時に処理（二重発火防止）
-    if(state===STATE.PLAY){ keys.fire=true; fire(); fireTimer=4; }
+    if(state===STATE.PLAY){ keys.fire=true; fire(); fireTimer=fireGap(); }
   }
   function onAUp(){
     keys.fire=false;
@@ -727,7 +732,7 @@
     if(e.key==='ArrowLeft')keys.left=true; if(e.key==='ArrowRight')keys.right=true;
     if((e.key==='ArrowUp'||e.key==='ArrowDown') && state===STATE.TITLE){ e.preventDefault(); menuUp(); }
     if(e.key===' '||e.key.toLowerCase()==='a'){ e.preventDefault();
-      if(state===STATE.PLAY){ if(!keys.fire){ keys.fire=true; fire(); fireTimer=4; } }
+      if(state===STATE.PLAY){ if(!keys.fire){ keys.fire=true; fire(); fireTimer=fireGap(); } }
     }
     // Bボタンもキーで押せるようにする（画面のBだけ効かないのは分かりにくい）
     if((e.key.toLowerCase()==='b'||e.key==='Escape') && !e.repeat){ e.preventDefault(); onBPress(); }
