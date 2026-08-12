@@ -53,6 +53,34 @@ def svg(grid, label):
             'xmlns="http://www.w3.org/2000/svg">%s</svg><figcaption>%s</figcaption></figure>'
             % (w, h, w*SCALE, h*SCALE, ''.join(rects), label))
 
+def solid(g):
+    """0/1の2値スプライトを 0/2 に直す。薄い色(1)と混ぜて描くための下ごしらえ"""
+    return [[2 if v else 0 for v in row] for row in g]
+
+def with_beam(ufo, rows=9, half_max=5):
+    """UFOの下に、地面へ向かって広がるビームを足す（ゲームと同じく薄い色の三角）"""
+    w = len(ufo[0]); cx = w // 2
+    g = solid(ufo)
+    for i in range(rows):
+        half = round((i+1) * half_max / rows)
+        row = [0]*w
+        for dx in range(-half, half+1):
+            x = cx + dx
+            if 0 <= x < w: row[x] = 1          # 1 = 薄い色
+        g.append(row)
+    return g
+
+def charging(ufo, tail=5):
+    """地面すれすれを横切ってくる姿。うしろに薄い線を引いて動きを表す"""
+    w = len(ufo[0]); h = len(ufo)
+    g = [[0]*tail + list(r) for r in solid(ufo)]
+    for y in (2, 3, 4):
+        for x in range(tail-1):
+            if (x + y) % 2 == 0: g[y][x] = 1   # 1 = 薄い色
+    g.append([0]*(tail+w))                      # 地面とのすき間
+    g.append([2]*(tail+w))                      # 地面
+    return g
+
 sw = (ROOT/'spacewalk_game.html').read_text(encoding='utf-8')
 ss = (ROOT/'shootingstar_game.html').read_text(encoding='utf-8')
 ab = (ROOT/'abduction_game.html').read_text(encoding='utf-8')
@@ -67,11 +95,13 @@ BLOCKS = {
  'shootingstar': [
     (js_array(ss, 'STAR'),   'ながれぼし'),
     (js_array(ss, 'METEOR'), 'いんせき'),
-    # きらきら星は2コマで瞬く。1コマだけ出すと ながれぼし と見分けがつかない
-    (join([js_array(ss, 'GEM_A'), js_array(ss, 'GEM_B')]), 'きらきらぼし'),
+    # 2コマ目（×の形）だけを出す。1コマ目は ながれぼし と紛らわしい
+    (js_array(ss, 'GEM_B'), 'きらきらぼし'),
  ],
  'abduction': [
     (js_array(ab, 'UFO'), 'UFO'),
+    (with_beam(js_array(ab, 'UFO')), 'ビーム'),
+    (charging(js_array(ab, 'UFO')), 'たいあたり'),
  ],
 }
 
