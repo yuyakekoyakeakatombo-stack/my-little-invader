@@ -372,10 +372,20 @@
   let warpLeft = WARP_MAX;
   let warpFx = 0, warpFromY = 0;    // 演出用（残っているフレーム数と、跳ぶ前の高さ）
   function safestY(){
+    // ボス戦のあいだは障害物が流れてこない（objs が空）。
+    //  「次に何かが来るまでの余裕」で測ると全部の高さが同点になり、
+    //  いまの高さが選ばれて跳ばずに終わってしまう。ボス戦は別の測りかたにする
+    if(state===STATE.BOSS || state===STATE.BOSS_INTRO){
+      const ucy = by + UFO_H/2;
+      let best=plyY, bestD=-1;
+      for(let y=PLY_MIN_Y; y<=PLY_MAX_Y; y++){
+        const d = Math.abs((y + CH_H/2) - ucy);      // UFOからいちばん離れた高さへ
+        if(d > bestD){ bestD=d; best=y; }
+      }
+      return best;
+    }
     // 候補の高さごとに「その高さに居たら、次に何かが来るまでどれだけ余裕があるか」を測る
-    const boss = (state===STATE.BOSS || state===STATE.BOSS_INTRO)
-               ? [{x:bx, y:by, w:UFO_W, h:UFO_H}] : [];
-    const list = objs.map(o=>{ const {w,h}=sprSize(o.si); return {x:o.x, y:o.y, w, h}; }).concat(boss);
+    const list = objs.map(o=>{ const {w,h}=sprSize(o.si); return {x:o.x, y:o.y, w, h}; });
     let best=plyY, bestScore=-Infinity;
     for(let y=PLY_MIN_Y; y<=PLY_MAX_Y; y++){
       let room = W*2;                                  // 何も無ければ最大
