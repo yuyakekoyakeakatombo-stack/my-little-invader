@@ -4361,6 +4361,7 @@
   const STORY_PAD = 6;      // 左右の余白(px)
   const STORY_TOP = 20;     // 本文の開始y(px)。上に余白を取って、天に貼りついて見えないようにする
   const STORY_BOT = 230;    // 本文の下限y(px)。この下に▼を置く
+  const STORY_PARA = 5;     // 段落のあいだの空き(px)
   // 折り返しとページ割りは言語ごとに一度だけ計算して使い回す
   let storyPages = null, storyPagesLang = '', storyPage = 0, fS = 0;
   function buildStory(){
@@ -4373,34 +4374,38 @@
     const maxW = W*S - STORY_PAD*2 - HANG;
     // 行間は文字の高さの1.5倍。英文は6pxだと小さすぎて読みにくかったので7pxにした
     const LH   = ja ? 15 : 14;
-    const per  = Math.floor((STORY_BOT - STORY_TOP) / LH);   // 1ページの行数
-    // 段落 → 行（段落の1行目は字下げ。ここが「詩ではなく地の文」に見せる要）
-    const rows = [];
+    // 段落ごとのかたまりにしておく。ページ割りで「途中で切らない」判断に使う
+    const blocks = [];
     (ja ? STORY_JA : STORY_EN).forEach((para, pi) => {
-      if(!para){ rows.push({t:'', head:false, pad:0}); return; }
-      wrapStory(ctxS, (ja ? '\u3000' : '') + para, maxW, ja)
-        .forEach((t,i) => rows.push({
-          t, head: i===0,
-          // 段落の切れ目に少し空きを入れる。字下げだけだと、
-          //  短い段落が続いたときに どこで切れているのか見えない
-          pad: (i===0 && pi>0) ? 5 : 0,
-        }));
+      if(!para){ blocks.push([{t:'', pad:0}]); return; }   // 原文の空行は1行あける
+      // 段落の1行目は字下げする。ここが「詩ではなく地の文」に見せる要
+      blocks.push(wrapStory(ctxS, (ja ? '\u3000' : '') + para, maxW, ja)
+        // 段落の切れ目に少し空きを入れる。字下げだけだと、
+        //  短い段落が続いたときに どこで切れているのか見えない
+        .map((t,i) => ({ t, pad: (i===0 && pi>0) ? STORY_PARA : 0 })));
     });
-    // 行 → ページ
+    // かたまり → ページ
     const pages = []; let cur = [], hUsed = 0;
     const avail = STORY_BOT - STORY_TOP;
-    rows.forEach(r => {
-      const pad = cur.length ? r.pad : 0;                    // ページ頭では空きを付けない
-      const need = pad + LH;
-      // 段落の1行目がページの最終行に1行だけ残ると、次のページと切れて読みにくい
-      if(hUsed + need > avail || (r.head && hUsed + need + LH > avail)){
-        pages.push(cur); cur = []; hUsed = 0;
-        if(!r.t) return;                                     // ページ頭の空行は捨てる
-        cur.push({...r, pad:0}); hUsed = LH; return;
-      }
-      cur.push({...r, pad}); hUsed += need;
+    const flush = () => { if(cur.length){ pages.push(cur); cur = []; hUsed = 0; } };
+    blocks.forEach(block => {
+      const pad  = cur.length ? block[0].pad : 0;            // ページ頭では空きを付けない
+      const need = pad + block.length * LH;
+      // 段落は途中で切らない。入りきらなければ段落ごと次のページへ送る。
+      //  文の途中でページが変わると読みが途切れるため。送ったぶんは
+      //  後ろのページが吸収するので、ページ数は増えない。
+      //  1ページに収まらないほど長い段落だけは、やむを得ず分ける
+      if(cur.length && hUsed + need > avail && block.length * LH <= avail) flush();
+      block.forEach((r, i) => {
+        const p = (i === 0 && cur.length) ? r.pad : 0;
+        if(hUsed + p + LH > avail) flush();
+        if(!cur.length && !r.t) return;                      // ページ頭の空行は捨てる
+        const p2 = cur.length ? p : 0;                       // 送った直後はページ頭
+        cur.push({ ...r, pad: p2 });
+        hUsed += p2 + LH;
+      });
     });
-    if(cur.length) pages.push(cur);
+    flush();
     storyPages = { pages, LH };
     storyPagesLang = lang;
     return storyPages;
