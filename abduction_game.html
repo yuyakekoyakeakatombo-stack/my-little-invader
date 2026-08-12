@@ -345,6 +345,23 @@
   // 入力
   const keys={left:false,right:false};
 
+  // ── ダッシュ（十字の左右をすばやく2回押す）──
+  //  ビームは避けきれない太さで来ることがあるので、一気に横へ抜ける手を用意する
+  const DBL_MS   = 260;      // この時間内に2度目を押すとダッシュ
+  const DASH_FR  = 6;        // ダッシュしている長さ（フレーム）
+  const DASH_SPD = 2.8;      // ダッシュ中の速さ（通常は1.2）
+  let dashT=0, dashDir=0, dashGhost=[];
+  const lastTap={left:0,right:0};
+  function tapDir(dir){
+    const now=Date.now();
+    if(state===STATE.PLAY && dashT<=0 && now-lastTap[dir] < DBL_MS){
+      dashDir = (dir==='left') ? -1 : 1;
+      dashT = DASH_FR; dashGhost=[];
+      beep(1300,0.05);
+    }
+    lastTap[dir]=now;
+  }
+
   function ufoCenter(){ return ufoX+5; }
   // 突進を終えて上空へ戻る。クールダウンを張り、次はビーム回にする
   function endCharge(D){
@@ -371,6 +388,7 @@
     mode='safe'; modeTimer=0; beamX=ufoCenter();
     chargeCD=0; forceBeamNext=false; diveStreak=0;
     graceFrames=6;
+    dashT=0; dashDir=0; dashGhost=[]; lastTap.left=0; lastTap.right=0;
     score=0; elapsed=0; hitCount=0; hitCooldown=0;
     state=STATE.PLAY;
   }
@@ -482,10 +500,18 @@
     if(ufoY<ufoYtarget) ufoY=Math.min(ufoY+2,ufoYtarget);
     else if(ufoY>ufoYtarget) ufoY=Math.max(ufoY-2,ufoYtarget);
 
-    // プレイヤー横移動
+    // プレイヤー横移動。ダッシュ中は左右キーより優先する
     const spd=1.2;
-    if(keys.left)  plyX-=spd;
-    if(keys.right) plyX+=spd;
+    if(dashT>0){
+      dashGhost.push(Math.round(plyX));      // 残像用にいた場所を覚えておく
+      if(dashGhost.length>3) dashGhost.shift();
+      plyX += dashDir*DASH_SPD;
+      dashT--;
+    } else {
+      if(dashGhost.length) dashGhost.shift();
+      if(keys.left)  plyX-=spd;
+      if(keys.right) plyX+=spd;
+    }
     if(plyX<PLY_MIN) plyX=PLY_MIN;
     if(plyX>PLY_MAX) plyX=PLY_MAX;
 
@@ -551,15 +577,17 @@
       ct.fillStyle=OFF; ct.fillRect(0,0,W*S,H*S);
       // 本文は視認性優先で 5px → 7px。行間も広げて再レイアウト
       txtC('HOW TO PLAY',2,7,ON);
-      hl(10,ON);
-      txt('MOVE',2,13,7,ON); arrowRow(30,13,['left','right'],ON);
-      txt('JUMP',2,21,7,ON); txt('A',30,21,7,ON);
-      hl(29,ON);
-      txt('SURVIVE LONG!',2,32,7,ON);
-      txt('BEAM = CAUGHT',2,41,6,ON);
+      hl(9,ON);
+      txt('MOVE',2,12,7,ON); arrowRow(30,12,['left','right'],ON);
+      // ビームが太い回は横に走らないと抜けられない。2度押しで一気に動けることを書く
+      txt('TAP TWICE TO DASH',2,19,5,DIM);
+      txt('JUMP',2,25,7,ON); txt('A',30,25,7,ON);
+      hl(32,ON);
+      txt('SURVIVE LONG!',2,35,7,ON);
+      txt('BEAM = CAUGHT',2,43,6,ON);
       // 体当たりは即終了ではなく減点。「当たっても平気」と誤解されないよう点数を出す
-      txt('UFO HITS YOU',2,48,6,ON);  txt('-30',W-11,48,6,ON);
-      txt('JUMP OVER IT',2,54,6,DIM);
+      txt('UFO HITS YOU',2,49,6,ON);  txt('-30',W-11,49,6,ON);
+      txt('JUMP OVER IT',2,55,6,DIM);
       if(Math.floor(Date.now()/450)%2===0) txtC('A/B : BACK',61,5,ON);
       return;
     }
@@ -583,6 +611,8 @@
         }
       }
       // UFO衝突直後は点滅で無敵を示す
+      // ダッシュの残像。通った跡を薄い色で置いて、速く動いたことを見せる
+      dashGhost.forEach(gx=>stamp(CHAR(), gx, Math.round(plyY), DIM));
       const flashing = hitCooldown>0 && Math.floor(hitCooldown/2)%2===0;
       if(!flashing) stamp((!jumping && Math.floor(elapsed/5)%2) ? CHAR2() : CHAR(), Math.round(plyX), Math.round(plyY), ON);  // 2コマ屈伸（接地中のみ・判定は不変）
       drawHud();
@@ -636,8 +666,8 @@
   const elR=document.querySelector('.dpad-arrow.right');
   const elU=document.querySelector('.dpad-arrow.up');
   const elD=document.querySelector('.dpad-arrow.down');
-  press(elL,()=>{keys.left=true;dpadAnim(elL);});  release(elL,()=>keys.left=false);
-  press(elR,()=>{keys.right=true;dpadAnim(elR);}); release(elR,()=>keys.right=false);
+  press(elL,()=>{keys.left=true;dpadAnim(elL);tapDir('left');});   release(elL,()=>keys.left=false);
+  press(elR,()=>{keys.right=true;dpadAnim(elR);tapDir('right');}); release(elR,()=>keys.right=false);
   function menuMove(){ if(state===STATE.TITLE){ menuSel=(menuSel+1)%2; beep(500,0.05); } }
   press(elU,()=>{dpadAnim(elU); menuMove();});
   press(elD,()=>{dpadAnim(elD); menuMove();});
@@ -677,8 +707,9 @@
 
   // キーボード対応
   document.addEventListener('keydown',e=>{
-    if(e.key==='ArrowLeft') keys.left=true;
-    if(e.key==='ArrowRight') keys.right=true;
+    // キーの押しっぱなし(e.repeat)は2度押しに数えない
+    if(e.key==='ArrowLeft'){ if(!keys.left && !e.repeat) tapDir('left'); keys.left=true; }
+    if(e.key==='ArrowRight'){ if(!keys.right && !e.repeat) tapDir('right'); keys.right=true; }
     if((e.key==='ArrowUp'||e.key==='ArrowDown') && state===STATE.TITLE){ e.preventDefault(); menuMove(); return; }
     if(e.key===' '||e.key==='ArrowUp'||e.key.toLowerCase()==='a'){ e.preventDefault(); if(state===STATE.PLAY) jump(); }
     // Bボタンもキーで押せるようにする（画面のBだけ効かないのは分かりにくい）

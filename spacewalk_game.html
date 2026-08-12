@@ -365,6 +365,43 @@
   const FIELD_H = GBOT-GTOP;
   const SAFE_GAP = CH_H + 5;   // キャラが通れる最低隙間（余裕を持たせる）
 
+  // ── ワープ（Aボタン。1回のプレイで3回まで）──
+  //  逃げ場が無くなったときの最後の手。いま流れてきているものを見て、
+  //  いちばん先まで何も来ていない高さへ跳ぶ
+  const WARP_MAX = 3;
+  let warpLeft = WARP_MAX;
+  let warpFx = 0, warpFromY = 0;    // 演出用（残っているフレーム数と、跳ぶ前の高さ）
+  function safestY(){
+    // 候補の高さごとに「その高さに居たら、次に何かが来るまでどれだけ余裕があるか」を測る
+    const boss = (state===STATE.BOSS || state===STATE.BOSS_INTRO)
+               ? [{x:bx, y:by, w:UFO_W, h:UFO_H}] : [];
+    const list = objs.map(o=>{ const {w,h}=sprSize(o.si); return {x:o.x, y:o.y, w, h}; }).concat(boss);
+    let best=plyY, bestScore=-Infinity;
+    for(let y=PLY_MIN_Y; y<=PLY_MAX_Y; y++){
+      let room = W*2;                                  // 何も無ければ最大
+      for(const o of list){
+        if(y+CH_H-1 < o.y || y > o.y+o.h-1) continue;  // 縦に重ならないものは関係ない
+        const dx = o.x - (plyX+CH_W);                  // 自機の前方までの距離
+        if(dx < -o.w) continue;                        // すでに後ろへ抜けた
+        room = Math.min(room, Math.max(0, dx));
+      }
+      // 同じ余裕なら、いまの高さに近いほうを選ぶ（むやみに大きく跳ばない）
+      const score = room - Math.abs(y-plyY)*0.01;
+      if(score > bestScore){ bestScore=score; best=y; }
+    }
+    return best;
+  }
+  function doWarp(){
+    if(state!==STATE.PLAY && state!==STATE.BOSS) return;
+    if(warpLeft<=0){ beep(180,0.10,'sawtooth'); return; }   // 残っていないことを音で返す
+    const ny = safestY();
+    if(Math.abs(ny-plyY) < 1){ beep(180,0.10,'sawtooth'); return; }  // すでにそこが最善
+    warpFromY = plyY; plyY = ny;
+    warpLeft--; warpFx = 8;
+    hitCooldown = Math.max(hitCooldown, Math.round(0.3*FPS));  // 着地直後の事故を防ぐ
+    beep(1400,0.05); beep(1900,0.10);
+  }
+
   // 新しい障害物(x=W+1)が、既存の各障害物と「xが重なる時間帯」に
   // 縦で塞ぎ合わないか確認する。障害物は全部同じspeedで流れるので相対位置は不変。
   // よって今この瞬間、新障害物のxレンジと重なる/将来重なる既存物との
@@ -442,6 +479,7 @@
   function startGame(){
     plyX=4; plyY=Math.floor((GTOP+GBOT)/2-CH_H/2);
     lives=MISS_MAX; score=0; elapsed=0; stage=0;
+    warpLeft=WARP_MAX; warpFx=0;
     objs=[]; spawnTimer=0; hitCooldown=0;
     phaseTimer=BOSS_INTERVAL*FPS;
     state=STATE.PLAY;
@@ -696,8 +734,21 @@
     // y=59 はフィールド下端の区切り線(GBOT+1=58)の直下。これより上げると線に食い込む。
     txt('SCORE '+score,1,59,7,ON);
     txt('ST'+(stage+1),(W-7),59,7,ON);
+    // ワープの残り。使い切ると薄くなる
+    for(let i=0;i<WARP_MAX;i++){
+      const wx=W-20+i*4, on=i<warpLeft;
+      d(wx,59,on?ON:DIM); d(wx+1,59,on?ON:DIM); d(wx,60,on?ON:DIM); d(wx+1,60,on?ON:DIM);
+    }
   }
   function drawPlayer(){
+    // ワープの跡：跳ぶ前の場所と、そこから今の場所へ薄い点を並べる
+    if(warpFx>0){
+      stamp(CHAR(), Math.round(plyX), Math.round(warpFromY), DIM);
+      const step = warpFromY < plyY ? 2 : -2;
+      for(let y=warpFromY+step; (step>0 ? y<plyY : y>plyY); y+=step)
+        d(Math.round(plyX)+Math.floor(CH_W/2), y, DIM);
+      warpFx--;
+    }
     const flashing=hitCooldown>0 && Math.floor(hitCooldown/2)%2===0;
     if(!flashing) stamp((Math.floor(elapsed/5)%2) ? CHAR2() : CHAR(), Math.round(plyX), Math.round(plyY), ON);  // 2コマ屈伸（描画のみ・判定は不変）
   }
@@ -732,9 +783,11 @@
       txt('DODGE ALL',2,24,7,ON);
       txt('STARS SATELLITES',2,32,5,DIM);
       txt('ROCKETS',2,38,5,DIM);
-      txt('UFO BOSS 30s',2,45,6,ON);
-      txt('5 MISS = OVER',2,52,6,ON);
-      if(Math.floor(Date.now()/450)%2===0) txtC('A/B : BACK',60,5,ON);
+      txt('UFO BOSS 30s',2,44,6,ON);
+      txt('5 MISS = OVER',2,50,6,ON);
+      // 逃げ場が無くなったときの最後の手。回数が限られていることまで書く
+      txt('A : WARP',2,56,6,ON);  txt('3 TIMES',W-11,56,6,ON);
+      if(Math.floor(Date.now()/450)%2===0) txtC('A/B : BACK',62,5,ON);
       return;
     }
     if(state===STATE.PLAY){
@@ -821,7 +874,7 @@
   release(eD,()=>keys.down=false);
 
   function confirmTitle(){ beep(880,0.07); if(menuSel===0) startGame(); else state=STATE.HELP; }
-  function onADown(){ anim(document.getElementById('ba')); }
+  function onADown(){ anim(document.getElementById('ba')); doWarp(); }
   function onAUp(){
     if(state===STATE.TITLE) confirmTitle();
     else if(state===STATE.HELP) state=STATE.TITLE;
