@@ -347,7 +347,7 @@
       hungry:'HUNGRY', mood:'MOOD', health:'HEALTH', stage:'STAGE', ptype:'TYPE',
       good:'GOOD', sick:'SICK', weak:'CRITICAL', normal:'NORMAL', starving:'STARVING', dead:'DEAD', friend:'BOND',
       newborn:'NEWBORN', baby:'BABY', child:'CHILD', adult:'ADULT', finalst:'FINAL',
-      gray:'GRAY', martian:'MARTIAN', alien:'ALIEN',
+      gray:'GRAY', martian:'MARTIAN', invader:'INVADER',
       nameq:'NAME?', done:'DONE', del:'DELETE', langval:'ENGLISH',
     },
     ja: {
@@ -361,7 +361,7 @@
       hungry:'おなか', mood:'きげん', health:'けんこう', stage:'せいちょう', ptype:'タイプ',
       good:'げんき', sick:'びょうき', weak:'ひんし', normal:'ふつう', starving:'はらぺこ', dead:'おばけ', friend:'なかよし',
       newborn:'うまれたて', baby:'あかちゃん', child:'こども', adult:'おとな', finalst:'さいしゅう',
-      gray:'グレイ', martian:'マーシャン', alien:'エイリアン',
+      gray:'グレイ', martian:'マーシャン', invader:'インベーダー',
       nameq:'なまえは？', done:'けってい', del:'けす', langval:'にほんご',
     },
   };
@@ -2418,7 +2418,7 @@
   // TYPE：進化系統（分岐前は---）。tako=Martian
   function typeLabel(){
     if(pet.stage==='adult' || pet.stage==='final'){
-      return pet.lineage==='grey' ? T('gray') : pet.lineage==='tako' ? T('martian') : T('alien');
+      return pet.lineage==='grey' ? T('gray') : pet.lineage==='tako' ? T('martian') : T('invader');
     }
     return '---';
   }
