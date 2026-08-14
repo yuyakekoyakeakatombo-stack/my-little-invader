@@ -848,7 +848,7 @@
       txtC('GAME',22,8,ON);
       txtC('OVER',32,8,ON);
       txtC('SCORE',44,7,ON);   // 薄くて読みにくかったので濃く・大きく
-      txtC((''+score).padStart(5,'0'),53,8,ON);
+      txtC((''+Math.max(0,score)).padStart(5,'0'),53,8,ON);
       if(Math.floor(Date.now()/450)%2===0) txtC('PRESS A',64,5,DIM);
       return;
     }

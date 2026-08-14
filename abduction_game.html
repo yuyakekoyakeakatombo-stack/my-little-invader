@@ -452,7 +452,7 @@
     if(chargeCD>0) chargeCD--;
 
     // 生存加点
-    score = Math.floor(elapsed/FPS*SCORE_PER_SEC) - hitCount*PENALTY_HIT;
+    score = Math.max(0, Math.floor(elapsed/FPS*SCORE_PER_SEC) - hitCount*PENALTY_HIT);   // 減点は0止まり
 
     // UFOロジック
     if(mode==='safe'){

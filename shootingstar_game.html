@@ -459,14 +459,14 @@
                                            y:Math.round(meteor.y+2+Math.random()*4), t:8+i, type:'hit'});
         beep(1600,0.25); meteor=null;
       } else if(meteor.y+MET_H>=GY){          // 落ちた：重い減点
-        score-=30;
+        score=Math.max(0,score-30);
         flashes.push({x:Math.round(meteor.x+4), y:GY-1, t:10, type:'miss'});
         beep(120,0.35,'sawtooth'); meteor=null;
       } else {
         // 自機に当たったら流れ星と同じくミス
         const hitsPly = (meteor.x+MET_W>=plyX && meteor.x<=plyX+CH_W && meteor.y+MET_H>=CY && meteor.y<=CY+CH_H);
         if(hitsPly){
-          score-=15; lives--;
+          score=Math.max(0,score-15); lives--;
           flashes.push({x:Math.round(meteor.x+4), y:CY, t:8, type:'miss'});
           beep(180,0.14,'sawtooth'); meteor=null;
           if(lives<=0){ state=STATE.GAMEOVER; reportScore(); beep(140,0.4,'sawtooth'); }
@@ -504,17 +504,17 @@
       // 地面に落ちた
       const hitsGround = (s.y+STAR_H>=GY);
       if(hitsPlayer){
-        score-=15; lives--;
+        score=Math.max(0,score-15); lives--;
         flashes.push({x:s.x+2, y:Math.min(s.y+2,GY-1), t:8, type:'miss'});
         beep(180,0.14,'sawtooth');
         if(lives<=0){ state=STATE.GAMEOVER; reportScore(); beep(140,0.4,'sawtooth'); }
       } else if(hitsGround){
-        score-=10;
+        score=Math.max(0,score-10);
         flashes.push({x:s.x+2, y:GY-1, t:6, type:'miss'});
         beep(200,0.1,'sawtooth');
       } else if(s.x<-8||s.x>W+8){
         // 撃てずに左右へ抜けた星も減点
-        score-=10;
+        score=Math.max(0,score-10);
         const fx=Math.max(1,Math.min(W-2,s.x+2));
         flashes.push({x:fx, y:Math.round(s.y)+2, t:6, type:'miss'});
         beep(200,0.1,'sawtooth');
