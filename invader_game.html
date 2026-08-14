@@ -621,7 +621,8 @@
     A:0,                                  // かまい度の累積（＋甘やかし／−放置）
     praiseCount:0, scoldBadCount:0,       // ほめた回数／理不尽・睡眠妨害のしかる回数
     plays:{sw:0,ss:0,ab:0},               // ミニゲームのプレイ回数（進化の傾向づけ）
-    touchedToday:false, noTouchDays:0,    // 今日ふれあったか／ふれあいゼロの連続日数
+    touchedToday:false, touchCount:0,      // 今日ふれあったか／その回数
+    noTouchDays:0,                        // ふれあいゼロの連続日数
     estrangedDays:0,                      // 疎遠期の連続日数（帰還までの猶予）
     // ── 手紙 ──
     diary:{}, diaryDay:'', diaryDue:null, // その日の出来事／日記を書き終えた日／翌日に持ち越したぶん
@@ -852,7 +853,9 @@
     }
   }
   // ごはん以外の世話（ほめる・遊ぶ・そうじ・くすり）に触れた印。1日1回でも触れれば放置ではない
-  function markTouch(){ pet.touchedToday = true; }
+  //  ふれあいの回数を数える。「1回でもやれば免除」だと、そうじ1回で
+  //   なかよしが永久に減らなくなってしまうので、回数で見る
+  function markTouch(){ pet.touchedToday = true; pet.touchCount = (pet.touchCount||0) + 1; }
   const DAY_MS = 86400000;
   function daysSince(ts){ return ts ? Math.max(0, (Date.now()-ts)/DAY_MS) : 0; }
 
@@ -1413,10 +1416,20 @@
   // ── 1日ぶんの締め ──
   //  d=その日の日記材料 / touched=ふれあいがあったか / nightPlay=夜更かしして遊んだか。
   //  アプリを閉じたままだった日にも同じ処理を回すため、独立した関数にしてある
-  function closeOneDay(d, touched, nightPlay){
+  //  なかよしが1日に下がる量。ふれあい（ごはん以外の世話）の回数で決める。
+  //   0回=-5 ／ 1回=-2 ／ 2回以上=0。1回やれば免除、では抜け道になる
+  function bondDrop(touches){ return touches >= 2 ? 0 : (touches === 1 ? 2 : 5); }
+  const BOND_NEGLECT = 3;     // ひもじい・病気のまま終わった日は、世話をしていてもこれだけ下がる
+
+  function closeOneDay(d, touches, nightPlay){
+    const touched = touches > 0;
     // ふれあい（ごはん以外の世話）が無い日が続くと、少しずつ心が離れる
     if(touched){ pet.noTouchDays = 0; }
-    else { pet.noTouchDays = (pet.noTouchDays||0) + 1; addA(A_ADJ.noTouchDay); addP(P_ADJ.noTouchDay); pet.B = Math.max(0, pet.B - 5); }
+    else { pet.noTouchDays = (pet.noTouchDays||0) + 1; addA(A_ADJ.noTouchDay); addP(P_ADJ.noTouchDay); }
+    // おなかを空かせたまま・病気のままにした日は、世話をしていても
+    //  「放っておかれた」事実が残る。かまった回数では帳消しにしない
+    const down = Math.max(bondDrop(touches), (d.hungry || d.sick) ? BOND_NEGLECT : 0);
+    if(down) pet.B = Math.max(0, pet.B - down);
     pet.lowBDays = (pet.B < 20) ? pet.lowBDays + 1 : 0;
     // 起こさず・夜更かしもさせず・ちゃんと構った日は、生活リズムが整っておっとり寄りに戻る。
     //  これが無いとPは上がる一方になるので、性格の振り子はここで戻す
@@ -1641,7 +1654,7 @@
         for(let i=0;i<skipped;i++){
           if(pet.dead || pet.gone) break;               // 途中で亡くなった／連れて行かれたらそこで止める
           const first = (i === 0);
-          closeOneDay(first ? d : idle, first && !!pet.touchedToday, first && !!pet.nightPlayToday);
+          closeOneDay(first ? d : idle, first ? (pet.touchCount||0) : 0, first && !!pet.nightPlayToday);
         }
 
         // ── 日記：寝る前に書けなかったぶんは持ち越して、翌日「きのうのこと」として書く ──
@@ -1659,7 +1672,7 @@
       }
       pet.diary = nextMat;                              // 材料は日ごとにリセット（書いたあとのぶんだけ引き継ぐ）
       pet.calDay = tk;
-      pet.touchedToday = false;
+      pet.touchedToday = false; pet.touchCount = 0;
       pet.nightPlayToday = false;
     }
     // 旅立ちエンド（E4）：最終形態から14日・なつき度60以上・健康
@@ -2858,6 +2871,14 @@
     jumpDur = Math.max(8, Math.round(8 * Math.sqrt(jumpHi / 3)));
     jumpT   = jumpDur;
   }
+  //  なかよしの低さ 0〜1。60以上で0、20未満で1。
+  //   数字ではなく「動きの鈍さ」として見えるようにするための係数
+  const BOND_FULL = 60, BOND_EMPTY = 20;
+  function bondLow(){
+    const b = pet.B || 0;
+    return Math.max(0, Math.min(1, (BOND_FULL - b) / (BOND_FULL - BOND_EMPTY)));
+  }
+
   function moveProfile(){
     // speed:ドット/tick, jump:行動決定時のジャンプ率, jumpH:高さ, float:浮遊率, mode:'walk'|'hop'
     let p;
@@ -2877,6 +2898,17 @@
     const t = pTrait();
     p.speed *= 1 + t*0.35;
     p.jump   = Math.min(0.5, p.jump * (1 + t*0.6));
+    // なかよしが低いほど動かなくなる。跳ねる・走る・浮かぶといった
+    //  「機嫌のいい動き」から先に消えて、最後は端でじっとしている
+    const lw = bondLow();
+    if(lw > 0){
+      p.speed *= 1 - 0.45*lw;   // 落としすぎると端まで行き着かない
+      p.jump  *= 1 - 0.90*lw;
+      if(p.dash)  p.dash  *= 1 - 0.90*lw;
+      if(p.float) p.float *= 1 - 0.90*lw;
+      if(p.squatWalk) p.squatWalk *= 1 - 0.70*lw;
+    }
+    p.aloof = lw;      // 端に寄って動かなくなる度合い（0〜1）
     return p;
   }
 
@@ -3470,7 +3502,9 @@
     // ── 移動AI：歩き回る・ジャンプ・浮遊（タコ）・ぴょんぴょん（インベーダー） ──
     const gw = grid[0].length, gh = grid.length;
     const minX = 1, maxX = W - gw - 1;
-    if(walkX === null) walkX = Math.floor((W - gw)/2);
+    // 起動時の立ち位置。なかよしが低い子は、開いた時点でもう端にいる
+    //  （中央から歩かせると、端に着くまで何分もかかって伝わらない）
+    if(walkX === null) walkX = (bondLow() > 0.6) ? minX : Math.floor((W - gw)/2);
     walkX = Math.max(minX, Math.min(maxX, walkX));   // 進化でサイズが変わった時のクランプ
     const moving = !(asleep || isWeak() || pet.health==='SICK' || reactT>0 || evoT>0);
     let airOff = 0;   // ジャンプ/浮遊の上方向オフセット
@@ -3490,6 +3524,16 @@
         // 次の行動を決める（実行中のアクションが終わってから）：左へ／右へ／ひとやすみ
         const r = Math.random();
         walkDir = r < 0.34 ? -1 : (r < 0.68 ? 1 : 0);
+        // なかよしが低いと、近いほうの画面端へ寄っていって、そこで動かなくなる。
+        //  まず端へ向かい、着いたら立ち止まる、の順にしないと中央で固まってしまう
+        if(prof.aloof > 0){
+          const near = (walkX <= (minX + maxX) / 2) ? minX : maxX;
+          if(Math.abs(walkX - near) <= 3){
+            if(Math.random() < prof.aloof * 0.85) walkDir = 0;                // 端に着いた：動かない
+          } else if(Math.random() < prof.aloof * 0.8){
+            walkDir = (near === minX) ? -1 : 1;                               // まだ途中：端へ向かう
+          }
+        }
         if(prof.look && Math.random() < prof.look){
           lookT = LOOK_T; walkDir = 0;                                                  // グレイ：立ち止まって見回す
         } else if(prof.wiggle && Math.random() < prof.wiggle){
