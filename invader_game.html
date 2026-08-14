@@ -2832,7 +2832,10 @@
   let reactFood = 'meal';             // 食事アニメで描く中身（'meal'=ごはん / 'snack'=おやつ）
   // quiet=true のときは演出だけ出し、頭上の感情アイコンは表示しない（睡眠中の掃除など）
   let reactQuiet = false;
-  function setReaction(type, t=24, quiet=false){ reactType = type; reactT = t; reactQuiet = quiet; }
+  // 今のリアクションが終わってから食べさせる皿（'meal'/'snack'）。
+  //  しかってわがままが収まった時、しゅんとする様子を見せてから食事に移るために使う
+  let pendingEat = null;
+  function setReaction(type, t=24, quiet=false){ reactType = type; reactT = t; reactQuiet = quiet; pendingEat = null; }
 
   // ── 移動AI（進化段階・系統・性格で歩き方が変わる） ──
   let walkX = null, walkDir = 1, walkTimer = 0;
@@ -3009,11 +3012,14 @@
       case 'CLEAN':
         if(pet.W > 0 || pet.plateAt || pet.plateSpoiled){
           cleanSnapW = pet.W; cleanSnapPlate = !!pet.plateAt; cleanSnapSpoiled = !!pet.plateSpoiled; cleanSnapPoopFly = poopHasFlies(); cleanSnapKind = pet.plateKind;  // 見た目用に退避
+          // わがままで食べなかったごはんを下げただけの時は喜ばない。
+          //  自分が拒んだ皿を片づけられて♪を出すと、喜んでいるように見えてしまう
+          const onlyFresh = (pet.W === 0 && !!pet.plateAt && !pet.plateSpoiled);
           pet.W = 0; pet.plateAt = 0; pet.plateSpoiled = false; pet.poopSince = 0;
           raiseMood();                                              // 汚れを消してから上げるので、病気でなければMAXまで戻せる
           note('cleaned');
           addA(A_ADJ.clean); markTouch();
-          setReaction('clean', CLEAN_T, asleep);                    // ほうき掃きアニメ（睡眠中は音符を出さない）
+          setReaction('clean', CLEAN_T, asleep || onlyFresh);       // ほうき掃きアニメ（睡眠中と、拒んだ皿を下げただけの時は音符を出さない）
         }
         // 掃除するものが無い時は無反応（退屈マークを出さない）
         break;
@@ -3059,7 +3065,10 @@
           addD(+5);
           if(pet.mood > 0) pet.mood--;
           addA(A_ADJ.scoldFair); markTouch();   // しつけは甘やかしでも放置でもない（ふれあいには数える）
-          setReaction('sad');                                       // 食事は出さない。改めてごはんをあげれば食べる
+          setReaction('sad');                                       // まずしゅんとする
+          // ごはんを出したまましかった場合：しゅんとしたあとで、その皿を食べに行く。
+          //  叱られた直後に♪で喜ばれると「叱ったのに喜んでいる」ように見えるので、音符は出さない
+          if(pet.plateAt && !pet.plateSpoiled && pet.hunger < 5) pendingEat = pet.plateKind || 'meal';
         } else {                                                    // 不当なしかる
           pet.mood = Math.max(0, pet.mood - 2);
           pet.B = Math.max(0, pet.B - 2);
@@ -3717,6 +3726,15 @@
       reactT--;
       // 食事が終わったら、食べる前の位置ではなく画面中央から歩き再開
       if(reactT === 0 && reactType === 'eat'){ walkX = Math.floor((W - gw)/2); walkDir = Math.random()<0.5?-1:1; walkTimer = 0; }
+      // しかったあとの食事：しゅんとする演出が終わってから、音符なしで食べ始める
+      if(reactT === 0 && pendingEat){
+        const kind = pendingEat;
+        if(pet.plateAt && !pet.plateSpoiled && !effectiveAsleep() && !pet.tantrumAt && pet.hunger < 5){
+          pet.plateAt = 0; pet.hunger++; schedulePoop();
+          reactFood = kind; setReaction('eat', EAT_T, true);        // quiet：♪を出さずに食べる
+          savePet();
+        } else pendingEat = null;
+      }
     }
     if (showReact) {
       /* 演出アイコンは上で描画済み */
