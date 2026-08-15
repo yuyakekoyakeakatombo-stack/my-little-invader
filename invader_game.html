@@ -599,6 +599,8 @@
     mealCount:0, snackCount:0,            // ごはん／おやつを与えた回数（日次で減衰。おやつ過多の判定用）
     poopAt:0, poopSince:0,                // 次のうんち発生時刻／最初のうんちが出た時刻（放置でハエ）
     wokeUntil:0,                          // しかられて起きている期限
+    rhythmUntil:0,                        // しかって正した生活リズムが続く期限（この間は夜型シフトを外す）
+    nightCareAt:0,                        // 最後に夜ふけの世話をした時刻（Pの加算を1時間に1回に絞る）
     dayKey:'', bGainToday:0,              // なつき度の日次獲得上限管理
     dirtAcc:0,                            // 汚れ放置時間（分・病気抽選用）
     starveSickAcc:0, snackAcc:0,          // 空腹／おやつ過多の継続時間（分・病気抽選用）
@@ -615,6 +617,7 @@
     EP:0, ageMin:0, eggTargetEP:0,        // 進化ポイント/年齢(分)/NEWBORN→BABYの個体別目標EP
     finalAt:0, departFlag:false,          // 最終形態到達時刻・旅立ちエンド確定
     nightPlays:0, nightPlayToday:false,   // 夜更かしプレイ回数（22時以降。i3条件）／今日夜更かししたか
+    nightCareToday:false,                 // 今日、夜ふけに世話をしたか
     best:{sw:0,ss:0,ab:0},                // ミニゲーム自己ベスト（g3条件）
     tantrumAt:0, tantrumType:'',          // わがまま拒否中（Stage2まで。正当なしかるで解消）
     // ── かまい度システム（甘やかし↔放置。進化分岐と帰還判定に使う）──
@@ -701,6 +704,8 @@
     scoldBad:   +1,   // 理不尽なしかる（落ち着かなくなる）
     tantrumIgnored: +2, // わがままを叱らず流した（つけあがる）
     noTouchDay: +1,   // 放っておかれた日
+    nightCare:  +2,   // 夜ふけに世話をした（生活リズムが後ろへ引っぱられる。1時間に1回まで）
+    scoldRhythm:-6,   // 生活リズムの乱れを正しくしかった＝夜型が少し戻る
     calmDay:    -5,   // 起こさず・夜更かしもさせず・ちゃんと構った日＝落ち着いた一日
                       //  （やんちゃ側は1日に何度でも積めるが、落ち着きは1日1回しか戻らない）
   };
@@ -1135,6 +1140,10 @@
                 { ja:['おおきな こえは','こわい'], en:['LOUD VOICES','SCARE ME'] } ],
     woken:    [ { ja:['ゆうべ おこされた のは','いやだった'], en:['YOU WOKE ME UP.','I DID NOT LIKE IT'] },
                 { ja:['ねむいのに','おこされて しまった'], en:['I WAS SLEEPY BUT','YOU WOKE ME'] } ],
+    rhythmNight:[{ ja:['はやく ねなさいと','おこられた'], en:['YOU TOLD ME','TO GO TO BED'] },
+                { ja:['まだ おきていたかった','けど ねた'], en:['I WANTED TO STAY UP','BUT I WENT TO BED'] } ],
+    rhythmDay:[ { ja:['ひるまに ねていたら','おこされた'], en:['I WAS ASLEEP AT NOON.','YOU WOKE ME UP'] },
+                { ja:['よるに ねなさいと','おこられた'], en:['YOU TOLD ME TO SLEEP','AT NIGHT INSTEAD'] } ],
     playSw:   [ { ja:['スペースウォーク','また やりたい'], en:['I WANT TO PLAY','SPACEWALK AGAIN'] },
                 { ja:['そらを あるくのは','ほしを おもいだす'], en:['WALKING IN THE SKY','REMINDS ME OF HOME'] } ],
     playSs:   [ { ja:['シューティングスター','たのしかった'], en:['SHOOTING STAR','WAS FUN'] },
@@ -1239,7 +1248,8 @@
     ],
   };
   // 印象の強い順。上から拾って載せる
-  const DIARY_PRIORITY = ['farewell','departed','evolved','sick','cured','hungry','lonely','woken','scolded','dirty',
+  const DIARY_PRIORITY = ['farewell','departed','evolved','sick','cured','hungry','lonely','woken',
+                          'rhythmDay','rhythmNight','scolded','dirty',
                           'snackMany','tantrum','cleaned','praised','playSw','playSs','playAb',
                           'snack','fed','noPlay','rain','snow','clear','slept'];
 
@@ -1465,17 +1475,29 @@
     s ^= s >>> 15; s = Math.imul(s, 2246822519); s ^= s >>> 13;
     return ((s >>> 0) % 100000) / 100000;   // 0..1
   }
+  // 夜型シフト：やんちゃなほど、就寝も起床もまるごと後ろへずれる（＝昼夜逆転気味）。
+  //  睡眠時間そのものは変えない。ずれた結果、昼間に寝ている時間が生まれるのがこの仕組みの肝。
+  const OWL_MAX = 5;   // やんちゃMAXでのシフト量（時間）。inv基準なら就寝23時→4時、起床8時→13時
+  const SLEEP_DELAY_MS  = 8 * 60000;   // 夜更かしをしかってから、実際に寝入るまでの間
+  const NIGHT_CARE_FROM = 22, NIGHT_CARE_TO = 4;   // この時間帯の世話は「夜型のお世話」とみなす
+  //  ミニゲームの夜更かし判定と同じ窓にしてある。就寝時刻より前から数えないと、
+  //  リズムが整っている子は23時にはもう寝ていて、夜型の世話が一度も成立しない
+  function owlShift(at, ignoreFix){
+    // しかって正した直後は、その晩だけ本来の時間に戻る（叱った手応えをその日のうちに見せる）
+    if(!ignoreFix && (at || Date.now()) < (pet.rhythmUntil || 0)) return 0;
+    return Math.max(0, pTrait()) * OWL_MAX;
+  }
   // 段階/系統別の睡眠設定：bed=就寝時,wake=起床時（inv=夜更かしで24=0時）,jit=±分ゆらぎ,nap種別
-  function sleepConfig(){
+  //  owl=そのとき掛かっている夜型シフト量（本来の就寝時刻を逆算するのに使う）
+  function sleepConfig(at, ignoreFix){
     const st = pet.stage;
-    // 性格で就寝・起床を前後させる（やんちゃ＝遅寝早起きで睡眠が短い）。
-    //  Math.round は負の .5 を 0 方向へ丸める（round(-1.5) = -1）ため、そのまま使うと
-    //  やんちゃだけ2時間遅寝・おっとりは1時間早寝という非対称になる。絶対値で丸めて左右を揃える
-    const rnd = v => Math.sign(v) * Math.round(Math.abs(v));
+    const ow = owlShift(at, ignoreFix);
     const shift = c => { const t = pTrait();
-      return {bed: c.bed + rnd(t*1.5), wake: c.wake - rnd(t), jit: c.jit, nap: c.nap}; };
-    if(st==='egg' || st==='mid') return {bed:19, wake:8, jit:45, nap:'baby'};   // 赤ちゃん：ほぼ寝ている
-    if(st==='larva')             return {bed:20, wake:8, jit:40, nap:'young'};  // 幼体：夜＋昼寝（幅広）
+      // おっとり側は少し早寝早起き。やんちゃ側のずれは owl にまとめてある
+      const cm = Math.min(0, t);
+      return {bed: c.bed + ow + cm, wake: c.wake + ow + cm, jit: c.jit, nap: c.nap, owl: ow}; };
+    if(st==='egg' || st==='mid') return {bed:19, wake:8, jit:45, nap:'baby', owl:0};   // 赤ちゃん：ほぼ寝ている
+    if(st==='larva')             return shift({bed:20, wake:8, jit:40, nap:'young'});  // 幼体：夜＋昼寝（幅広）
     const L = pet.lineage;
     if(L==='tako') return shift((pet.form==='t3')
       ? {bed:21, wake:7, jit:40, nap:'none'}     // クラーケンは昼寝なし
@@ -1498,19 +1520,67 @@
     }
     return out;
   }
-  function isAsleep(d){
-    const cfg = sleepConfig();
-    const di  = dayIndex(d);
-    const minutes = d.getHours()*60 + d.getMinutes();
-    // 夜間睡眠（毎日±jitterでゆらぐ）
+  // 夜間睡眠のウィンドウに入っているか（毎日±jitterでゆらぐ）
+  function inNightSleep(cfg, di, minutes){
     let bedM  = cfg.bed*60  + Math.round((dayRnd(di,'bed') *2-1)*cfg.jit);
     const wakeM = cfg.wake*60 + Math.round((dayRnd(di,'wake')*2-1)*cfg.jit);
     bedM = ((bedM % 1440) + 1440) % 1440;
-    const night = (bedM <= wakeM) ? (minutes >= bedM && minutes < wakeM)
-                                  : (minutes >= bedM || minutes < wakeM);
-    if(night) return true;
+    return (bedM <= wakeM) ? (minutes >= bedM && minutes < wakeM)
+                           : (minutes >= bedM || minutes < wakeM);
+  }
+  function isAsleep(d){
+    const cfg = sleepConfig(d.getTime());
+    const di  = dayIndex(d);
+    const minutes = d.getHours()*60 + d.getMinutes();
+    if(inNightSleep(cfg, di, minutes)) return true;
     // 昼寝
     return napWindows(di, cfg.nap).some(([a,b]) => minutes >= a && minutes < b);
+  }
+  // 「なぜ寝ているか」。昼寝と、昼夜逆転で昼間に寝てしまっているのとを区別する。
+  //   'night' 夜の睡眠 ／ 'nap' 昼寝（そっとしておくのが正しい）
+  //   'owl'   生活リズムの乱れによる昼間の睡眠（起こして正すのが正しい）
+  function sleepKind(d){
+    const cfg = sleepConfig(d.getTime());
+    const di  = dayIndex(d);
+    const minutes = d.getHours()*60 + d.getMinutes();
+    if(inNightSleep(cfg, di, minutes)){
+      // 本来の予定（夜型シフトを外したもの）ではもう起きているはずの時間なら、それは生活リズムの乱れ。
+      //  時刻で「何時から昼」と決め打ちすると、朝8時まで寝る健康な子まで乱れ扱いになってしまう
+      if(cfg.owl > 0 &&
+         !inNightSleep({bed: cfg.bed - cfg.owl, wake: cfg.wake - cfg.owl, jit: cfg.jit}, di, minutes))
+        return 'owl';
+      return 'night';
+    }
+    if(napWindows(di, cfg.nap).some(([a,b]) => minutes >= a && minutes < b)) return 'nap';
+    return null;
+  }
+  // 夜更かし中か：本来の就寝時刻（夜型シフトを除いた時刻）を過ぎているのに、まだ起きている
+  const LATE_GRACE = 30;   // 本来の就寝時刻から30分は大目に見る
+  function stayingUpLate(){
+    if(debugMode) return false;
+    if(effectiveAsleep()) return false;
+    const cfg = sleepConfig();
+    if(cfg.owl <= 0) return false;             // 夜型シフトが無ければ、そもそも夜更かしではない
+    const d  = new Date();
+    const di = dayIndex(d);
+    // 本来の予定（シフトを外したもの）ではもう寝ている時間か。sleepKind と同じ判定を使うので、
+    //  その日のゆらぎも同じものが掛かる。時刻のほうを猶予ぶん戻して「就寝直後は見逃す」を表現する
+    const minutes = ((d.getHours()*60 + d.getMinutes() - LATE_GRACE) % 1440 + 1440) % 1440;
+    return inNightSleep({bed: cfg.bed - cfg.owl, wake: cfg.wake - cfg.owl, jit: cfg.jit}, di, minutes);
+  }
+  // しかって正した生活リズムが続く期限。
+  //  「本来の予定でも、夜型の予定でも起きている」時間帯まで延ばすのが肝。本来の起床時刻で切ると、
+  //  その瞬間に夜型シフトが戻って昼まで寝直してしまい、しかった意味が無くなる。
+  function untilRhythmEnd(){
+    const cfg = sleepConfig(null, true);                       // シフト込みの予定（矯正を無視して見る）
+    const wakeH = ((cfg.wake % 24) + 24) % 24;
+    const safeH = Math.min(23, Math.ceil(wakeH) + 1);          // 夜型の予定でも起きている時刻
+    const now = new Date(), t = new Date(now);
+    t.setHours(safeH, 0, 0, 0);
+    if(t <= now) t.setDate(t.getDate() + 1);
+    // 昼間にしかった場合はここが数時間先にしかならない。それではその晩をカバーできないので1日延ばす
+    if(t - now < 10*3600000) t.setDate(t.getDate() + 1);
+    return t.getTime();
   }
   // 実効睡眠（しかられて起きた直後は起きている）
   // DEBUG中は常に起きている扱い（3秒サイクルの夜に操作がランダムに弾かれるのを防ぎ、いつでも検証可能に）
@@ -1654,7 +1724,7 @@
         for(let i=0;i<skipped;i++){
           if(pet.dead || pet.gone) break;               // 途中で亡くなった／連れて行かれたらそこで止める
           const first = (i === 0);
-          closeOneDay(first ? d : idle, first ? (pet.touchCount||0) : 0, first && !!pet.nightPlayToday);
+          closeOneDay(first ? d : idle, first ? (pet.touchCount||0) : 0, first && !!(pet.nightPlayToday || pet.nightCareToday));
         }
 
         // ── 日記：寝る前に書けなかったぶんは持ち越して、翌日「きのうのこと」として書く ──
@@ -1673,7 +1743,7 @@
       pet.diary = nextMat;                              // 材料は日ごとにリセット（書いたあとのぶんだけ引き継ぐ）
       pet.calDay = tk;
       pet.touchedToday = false; pet.touchCount = 0;
-      pet.nightPlayToday = false;
+      pet.nightPlayToday = false; pet.nightCareToday = false;
     }
     // 旅立ちエンド（E4）：最終形態から14日・なつき度60以上・健康
     if(pet.stage==='final' && pet.finalAt && !pet.departFlag &&
@@ -3052,7 +3122,17 @@
         }
         break;
       case 'SCOLD':
-        if(asleep){                                                 // 起こしてしまう
+        if(asleep && sleepKind(new Date()) === 'owl'){
+          // 昼夜逆転で昼間に寝ている：起こして正すのが正しい世話。
+          //  夜の睡眠や昼寝を起こすのとは区別する（そちらは下の理不尽なしかる）
+          pet.rhythmUntil = untilRhythmEnd();                     // 今夜は本来の時間に寝る
+          pet.wokeUntil = 0;                                        // シフトが外れるので、この時間はもう起きている扱い
+          addP(P_ADJ.scoldRhythm);                                  // 夜型が少し戻る
+          addD(+3);
+          addA(A_ADJ.scoldFair); markTouch();
+          note('rhythmDay');
+          setReaction('sad');                                       // 起きて「・・・」
+        } else if(asleep){                                          // 起こしてしまう
           pet.wokeUntil = Date.now() + (debugMode ? 30000 : 600000);
           pet.mood = Math.max(0, pet.mood - 2);
           addP(P_ADJ.wokenUp);                                      // 睡眠を邪魔されて落ち着かなくなる
@@ -3069,6 +3149,15 @@
           // ごはんを出したまましかった場合：しゅんとしたあとで、その皿を食べに行く。
           //  叱られた直後に♪で喜ばれると「叱ったのに喜んでいる」ように見えるので、音符は出さない
           if(pet.plateAt && !pet.plateSpoiled && pet.hunger < 5) pendingEat = pet.plateKind || 'meal';
+        } else if(stayingUpLate()){
+          // 夜更かし：しゅんとしてから、しばらくして寝入る（叱ってすぐ寝るのは不自然）
+          pet.rhythmUntil = untilRhythmEnd();                     // 本来の就寝時刻の側へ戻す
+          pet.wokeUntil = Date.now() + SLEEP_DELAY_MS;              // ただし、この時間が過ぎるまでは起きている
+          addP(P_ADJ.scoldRhythm);
+          addD(+3);
+          addA(A_ADJ.scoldFair); markTouch();
+          note('rhythmNight');
+          setReaction('sad');
         } else {                                                    // 不当なしかる
           pet.mood = Math.max(0, pet.mood - 2);
           pet.B = Math.max(0, pet.B - 2);
@@ -3079,6 +3168,15 @@
           setReaction('sad');
         }
         break;
+    }
+    // 夜ふけの世話は生活リズムを後ろへ引っぱる。連打で一気に夜型化しないよう1時間に1回まで。
+    //  しかるだけは除く（夜更かしを正す操作なので、夜型化の材料にしない）
+    if(!asleep && act !== 'SCOLD'){
+      const nh = new Date().getHours();
+      if(nh >= NIGHT_CARE_FROM || nh < NIGHT_CARE_TO){
+        pet.nightCareToday = true;                       // この日は「落ち着いた一日」に数えない
+        if(Date.now() - (pet.nightCareAt||0) >= 3600000){ pet.nightCareAt = Date.now(); addP(P_ADJ.nightCare); }
+      }
     }
     clampMood();   // 世話の結果その場で病気になった場合も、きげんを上限に合わせる
     savePet();
