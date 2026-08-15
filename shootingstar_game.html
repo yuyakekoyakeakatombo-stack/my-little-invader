@@ -347,13 +347,25 @@
     state=STATE.PLAY;
   }
 
-  // 星のスポーン（4方向から）。下に必ず落ちる成分を持たせるが方向はバリエーション
+  // 星のスポーン（4方向から）。下に必ず落ちる成分を持たせるが方向はバリエーション。
+  //  ねらいようのない星を出さないために、2つの決まりごとを置いてある。
+  //   ・横から入る星は、画面の中央より上から入れる。低いところから斜めに入ってくると
+  //     自機の高さに届くまでが短すぎて、撃つのも よけるのも間に合わない
+  //   ・上から落ちる星は端ギリギリに出さず、外へも流さない。砲口が届くのは x=5〜48 なので、
+  //     端で外向きに流れる星は、当てようがないまま画面の外へ抜けてしまう
+  const SIDE_Y_MIN = HDR_Y + 2;                    // 横入りの上限（ヘッダーのすぐ下）
+  const SIDE_Y_MAX = Math.floor(H/2) - STAR_H;     // 入った時点で星の下端が画面中央に収まる高さ
+  const TOP_MARGIN = 6;                            // 上から落とすときに空ける左右の余白
   function spawnStar(){
+    const sideY = SIDE_Y_MIN + Math.random()*(SIDE_Y_MAX - SIDE_Y_MIN);
+    const topX  = TOP_MARGIN + Math.random()*(W - STAR_W - TOP_MARGIN*2);
+    const inward = (topX < (W - STAR_W)/2) ? 1 : -1;      // 端へ逃げないよう内側へ向ける
     const patterns=[
-      {x:Math.random()*(W-10)+3, y:-3, vx:(Math.random()-0.5)*0.4, vy:0.6+Math.random()*0.3}, // 上から落下
-      {x:-3, y:HDR_Y+2+Math.random()*18, vx:0.7+Math.random()*0.3, vy:0.3+Math.random()*0.3},        // 左から
-      {x:W+1, y:HDR_Y+2+Math.random()*18, vx:-(0.7+Math.random()*0.3), vy:0.3+Math.random()*0.3},     // 右から
-      {x:W*0.6+Math.random()*W*0.3, y:-3, vx:-(0.4+Math.random()*0.3), vy:0.6+Math.random()*0.2},// 右上から斜め
+      {x:topX, y:-3, vx:inward*Math.random()*0.25, vy:0.6+Math.random()*0.3},      // 上から落下
+      {x:-3,  y:sideY, vx:0.7+Math.random()*0.3,    vy:0.3+Math.random()*0.3},     // 左から
+      {x:W+1, y:sideY, vx:-(0.7+Math.random()*0.3), vy:0.3+Math.random()*0.3},     // 右から
+      {x:Math.min(W-STAR_W-2, W*0.6+Math.random()*W*0.3), y:-3,
+       vx:-(0.4+Math.random()*0.3), vy:0.6+Math.random()*0.2},                     // 右上から斜め
     ];
     const p=patterns[Math.floor(Math.random()*patterns.length)];
     stars.push(p);
@@ -401,7 +413,7 @@
     // 隕石の登場
     if(!meteor && t >= metNext){
       const hp = Math.min(4 + level(), 9);
-      meteor = { x: 4+Math.random()*(W-MET_W-8), y: -MET_H, vx: (Math.random()-0.5)*0.25,
+      meteor = { x: 4+Math.random()*(W-MET_W-8), y: -MET_H, vx: (Math.random()-0.5)*0.4,
                  vy: 0.20 + level()*0.015, hp: hp, max: hp, hurt: 0 };
       metNext = t + MET_EVERY;
       beep(150,0.3,'sawtooth');

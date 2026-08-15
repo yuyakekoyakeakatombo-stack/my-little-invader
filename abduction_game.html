@@ -649,6 +649,22 @@
   setInterval(loop, TICK);
 
   // ── 入力 ──
+  // 十字ボタンの操作音。本体の playClick と同じ「下がる短いクリック」に合わせてある
+  function click(freq){
+    try{
+      if(localStorage.getItem('myvader_sound')==='off') return;
+      if(!ac) ac=new (window.AudioContext||window.webkitAudioContext)();
+      if(ac.state==='suspended'){ ac.resume().catch(function(){}); }
+      const o=ac.createOscillator(), g=ac.createGain();
+      o.connect(g); g.connect(ac.destination);
+      o.type='square';
+      o.frequency.setValueAtTime(freq, ac.currentTime);
+      o.frequency.exponentialRampToValueAtTime(freq*0.33, ac.currentTime+0.04);
+      g.gain.setValueAtTime(0.12, ac.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime+0.05);
+      o.start(); o.stop(ac.currentTime+0.05);
+    }catch(e){}
+  }
   function press(el,fn){
     el.addEventListener('touchstart',e=>{e.preventDefault(); el._pressed=true; fn();},{passive:false});
     el.addEventListener('mousedown',e=>{ el._pressed=true; fn(); });
@@ -666,11 +682,12 @@
   const elR=document.querySelector('.dpad-arrow.right');
   const elU=document.querySelector('.dpad-arrow.up');
   const elD=document.querySelector('.dpad-arrow.down');
-  press(elL,()=>{keys.left=true;dpadAnim(elL);tapDir('left');});   release(elL,()=>keys.left=false);
-  press(elR,()=>{keys.right=true;dpadAnim(elR);tapDir('right');}); release(elR,()=>keys.right=false);
+  press(elL,()=>{keys.left=true;dpadAnim(elL);click(900);tapDir('left');});   release(elL,()=>keys.left=false);
+  press(elR,()=>{keys.right=true;dpadAnim(elR);click(900);tapDir('right');}); release(elR,()=>keys.right=false);
   function menuMove(){ if(state===STATE.TITLE){ menuSel=(menuSel+1)%2; beep(500,0.05); } }
-  press(elU,()=>{dpadAnim(elU); menuMove();});
-  press(elD,()=>{dpadAnim(elD); menuMove();});
+  // タイトルでは選択音が鳴るので、押下音は重ねない
+  press(elU,()=>{dpadAnim(elU); if(state===STATE.TITLE) menuMove(); else click(900);});
+  press(elD,()=>{dpadAnim(elD); if(state===STATE.TITLE) menuMove(); else click(900);});
 
   function confirmTitle(){ beep(880,0.07); if(menuSel===0) startGame(); else state=STATE.HELP; }
   function onADown(){
@@ -708,8 +725,8 @@
   // キーボード対応
   document.addEventListener('keydown',e=>{
     // キーの押しっぱなし(e.repeat)は2度押しに数えない
-    if(e.key==='ArrowLeft'){ if(!keys.left && !e.repeat) tapDir('left'); keys.left=true; }
-    if(e.key==='ArrowRight'){ if(!keys.right && !e.repeat) tapDir('right'); keys.right=true; }
+    if(e.key==='ArrowLeft'){ if(!keys.left && !e.repeat){ click(900); tapDir('left'); } keys.left=true; }
+    if(e.key==='ArrowRight'){ if(!keys.right && !e.repeat){ click(900); tapDir('right'); } keys.right=true; }
     if((e.key==='ArrowUp'||e.key==='ArrowDown') && state===STATE.TITLE){ e.preventDefault(); menuMove(); return; }
     if(e.key===' '||e.key==='ArrowUp'||e.key.toLowerCase()==='a'){ e.preventDefault(); if(state===STATE.PLAY) jump(); }
     // Bボタンもキーで押せるようにする（画面のBだけ効かないのは分かりにくい）
