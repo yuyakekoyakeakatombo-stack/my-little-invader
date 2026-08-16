@@ -618,6 +618,7 @@
     EP:0, ageMin:0, eggTargetEP:0,        // 進化ポイント/年齢(分)/NEWBORN→BABYの個体別目標EP
     finalAt:0, departFlag:false,          // 最終形態到達時刻・旅立ちエンド確定
     formWild:false,                       // 最終形態が「ワイルド系」か（お迎えエンドが出なくなる）
+    voice:'',                             // 日記の口調（成体で確定。'' は未確定＝共通の子どもの口調）
     wrathDays:0, invadeFlag:false,        // 侵攻の兆候が続いた日数・侵攻エンド確定
     nightPlays:0, nightPlayToday:false,   // 夜更かしプレイ回数（22時以降。i3条件）／今日夜更かししたか
     nightCareToday:false,                 // 今日、夜ふけに世話をしたか
@@ -890,7 +891,7 @@
       pet.wrathDays = (pet.wrathDays||0) + 1;
       if(pet.wrathDays >= INV_DAYS){
         pet.invadeFlag = true;
-        addDiary({ d: petDay(), n: pet.name, t: ['wrath'], c: '', ts: Date.now(), cd: todayKey() });
+        addDiary({ d: petDay(), n: pet.name, t: ['wrath'], v: [voiceIdx()], c: '', ts: Date.now(), cd: todayKey() });
       }
     } else pet.wrathDays = 0;                          // 持ち直したら解除（E3と同じ作法）
   }
@@ -912,7 +913,7 @@
       if(pet.estrangedDays >= RET_ESTR_DAYS){
         pet.ufoFlag = true;
         // 迎えが来る日。最後の一言を日記に書き残してから連れて行かれる
-        addDiary({ d: petDay(), n: pet.name, t: ['farewell'], c: '', ts: Date.now(), cd: todayKey() });
+        addDiary({ d: petDay(), n: pet.name, t: ['farewell'], v: [voiceIdx()], c: '', ts: Date.now(), cd: todayKey() });
       }
     } else {
       pet.estrangedDays = 0;                                 // 持ち直したら解除
@@ -996,6 +997,21 @@
     if(n === 3) pet.formWild = true;
     return (L==='grey'?'g':L==='tako'?'t':'i') + n;
   }
+  // ── 日記の口調 ──
+  //  成体になった時に、系統とその時点の性格で確定させ、以後は動かさない。
+  //  性格（P）は毎日ゆれるので、そのつど参照すると日記の口調が日替わりになってしまう。
+  //  姿が変わる瞬間に決まるなら「大人になった」と読めるので、そこを区切りにしてある。
+  //  成体になる前は全員 'plain'（共通の子どもの口調）。
+  function pickVoice(){
+    const L = pet.lineage;
+    const v = pTrait() + (L==='tako' ? -0.4 : L==='grey' ? +0.4 : 0);   // マーシャン＝のんびり／グレイ＝活発
+    return (v <= -0.35) ? 'calm' : (v >= 0.35 ? 'rough' : 'plain');
+  }
+  function voice(){ return pet.voice || 'plain'; }
+  // 言い回しの並び順は plain=0 / calm=1 / rough=2。0を今までの文面にしておくと、
+  //  口調を持たない古い日記（vが無い）を読み返しても文面が変わらない
+  function voiceIdx(){ const v = voice(); return v==='calm' ? 1 : (v==='rough' ? 2 : 0); }
+
   // ワイルド系＝荒れた見た目に育った子。ここに来たらもう「お迎え（旅立ち）」は来ない
   function isWild(){ return !!pet.formWild; }
   function maybeEvolve(){
@@ -1017,6 +1033,7 @@
     }
     if(pet.stage==='larva' && pet.EP >= 4){
       pet.lineage = pickLineage();                // 系統決定：ミニゲーム傾向が主、世話の傾向が従
+      pet.voice   = pickVoice();                  // 日記の口調もここで確定（以後は動かさない）
       // 成体到達＝形態判定の起点。ここからの行動だけで最終形態が決まる
       pet.lineageAt = Date.now();
       const p = pet.plays || {sw:0,ss:0,ab:0};
@@ -1163,14 +1180,31 @@
     // 別れのことばは2種類。同じ「むかえが きた」から始めて、その後で分かれる。
     //  farewell＝帰還（E3）：育ちきる前に連れ戻される。名残と、言えなかった気もち
     //  departed＝旅立ち（E4）：育ちきって送り出される。ひとり立ちの報告と感謝
+    // 別れの言葉は口調で言い分ける。並びは plain / calm / rough の順（voiceIdx と対応）
     farewell: [ { ja:['むかえが きた','まだ ここに','いたかったな'],
-                  en:['THEY CAME FOR ME.','I WANTED TO STAY','A BIT LONGER'] } ],
+                  en:['THEY CAME FOR ME.','I WANTED TO STAY','A BIT LONGER'] },
+                { ja:['むかえが きました','まだ ここに','いたかったです'],
+                  en:['THEY HAVE COME FOR ME.','I WANTED TO STAY HERE','A LITTLE LONGER'] },
+                { ja:['むかえが きた','まだ いたかったのに','しかたないか'],
+                  en:['THEY CAME FOR ME.','I WANTED TO STAY.','NOTHING I CAN DO'] } ],
     farewellWild:[{ ja:['むかえが きた','なにも いうことは ない','じゃあな'],
-                  en:['THEY CAME FOR ME.','I HAVE NOTHING TO SAY.','SO LONG'] } ],
+                  en:['THEY CAME FOR ME.','I HAVE NOTHING TO SAY.','SO LONG'] },
+                { ja:['むかえが きました','もう いうことは ありません','さようなら'],
+                  en:['THEY HAVE COME FOR ME.','I HAVE NOTHING LEFT','TO SAY. FAREWELL'] },
+                { ja:['むかえが きた','もう いい','じゃあな'],
+                  en:['THEY CAME FOR ME.','ENOUGH OF THIS.','SO LONG'] } ],
     departed: [ { ja:['むかえが きた','もう ひとりでも','だいじょうぶ','そだててくれて ありがとう'],
-                  en:['THEY CAME FOR ME.','I CAN MANAGE NOW.','THANK YOU FOR','RAISING ME'] } ],
+                  en:['THEY CAME FOR ME.','I CAN MANAGE NOW.','THANK YOU FOR','RAISING ME'] },
+                { ja:['むかえが きました','もう ひとりでも','だいじょうぶです','そだててくれて ありがとう'],
+                  en:['THEY HAVE COME FOR ME.','I CAN MANAGE ON MY OWN.','THANK YOU FOR','RAISING ME'] },
+                { ja:['むかえが きた','もう へいきだ','そだててくれて ありがとうな'],
+                  en:['THEY CAME FOR ME.','I AM FINE NOW.','THANKS FOR','RAISING ME'] } ],
     wrath:    [ { ja:['なかまをよんだ','もう がまんできない','おわかれだ'],
-                  en:['I CALLED MY KIND.','I CANNOT BEAR THIS','ANY MORE. GOODBYE'] } ],
+                  en:['I CALLED MY KIND.','I CANNOT BEAR THIS','ANY MORE. GOODBYE'] },
+                { ja:['なかまを よびました','もう たえられません','さようなら'],
+                  en:['I HAVE CALLED MY KIND.','I CANNOT ENDURE THIS.','FAREWELL'] },
+                { ja:['なかまを よんだ','もう がまんならない','おわかれだ'],
+                  en:['I CALLED MY KIND.','I WILL NOT TAKE','ANY MORE. GOODBYE'] } ],
     hungry:   [ { ja:['きのう ずっと','おなかが すいてた'], en:['I WAS HUNGRY','ALL DAY'] },
                 { ja:['おなかの おとが','なりつづけていた'], en:['MY TUMMY MADE','NOISES ALL DAY'] },
                 { ja:['たべものの ことばかり','かんがえていた'], en:['I ONLY THOUGHT','ABOUT FOOD'] },
@@ -1262,43 +1296,237 @@
   // ひとりごと：世話とは関係のない、プレイヤーが見ていない時間の一面。
   //  条件（天気・成長段階・なつき度・性格）に合うものから1つ選ぶ。
   //  s = {clear, cloudy, rain, snow, young, grown, bond, trait}
+  // ひとりごとは口調で言い分ける。plain＝共通（成体前はこれ）／calm＝おっとり／rough＝やんちゃ。
+  //  どれを使うかは日記に vo として保存するので、あとから読み返しても文面は変わらない
   const DIARY_MUSINGS = {
-    star1:  { when:s=>s.clear, ja:['よぞらに ながれぼしが','ひとつ とんだ'], en:['ONE SHOOTING STAR','CROSSED THE SKY'] },
-    star2:  { when:s=>s.clear&&s.grown, ja:['ほしを みていたら','なつかしく なった'], en:['I LOOKED AT THE STARS','AND FELT HOMESICK'] },
-    star3:  { when:s=>s.clear&&s.grown, ja:['わたしの ほしは','どれだろう'], en:['WHICH ONE OF THEM','IS MY PLANET?'] },
-    rain1:  { when:s=>s.rain, ja:['あめは つめたい','でも きらいでは ない'], en:['RAIN IS COLD.','I DO NOT HATE IT'] },
-    rain2:  { when:s=>s.rain, ja:['みずたまりに','じぶんが うつった'], en:['I SAW MYSELF','IN A PUDDLE'] },
-    snow1:  { when:s=>s.snow, ja:['しろいのが つもった','あしあとを つけた'], en:['THE WHITE PILED UP.','I MADE FOOTPRINTS'] },
-    earth1: { when:s=>true, ja:['ちきゅうの かぜは','おもたい においが する'], en:['THE WIND HERE','SMELLS HEAVY'] },
-    earth2: { when:s=>true, ja:['じめんが かたい','わたしの ほしより かたい'], en:['THE GROUND IS HARD.','HARDER THAN HOME'] },
-    earth3: { when:s=>s.grown, ja:['あさの ひかりは','まだ まぶしい'], en:['THE MORNING LIGHT','IS STILL TOO BRIGHT'] },
-    alone1: { when:s=>true, ja:['だれも いないとき','すこし あるいてみた'], en:['WHEN NOBODY LOOKED','I WALKED A LITTLE'] },
-    alone2: { when:s=>true, ja:['へんな むしが いた','ともだちに なれるかな'], en:['A STRANGE BUG CAME.','CAN WE BE FRIENDS?'] },
-    alone3: { when:s=>true, ja:['ひとりで うたを','うたって みた'], en:['I TRIED SINGING','TO MYSELF'] },
-    alone4: { when:s=>true, ja:['くもの かたちが','かおに みえてきた'], en:['A CLOUD UP THERE','LOOKED LIKE A FACE'] },
+    star1:  { when:s=>s.clear,
+              ja:{plain:['よぞらに ながれぼしが','ひとつ とんだ'],
+                  calm: ['よぞらに ながれぼしが','ひとつ とんでいったなあ'],
+                  rough:['よぞらを ながれぼしが','ひとつ とんでった']},
+              en:{plain:['ONE SHOOTING STAR','CROSSED THE SKY'],
+                  calm: ['ONE SHOOTING STAR','WENT ACROSS THE SKY'],
+                  rough:['A SHOOTING STAR!','IT SHOT RIGHT PAST']} },
+    star2:  { when:s=>s.clear&&s.grown,
+              ja:{plain:['ほしを みていたら','なつかしく なった'],
+                  calm: ['ほしを みていたら','なんだか なつかしく なった'],
+                  rough:['ほしを みてたら','なつかしく なった']},
+              en:{plain:['I LOOKED AT THE STARS','AND FELT HOMESICK'],
+                  calm: ['I LOOKED AT THE STARS','AND FELT HOMESICK TOO'],
+                  rough:['LOOKED AT THE STARS.','GOT HOMESICK']} },
+    star3:  { when:s=>s.clear&&s.grown,
+              ja:{plain:['わたしの ほしは','どれだろう'],
+                  calm: ['わたしの ほしは','どれなのだろうなあ'],
+                  rough:['わたしの ほしは','どれだ']},
+              en:{plain:['WHICH ONE OF THEM','IS MY PLANET?'],
+                  calm: ['WHICH ONE OF THEM','COULD BE MY PLANET?'],
+                  rough:['WHICH ONE IS','MY PLANET?']} },
+    rain1:  { when:s=>s.rain,
+              ja:{plain:['あめは つめたい','でも きらいでは ない'],
+                  calm: ['あめは つめたいけれど','きらいでは ないなあ'],
+                  rough:['あめは つめたい','でも へいきだ']},
+              en:{plain:['RAIN IS COLD.','I DO NOT HATE IT'],
+                  calm: ['THE RAIN IS COLD,','BUT I DO NOT MIND IT'],
+                  rough:['RAIN IS COLD.','I DO NOT CARE']} },
+    rain2:  { when:s=>s.rain,
+              ja:{plain:['みずたまりに','じぶんが うつった'],
+                  calm: ['みずたまりに','じぶんが うつっていた'],
+                  rough:['みずたまりを のぞいた','じぶんが いた']},
+              en:{plain:['I SAW MYSELF','IN A PUDDLE'],
+                  calm: ['I SAW MYSELF','IN A PUDDLE OF RAIN'],
+                  rough:['I LOOKED IN A PUDDLE.','THERE I WAS']} },
+    snow1:  { when:s=>s.snow,
+              ja:{plain:['しろいのが つもった','あしあとを つけた'],
+                  calm: ['しろいのが つもっていた','そっと あしあとを つけた'],
+                  rough:['しろいのが つもった','あしあとを つけまくった']},
+              en:{plain:['THE WHITE PILED UP.','I MADE FOOTPRINTS'],
+                  calm: ['THE WHITE HAD PILED UP.','I STEPPED ON IT GENTLY'],
+                  rough:['SNOW EVERYWHERE!','I MADE LOTS OF PRINTS']} },
+    earth1: { when:s=>true,
+              ja:{plain:['ちきゅうの かぜは','おもたい においが する'],
+                  calm: ['ちきゅうの かぜは','おもたい においが するなあ'],
+                  rough:['ちきゅうの かぜは','においが おもい']},
+              en:{plain:['THE WIND HERE','SMELLS HEAVY'],
+                  calm: ['THE WIND ON THIS PLANET','SMELLS HEAVY TO ME'],
+                  rough:['THE WIND HERE.','HEAVY SMELL']} },
+    earth2: { when:s=>true,
+              ja:{plain:['じめんが かたい','わたしの ほしより かたい'],
+                  calm: ['じめんが かたいなあ','わたしの ほしより かたい'],
+                  rough:['じめんが かたい','ほしより かたい']},
+              en:{plain:['THE GROUND IS HARD.','HARDER THAN HOME'],
+                  calm: ['THE GROUND IS SO HARD,','HARDER THAN BACK HOME'],
+                  rough:['HARD GROUND.','HARDER THAN HOME']} },
+    earth3: { when:s=>s.grown,
+              ja:{plain:['あさの ひかりは','まだ まぶしい'],
+                  calm: ['あさの ひかりは','まだ すこし まぶしい'],
+                  rough:['あさの ひかりは','まぶしい']},
+              en:{plain:['THE MORNING LIGHT','IS STILL TOO BRIGHT'],
+                  calm: ['THE MORNING LIGHT','IS STILL A BIT BRIGHT'],
+                  rough:['MORNING LIGHT.','STILL TOO BRIGHT']} },
+    alone1: { when:s=>true,
+              ja:{plain:['だれも いないとき','すこし あるいてみた'],
+                  calm: ['だれも いないとき','そっと あるいてみた'],
+                  rough:['だれも いないとき','あるきまわった']},
+              en:{plain:['WHEN NOBODY LOOKED','I WALKED A LITTLE'],
+                  calm: ['WHEN NOBODY WAS THERE','I WALKED A LITTLE'],
+                  rough:['NOBODY AROUND.','SO I WALKED AROUND']} },
+    alone2: { when:s=>true,
+              ja:{plain:['へんな むしが いた','ともだちに なれるかな'],
+                  calm: ['へんな むしが いた','ともだちに なれるかなあ'],
+                  rough:['へんな むしが いた','おいかけて みた']},
+              en:{plain:['A STRANGE BUG CAME.','CAN WE BE FRIENDS?'],
+                  calm: ['A STRANGE BUG CAME BY.','COULD WE BE FRIENDS?'],
+                  rough:['A STRANGE BUG!','I CHASED IT']} },
+    alone3: { when:s=>true,
+              ja:{plain:['ひとりで うたを','うたって みた'],
+                  calm: ['ひとりで うたを','うたって みたんだ'],
+                  rough:['ひとりで うたった','おおきな こえで']},
+              en:{plain:['I TRIED SINGING','TO MYSELF'],
+                  calm: ['I SANG A LITTLE SONG','ALL BY MYSELF'],
+                  rough:['I SANG BY MYSELF.','NICE AND LOUD']} },
+    alone4: { when:s=>true,
+              ja:{plain:['くもの かたちが','かおに みえてきた'],
+                  calm: ['くもの かたちが','かおに みえてきたなあ'],
+                  rough:['くもが かおに みえた','わらって いた']},
+              en:{plain:['A CLOUD UP THERE','LOOKED LIKE A FACE'],
+                  calm: ['THAT CLOUD UP THERE','LOOKED LIKE A FACE TO ME'],
+                  rough:['A CLOUD LOOKED','LIKE A LAUGHING FACE']} },
     // 虫・鳥・草花・風。画面に描いていなくても、庭にいれば出会うもの。
     //  天気の設定がOFFだと clear/rain などは全部falseになるので、
     //  「雨・雪でないこと」を条件にして、OFFの人にも出るようにしてある
-    life1:  { when:s=>!s.rain&&!s.snow, ja:['ゆうがた むしが ないていた','なんて いって いたんだろう'], en:['BUGS SANG AT DUSK.','WHAT WERE THEY SAYING?'] },
-    life2:  { when:s=>!s.rain&&!s.snow, ja:['とりが とんでいった','あんなふうに とべたら'], en:['A BIRD FLEW PAST.','I WISH I COULD FLY'] },
-    life3:  { when:s=>!s.snow, ja:['ちいさな はなが さいていた','なまえは しらない'], en:['A SMALL FLOWER BLOOMED.','I DO NOT KNOW ITS NAME'] },
-    life4:  { when:s=>!s.rain&&!s.snow, ja:['かぜが きもち よかった','めを つぶって いた'], en:['THE WIND FELT NICE.','I CLOSED MY EYES'] },
+    life1:  { when:s=>!s.rain&&!s.snow,
+              ja:{plain:['ゆうがた むしが ないていた','なんて いって いたんだろう'],
+                  calm: ['ゆうがた むしが ないていた','なんて いって いたのかなあ'],
+                  rough:['ゆうがた むしが ないてた','うるさかった']},
+              en:{plain:['BUGS SANG AT DUSK.','WHAT WERE THEY SAYING?'],
+                  calm: ['BUGS SANG AT DUSK.','I WONDER WHAT THEY SAID'],
+                  rough:['BUGS SANG AT DUSK.','THEY WERE LOUD']} },
+    life2:  { when:s=>!s.rain&&!s.snow,
+              ja:{plain:['とりが とんでいった','あんなふうに とべたら'],
+                  calm: ['とりが とんでいった','あんなふうに とべたらなあ'],
+                  rough:['とりが とんでった','とんで みたい']},
+              en:{plain:['A BIRD FLEW PAST.','I WISH I COULD FLY'],
+                  calm: ['A BIRD FLEW OVERHEAD.','I WISH I COULD DO THAT'],
+                  rough:['A BIRD SHOT PAST!','I WANT TO FLY TOO']} },
+    life3:  { when:s=>!s.snow,
+              ja:{plain:['ちいさな はなが さいていた','なまえは しらない'],
+                  calm: ['ちいさな はなが さいていた','なまえは しらないけれど'],
+                  rough:['ちいさな はなが さいてた','なまえは しらない']},
+              en:{plain:['A SMALL FLOWER BLOOMED.','I DO NOT KNOW ITS NAME'],
+                  calm: ['A SMALL FLOWER BLOOMED.','ITS NAME I DO NOT KNOW'],
+                  rough:['A LITTLE FLOWER.','NO IDEA WHAT IT IS']} },
+    life4:  { when:s=>!s.rain&&!s.snow,
+              ja:{plain:['かぜが きもち よかった','めを つぶって いた'],
+                  calm: ['かぜが きもち よかった','しばらく めを つぶって いた'],
+                  rough:['かぜが きもち よかった','めを つぶった']},
+              en:{plain:['THE WIND FELT NICE.','I CLOSED MY EYES'],
+                  calm: ['THE WIND FELT SO NICE.','I KEPT MY EYES CLOSED'],
+                  rough:['GOOD WIND TODAY.','I SHUT MY EYES']} },
     // 曇りの夜のUFO。ながれぼし（star1）と同じで、実際に出たかではなく その日の空模様で選ぶ
-    ufo1:   { when:s=>s.cloudy, ja:['くもの きれまに','ひかるものが みえた'], en:['SOMETHING GLOWED','IN A GAP IN THE CLOUDS'] },
-    ufo2:   { when:s=>s.cloudy&&s.grown, ja:['さっきの ひかりは','むかえに きたのかな'], en:['THAT LIGHT EARLIER','WAS IT COMING FOR ME?'] },
-    ufo3:   { when:s=>s.cloudy&&s.bond>=70, ja:['そらを みあげたけど','ここに いることにした'], en:['I LOOKED UP AT IT.','I CHOSE TO STAY HERE'] },
-    bond1:  { when:s=>s.bond>=70, ja:['きみの あしおとが','わかるように なった'], en:['I KNOW YOUR STEPS','WHEN YOU COME'] },
-    bond2:  { when:s=>s.bond>=70, ja:['ここは あんぜんだ','そう おもう'], en:['THIS PLACE IS SAFE.','I THINK SO NOW'] },
-    bond3:  { when:s=>s.bond<30, ja:['きみは だれ だっけ','わすれそうに なる'], en:['WHO ARE YOU AGAIN?','I ALMOST FORGOT'] },
-    bond4:  { when:s=>s.bond<30, ja:['そらばかり みていた','だれも こないから'], en:['I WATCHED THE SKY.','NOBODY CAME'] },
-    young1: { when:s=>s.young, ja:['まだ よく わからない','でも たのしい'], en:['I DO NOT UNDERSTAND.','BUT IT IS FUN'] },
-    young2: { when:s=>s.young, ja:['じぶんの てを','ずっと みていた'], en:['I LOOKED AT MY HANDS','FOR A LONG TIME'] },
-    grown1: { when:s=>s.grown, ja:['むかしは もっと','ちいさかった はずだ'], en:['I WAS SMALLER','I AM SURE OF IT'] },
-    grown2: { when:s=>s.grown, ja:['いつか かえるのかな','まだ わからない'], en:['WILL I GO BACK?','I DO NOT KNOW YET'] },
-    lively1:{ when:s=>s.trait>=0.4, ja:['はしりたい','もっと はしりたい'], en:['I WANT TO RUN.','I WANT TO RUN MORE'] },
-    lively2:{ when:s=>s.trait>=0.4, ja:['たかい ところに','のぼって みたい'], en:['I WANT TO CLIMB','SOMETHING TALL'] },
-    calm1:  { when:s=>s.trait<=-0.4, ja:['なにも しない じかんも','わるく ない'], en:['DOING NOTHING','IS NOT SO BAD'] },
-    calm2:  { when:s=>s.trait<=-0.4, ja:['ひなたで まるくなって','いちにち おわった'], en:['I CURLED UP IN THE SUN','AND THE DAY ENDED'] },
+    ufo1:   { when:s=>s.cloudy,
+              ja:{plain:['くもの きれまに','ひかるものが みえた'],
+                  calm: ['くもの きれまに','ひかるものが みえたなあ'],
+                  rough:['くもの きれまに','なにか ひかった']},
+              en:{plain:['SOMETHING GLOWED','IN A GAP IN THE CLOUDS'],
+                  calm: ['IN A GAP IN THE CLOUDS','SOMETHING WAS GLOWING'],
+                  rough:['SOMETHING FLASHED','IN THE CLOUDS']} },
+    ufo2:   { when:s=>s.cloudy&&s.grown,
+              ja:{plain:['さっきの ひかりは','むかえに きたのかな'],
+                  calm: ['さっきの ひかりは','むかえに きたのかなあ'],
+                  rough:['さっきの ひかりは','むかえか']},
+              en:{plain:['THAT LIGHT EARLIER','WAS IT COMING FOR ME?'],
+                  calm: ['THAT LIGHT EARLIER.','WAS IT COMING FOR ME?'],
+                  rough:['THAT LIGHT.','WAS IT FOR ME?']} },
+    ufo3:   { when:s=>s.cloudy&&s.bond>=70,
+              ja:{plain:['そらを みあげたけど','ここに いることにした'],
+                  calm: ['そらを みあげたけれど','ここに いることに した'],
+                  rough:['そらを みあげた','でも ここに いる']},
+              en:{plain:['I LOOKED UP AT IT.','I CHOSE TO STAY HERE'],
+                  calm: ['I LOOKED UP AT THE SKY,','BUT I CHOSE TO STAY'],
+                  rough:['I LOOKED UP.','BUT I AM STAYING']} },
+    bond1:  { when:s=>s.bond>=70,
+              ja:{plain:['きみの あしおとが','わかるように なった'],
+                  calm: ['きみの あしおとが','わかるように なったなあ'],
+                  rough:['きみの あしおとは','すぐ わかる']},
+              en:{plain:['I KNOW YOUR STEPS','WHEN YOU COME'],
+                  calm: ['I CAN TELL YOUR STEPS','APART FROM ANY OTHER'],
+                  rough:['I KNOW YOUR STEPS','RIGHT AWAY']} },
+    bond2:  { when:s=>s.bond>=70,
+              ja:{plain:['ここは あんぜんだ','そう おもう'],
+                  calm: ['ここは あんぜんだ','そう おもえるように なった'],
+                  rough:['ここは あんぜんだ','たぶんな']},
+              en:{plain:['THIS PLACE IS SAFE.','I THINK SO NOW'],
+                  calm: ['THIS PLACE IS SAFE.','I HAVE COME TO FEEL THAT'],
+                  rough:['THIS PLACE IS SAFE.','PROBABLY']} },
+    bond3:  { when:s=>s.bond<30,
+              ja:{plain:['きみは だれ だっけ','わすれそうに なる'],
+                  calm: ['きみは だれ だったかな','わすれそうに なる'],
+                  rough:['きみは だれ だっけ','わすれた']},
+              en:{plain:['WHO ARE YOU AGAIN?','I ALMOST FORGOT'],
+                  calm: ['WHO WERE YOU AGAIN?','I ALMOST FORGOT'],
+                  rough:['WHO ARE YOU?','I FORGOT']} },
+    bond4:  { when:s=>s.bond<30,
+              ja:{plain:['そらばかり みていた','だれも こないから'],
+                  calm: ['そらばかり みていたなあ','だれも こないから'],
+                  rough:['そらばかり みてた','だれも こない']},
+              en:{plain:['I WATCHED THE SKY.','NOBODY CAME'],
+                  calm: ['I KEPT WATCHING THE SKY.','NOBODY CAME AT ALL'],
+                  rough:['WATCHED THE SKY.','NOBODY CAME']} },
+    young1: { when:s=>s.young,
+              ja:{plain:['まだ よく わからない','でも たのしい'],
+                  calm: ['まだ よく わからない','でも たのしいなあ'],
+                  rough:['まだ わからない','でも たのしい']},
+              en:{plain:['I DO NOT UNDERSTAND.','BUT IT IS FUN'],
+                  calm: ['I STILL DO NOT GET IT,','BUT IT IS FUN'],
+                  rough:['DO NOT GET IT YET.','STILL FUN']} },
+    young2: { when:s=>s.young,
+              ja:{plain:['じぶんの てを','ずっと みていた'],
+                  calm: ['じぶんの てを','ずっと みていたなあ'],
+                  rough:['じぶんの てを','ずっと みてた']},
+              en:{plain:['I LOOKED AT MY HANDS','FOR A LONG TIME'],
+                  calm: ['I STARED AT MY HANDS','FOR A LONG WHILE'],
+                  rough:['STARED AT MY HANDS.','A LONG TIME']} },
+    grown1: { when:s=>s.grown,
+              ja:{plain:['むかしは もっと','ちいさかった はずだ'],
+                  calm: ['むかしは もっと','ちいさかった はずだなあ'],
+                  rough:['むかしは もっと','ちいさかった']},
+              en:{plain:['I WAS SMALLER','I AM SURE OF IT'],
+                  calm: ['I USED TO BE SMALLER.','I AM QUITE SURE OF IT'],
+                  rough:['I WAS SMALLER BEFORE.','FOR SURE']} },
+    grown2: { when:s=>s.grown,
+              ja:{plain:['いつか かえるのかな','まだ わからない'],
+                  calm: ['いつか かえるのかなあ','まだ わからない'],
+                  rough:['いつか かえるのか','わからない']},
+              en:{plain:['WILL I GO BACK?','I DO NOT KNOW YET'],
+                  calm: ['WILL I GO BACK SOMEDAY?','I DO NOT KNOW YET'],
+                  rough:['WILL I GO BACK?','NO IDEA']} },
+    lively1:{ when:s=>s.trait>=0.4,
+              ja:{plain:['はしりたい','もっと はしりたい'],
+                  calm: ['はしりたいなあ','もっと はしりたい'],
+                  rough:['はしりたい','もっと はしりたい']},
+              en:{plain:['I WANT TO RUN.','I WANT TO RUN MORE'],
+                  calm: ['I WOULD LIKE TO RUN.','AND RUN SOME MORE'],
+                  rough:['WANT TO RUN!','WANT TO RUN MORE!']} },
+    lively2:{ when:s=>s.trait>=0.4,
+              ja:{plain:['たかい ところに','のぼって みたい'],
+                  calm: ['たかい ところに','のぼって みたいなあ'],
+                  rough:['たかい ところに','のぼりたい']},
+              en:{plain:['I WANT TO CLIMB','SOMETHING TALL'],
+                  calm: ['I WOULD LIKE TO CLIMB','SOMETHING TALL'],
+                  rough:['WANT TO CLIMB','SOMETHING TALL!']} },
+    calm1:  { when:s=>s.trait<=-0.4,
+              ja:{plain:['なにも しない じかんも','わるく ない'],
+                  calm: ['なにも しない じかんも','わるく ないなあ'],
+                  rough:['なにも しない じかん','わるく ない']},
+              en:{plain:['DOING NOTHING','IS NOT SO BAD'],
+                  calm: ['TIME SPENT DOING NOTHING','IS NOT SO BAD'],
+                  rough:['DOING NOTHING.','NOT BAD']} },
+    calm2:  { when:s=>s.trait<=-0.4,
+              ja:{plain:['ひなたで まるくなって','いちにち おわった'],
+                  calm: ['ひなたで まるくなって','いちにちが おわったなあ'],
+                  rough:['ひなたで まるくなってたら','ひが くれた']},
+              en:{plain:['I CURLED UP IN THE SUN','AND THE DAY ENDED'],
+                  calm: ['I CURLED UP IN THE SUN','AND THE DAY WENT BY'],
+                  rough:['CURLED UP IN THE SUN.','DAY WAS GONE']} },
   };
   // 性格でにじむ結びの一言（おっとり／やんちゃ）
   // 結びのことば。毎日おなじ一文で終わると強く繰り返して見えるので、性格ごとに4通り持つ
@@ -1310,7 +1538,14 @@
       { ja:['おだやかに','ひが くれた'],              en:['THE DAY ENDED','QUIETLY'] },
       { ja:['きょうも ぶじに','おわった'],            en:['ANOTHER DAY','ENDED SAFELY'] },
     ],
-    lively: [
+    plain: [
+      { ja:['きょうも いちにちが','おわった'],        en:['ANOTHER DAY','IS OVER'] },
+      { ja:['あしたは なにが','あるだろう'],          en:['I WONDER WHAT','TOMORROW BRINGS'] },
+      { ja:['そんな いちにち だった'],                en:['THAT WAS THE DAY'] },
+      { ja:['きょうの ことは','おぼえておこう'],      en:['I WILL REMEMBER','TODAY'] },
+      { ja:['もう ねる じかんだ'],                    en:['IT IS TIME','TO SLEEP'] },
+    ],
+    rough: [
       { ja:['あしたは なにを','しようかな'],          en:['WHAT SHOULD I DO','TOMORROW?'] },
       { ja:['あしたも たくさん','あそびたい'],        en:['I WANT TO PLAY','A LOT TOMORROW TOO'] },
       { ja:['まだ ねむく ない','もう すこし おきていたい'], en:['NOT SLEEPY YET.','LET ME STAY UP'] },
@@ -1318,6 +1553,7 @@
       { ja:['あしたが たのしみで','そわそわ する'],   en:['I AM RESTLESS.','TOMORROW SOUNDS FUN'] },
     ],
   };
+  DIARY_CLOSE.lively = DIARY_CLOSE.rough;   // 旧セーブ互換（以前この枠は 'lively' という名前だった）
   // 印象の強い順。上から拾って載せる
   const DIARY_PRIORITY = ['wrath','farewell','farewellWild','departed','evolved','sick','cured','hungry','lonely','woken',
                           'rhythmDay','rhythmNight','scolded','dirty',
@@ -1345,7 +1581,7 @@
       skip:   Math.max(0, t) * 0.35,          // その日は書かずに終わる確率
       putOff: Math.max(0, t) * 0.50,          // 寝る前に書かず、翌日に回す確率
       topics: (t <= -0.4) ? 4 : (t >= 0.4 ? 2 : 3),
-      close:  (t <= -0.4) ? 'calm' : (t >= 0.4 ? 'lively' : ''),
+      close:  voice(),                        // 口調は成体で確定。それまでは共通の 'plain'
     };
   }
   // 日記を書く時刻＝就寝の1時間前。就寝が遅い子でも深夜には回さない
@@ -1433,7 +1669,7 @@
     const c = solo ? '' : st.close;
     const cv = c ? pickFresh(DIARY_CLOSE[c].map((_, i) => i), i => 'c:' + c + ':' + i, used) : 0;
     return { d: dayNo || petDay(), n: pet.name, t: picked, v: v,
-             s: solo, c: c, cv: cv, ts: Date.now(), cd: cd || todayKey() };
+             s: solo, vo: voice(), c: c, cv: cv, ts: Date.now(), cd: cd || todayKey() };
   }
   function addDiary(e){
     if(!e) return;
@@ -1452,7 +1688,12 @@
       })
       .filter(Boolean);
     const mu = e.s && DIARY_MUSINGS[e.s];                              // ひとりごと
-    if(mu) parts.push(lang==='ja' ? mu.ja : mu.en);
+    if(mu){
+      // 口調別（{plain,calm,rough}）でも、口調を持たない古い形（配列）でも読めるようにする。
+      //  口調は日記に保存した e.vo を使う。あとから読み返しても文面が変わらないようにするため
+      const src = lang==='ja' ? mu.ja : mu.en;
+      parts.push(Array.isArray(src) ? src : (src[e.vo || 'plain'] || src.plain));
+    }
     const cset = e.c && DIARY_CLOSE[e.c];
     const cm = cset ? cset[Math.min(e.cv || 0, cset.length - 1)] : null;   // 保存した番号の結びを使う
     const cl = cm ? (lang==='ja' ? cm.ja : cm.en) : null;
@@ -1827,7 +2068,7 @@
     if(pet.stage==='final' && pet.finalAt && isWild() && !pet.ufoFlag && !pet.invadeFlag &&
        !invadeSigns() && now - pet.finalAt >= 14*86400000){
       pet.ufoFlag = true;
-      addDiary({ d: petDay(), n: pet.name, t: ['farewellWild'], c: '', ts: Date.now(), cd: todayKey() });
+      addDiary({ d: petDay(), n: pet.name, t: ['farewellWild'], v: [voiceIdx()], c: '', ts: Date.now(), cd: todayKey() });
     }
     //  ワイルド系に育った子には来ない。あとからどれだけ世話を頑張っても、この道は閉じている
     if(pet.stage==='final' && pet.finalAt && !pet.departFlag && !isWild() &&
@@ -1835,7 +2076,7 @@
       pet.departFlag = true;
       // 帰還エンドと同じく、最後の一言を日記に書き残してから旅立つ。
       //  演出のあとは主のいない画面で止まるので、読み返せるものが無いと画面が空のまま残ってしまう
-      addDiary({ d: petDay(), n: pet.name, t: ['departed'], c: '', ts: Date.now(), cd: todayKey() });
+      addDiary({ d: petDay(), n: pet.name, t: ['departed'], v: [voiceIdx()], c: '', ts: Date.now(), cd: todayKey() });
     }
 
     maybeEvolve();   // 進化条件チェック（起きている時のみ発動）
