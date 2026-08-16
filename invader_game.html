@@ -4719,7 +4719,11 @@
           clearDiary();                    // 日記が消えるのはこのリセットの時だけ
           pet = defaultPet(); nameBuf=''; nameCur=0; onSlots=false;
           ufoEnding = false; ufoT = 0; departEnding = false; departT = 0; invadeEnding = false; invadeT = 0; invadeGoneAt = 0; evoT = 0;
-          applyBodyColor(); showView('opening'); fO=0; openingReady=false;
+          // オープニングは最初から流し直す。openingDone と titleWait も戻さないと、
+          //  一度再生済みのフラグが残ったままで、UFOが降りてくる場面を飛ばして
+          //  いきなりタイトルと PRESS A が出てしまう
+          applyBodyColor(); showView('opening');
+          fO=0; openingReady=false; openingDone=false; titleWait=0;
         }
       }
     } else if(inStatus){
