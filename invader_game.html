@@ -1165,6 +1165,8 @@
     //  departed＝旅立ち（E4）：育ちきって送り出される。ひとり立ちの報告と感謝
     farewell: [ { ja:['むかえが きた','まだ ここに','いたかったな'],
                   en:['THEY CAME FOR ME.','I WANTED TO STAY','A BIT LONGER'] } ],
+    farewellWild:[{ ja:['むかえが きた','なにも いうことは ない','じゃあな'],
+                  en:['THEY CAME FOR ME.','I HAVE NOTHING TO SAY.','SO LONG'] } ],
     departed: [ { ja:['むかえが きた','もう ひとりでも','だいじょうぶ','そだててくれて ありがとう'],
                   en:['THEY CAME FOR ME.','I CAN MANAGE NOW.','THANK YOU FOR','RAISING ME'] } ],
     wrath:    [ { ja:['なかまをよんだ','もう がまんできない','おわかれだ'],
@@ -1317,7 +1319,7 @@
     ],
   };
   // 印象の強い順。上から拾って載せる
-  const DIARY_PRIORITY = ['wrath','farewell','departed','evolved','sick','cured','hungry','lonely','woken',
+  const DIARY_PRIORITY = ['wrath','farewell','farewellWild','departed','evolved','sick','cured','hungry','lonely','woken',
                           'rhythmDay','rhythmNight','scolded','dirty',
                           'snackMany','tantrum','cleaned','praised','playSw','playSs','playAb',
                           'snack','fed','noPlay','rain','snow','clear','slept'];
@@ -1825,7 +1827,7 @@
     if(pet.stage==='final' && pet.finalAt && isWild() && !pet.ufoFlag && !pet.invadeFlag &&
        !invadeSigns() && now - pet.finalAt >= 14*86400000){
       pet.ufoFlag = true;
-      addDiary({ d: petDay(), n: pet.name, t: ['farewell'], c: '', ts: Date.now(), cd: todayKey() });
+      addDiary({ d: petDay(), n: pet.name, t: ['farewellWild'], c: '', ts: Date.now(), cd: todayKey() });
     }
     //  ワイルド系に育った子には来ない。あとからどれだけ世話を頑張っても、この道は閉じている
     if(pet.stage==='final' && pet.finalAt && !pet.departFlag && !isWild() &&
