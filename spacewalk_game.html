@@ -858,6 +858,22 @@
   setInterval(()=>{ update(); draw(); }, TICK);
 
   // ── 入力 ──
+  // 十字ボタンの操作音。本体の playClick と同じ「下がる短いクリック」に合わせてある
+  function click(freq){
+    try{
+      if(localStorage.getItem('myvader_sound')==='off') return;
+      if(!ac) ac=new (window.AudioContext||window.webkitAudioContext)();
+      if(ac.state==='suspended'){ ac.resume().catch(function(){}); }
+      const o=ac.createOscillator(), g=ac.createGain();
+      o.connect(g); g.connect(ac.destination);
+      o.type='square';
+      o.frequency.setValueAtTime(freq, ac.currentTime);
+      o.frequency.exponentialRampToValueAtTime(freq*0.33, ac.currentTime+0.04);
+      g.gain.setValueAtTime(0.12, ac.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime+0.05);
+      o.start(); o.stop(ac.currentTime+0.05);
+    }catch(e){}
+  }
   function press(el,fn){
     el.addEventListener('touchstart',e=>{e.preventDefault(); el._pressed=true; fn();},{passive:false});
     el.addEventListener('mousedown',e=>{ el._pressed=true; fn(); });
@@ -875,12 +891,13 @@
   const eR=document.querySelector('.dpad-arrow.right');
   const eU=document.querySelector('.dpad-arrow.up');
   const eD=document.querySelector('.dpad-arrow.down');
-  press(eL,()=>{keys.left=true;dAnim(eL);});   release(eL,()=>keys.left=false);
-  press(eR,()=>{keys.right=true;dAnim(eR);});   release(eR,()=>keys.right=false);
+  press(eL,()=>{keys.left=true;dAnim(eL);click(900);});   release(eL,()=>keys.left=false);
+  press(eR,()=>{keys.right=true;dAnim(eR);click(900);});   release(eR,()=>keys.right=false);
   function menuMove(){ if(state===STATE.TITLE){ menuSel=(menuSel+1)%2; beep(500,0.05); } }
-  press(eU,()=>{ dAnim(eU); if(state===STATE.TITLE) menuMove(); else keys.up=true; });
+  // タイトルでは選択音が鳴るので、押下音は重ねない
+  press(eU,()=>{ dAnim(eU); if(state===STATE.TITLE) menuMove(); else { keys.up=true; click(900); } });
   release(eU,()=>keys.up=false);
-  press(eD,()=>{ dAnim(eD); if(state===STATE.TITLE) menuMove(); else keys.down=true; });
+  press(eD,()=>{ dAnim(eD); if(state===STATE.TITLE) menuMove(); else { keys.down=true; click(900); } });
   release(eD,()=>keys.down=false);
 
   function confirmTitle(){ beep(880,0.07); if(menuSel===0) startGame(); else state=STATE.HELP; }
@@ -913,7 +930,9 @@
     exitToMenu();   // iframe内なら親に通知して閉じる（ページ遷移しない）
   });
 
+  const KEY_DIRS = ['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'];
   document.addEventListener('keydown',e=>{
+    if(KEY_DIRS.includes(e.key) && !e.repeat && state!==STATE.TITLE) click(900);
     if(e.key==='ArrowLeft')keys.left=true; if(e.key==='ArrowRight')keys.right=true;
     if((e.key==='ArrowUp'||e.key==='ArrowDown') && state===STATE.TITLE){ e.preventDefault(); menuMove(); return; }
     if(e.key==='ArrowUp')keys.up=true; if(e.key==='ArrowDown')keys.down=true;
