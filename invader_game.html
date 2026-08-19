@@ -850,6 +850,17 @@
   //  ほめてもおやつをあげても満タンにはならず、「バーが満タン＝手入れが行き届いている」と読めるようにする。
   function moodCap(){ return (dirtCount() > 0 || pet.health === 'SICK') ? 4 : 5; }
   function raiseMood(){ if(pet.mood < moodCap()) pet.mood++; }
+  // ── ステータスのゲージ用の値（0〜5、小数あり）──
+  //  おなかもきげんも内部値は0〜5の整数だが、目盛りは10本ある。そのままだと
+  //  2本ずつしか動かず、5段階ぶんの見た目しか出せていなかった。
+  //  次の1が減るまでの進み具合（hungerAcc / moodAcc）を引いて、1本きざみで動かす
+  function gaugeHunger(){
+    const hm = hungerMin();
+    return Math.max(0, (pet.hunger||0) - (hm > 0 ? Math.min(1, (pet.hungerAcc||0) / hm) : 0));
+  }
+  function gaugeMood(){
+    return Math.max(0, (pet.mood||0) - Math.min(1, (pet.moodAcc||0) / MOOD_MIN));
+  }
   function clampMood(){ if(pet.mood > moodCap()) pet.mood = moodCap(); }   // 汚れ・病気が発生した瞬間に上限まで下げる
 
   // 帰還の兆候があるか（幼体到達後の接し方だけを見る）。1日1回、日付が変わった時に判定
@@ -4532,12 +4543,11 @@
         //  けんこう欄だけ見た人には問題なしに読めてしまっていた
         : pet.hunger===0      ? T('starving')
         :                       T('good');
-      // なかよし度Bは0〜100なので、5段階に落としてハートで見せる
-      const bondPips = Math.max(0, Math.min(5, Math.round((pet.B||0) / 20)));
+      // なかよし度Bは0〜100。20で割ると0〜5になり、下の×2で10本ぶんの目盛りになる
       const rows=[
-        {label:T('hungry'), gauge:pet.hunger},
-        {label:T('mood'),   gauge:pet.mood},
-        {label:T('friend'), gauge:bondPips},
+        {label:T('hungry'), gauge:gaugeHunger()},
+        {label:T('mood'),   gauge:gaugeMood()},
+        {label:T('friend'), gauge:(pet.B||0) / 20},
         {label:T('health'), text:healthText},
         {label:T('stage'),  text:stageLabel()},
         {label:T('ptype'),  text:typeLabel()},
@@ -4548,7 +4558,7 @@
         ctxN.fillText(r.label, 2*S, y*S);
         if(r.gauge !== undefined){
           // 目盛り10本。点いているぶんがON、残りはDIM
-          const lit = Math.max(0, Math.min(GAUGE_MAX, r.gauge)) * 2;
+          const lit = Math.round(Math.max(0, Math.min(GAUGE_MAX, r.gauge)) * 2);
           for(let k=0;k<GAUGE_MAX*2;k++){
             const c = (k < lit) ? ON : DIM;
             for(let dx=0;dx<GAUGE_W;dx++) for(let dy=0;dy<GAUGE_H;dy++)
