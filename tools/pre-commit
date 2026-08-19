@@ -1,0 +1,23 @@
+#!/bin/sh
+# キャッシュ対象のファイルが1つでもステージされていたら、sw.js の VERSION を上げる。
+# これを忘れると、更新をpushしてもテスターの端末に古い版が出続ける。
+set -e
+# まず回帰テスト。ここで落ちたらコミットさせない
+if [ -f tools/test.js ]; then
+  if ! node tools/test.js; then
+    echo ""
+    echo "テストが通らないのでコミットを中止しました。"
+    echo "どうしても通したい場合は git commit --no-verify"
+    exit 1
+  fi
+fi
+
+WATCH='invader_game.html spacewalk_game.html shootingstar_game.html abduction_game.html index.html manual.html fonts.css register-sw.js manifest.json apple-touch-icon.png pressstart2p-latin.woff2'
+STAGED=$(git diff --cached --name-only | tr '\n' ' ')
+HIT=0
+for f in $WATCH; do
+  case " $STAGED " in *" $f "*) HIT=1 ;; esac
+done
+[ "$HIT" = "1" ] || exit 0
+sh tools/bump-sw.sh
+git add sw.js
