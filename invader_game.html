@@ -3340,6 +3340,9 @@
   //  逆に毎日続けていれば上限が上がっていき、伸びが速くなる。
   const BOND_CAP = [1, 1, 2, 2, 3];   // 連続0日 / 1日 / 2日 / 3日 / 4日以上
   function bondCapToday(){ return BOND_CAP[Math.min(pet.careStreak||0, BOND_CAP.length-1)]; }
+  //  なかよしの点が入るのは おやつ・ほめる・遊ぶ・空腹時のごはん だけ。
+  //  そうじは「その日きちんと世話をしたか」の判定には数えるが、点は入らない
+  //  （きれいにするのは当たり前の世話で、なつく理由ではないため）。
   //  同じ世話を繰り返しても、その日に効くのは1回ぶん。ほめるを連打しても上限まで埋まらない
   function gainB(n, key){
     if(pet.dayKey !== todayKey()){ pet.dayKey = todayKey(); pet.bGainToday = 0; pet.bGainKinds = {}; }
@@ -3449,7 +3452,8 @@
           pet.W = 0; pet.plateAt = 0; pet.plateSpoiled = false; pet.poopSince = 0;
           raiseMood();                                              // 汚れを消してから上げるので、病気でなければMAXまで戻せる
           note('cleaned');
-          addA(A_ADJ.clean); markTouch();           // そうじは「来てくれた」だけ。ふれあいには数えない
+          addA(A_ADJ.clean); markTouch('clean');    // そうじは「その日世話をしたか」の判定には数える。
+                                                    //  ただし gainB は呼ばないので、なかよしの点は入らない
           setReaction('clean', CLEAN_T, asleep || onlyFresh);       // ほうき掃きアニメ（睡眠中と、拒んだ皿を下げただけの時は音符を出さない）
         }
         // 掃除するものが無い時は無反応（退屈マークを出さない）
