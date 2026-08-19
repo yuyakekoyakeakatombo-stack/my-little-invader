@@ -632,7 +632,9 @@
     A:0,                                  // かまい度の累積（＋甘やかし／−放置）
     praiseCount:0, scoldBadCount:0,       // ほめた回数／理不尽・睡眠妨害のしかる回数
     plays:{sw:0,ss:0,ab:0},               // ミニゲームのプレイ回数（進化の傾向づけ）
-    touchedToday:false, touchCount:0,      // 今日ふれあったか／その回数
+    touchedToday:false, touchCount:0,      // 今日だれか来たか／ふれあいの種類数
+    touchKinds:{},                        // 今日すでに数えたふれあいの種類
+    bGainKinds:{},                        // 今日すでになかよしに効いた世話の種類
     noTouchDays:0,                        // ふれあいゼロの連続日数
     estrangedDays:0,                      // 疎遠期の連続日数（帰還までの猶予）
     // ── 手紙 ──
@@ -926,7 +928,17 @@
   // ごはん以外の世話（ほめる・遊ぶ・そうじ・くすり）に触れた印。1日1回でも触れれば放置ではない
   //  ふれあいの回数を数える。「1回でもやれば免除」だと、そうじ1回で
   //   なかよしが永久に減らなくなってしまうので、回数で見る
-  function markTouch(){ pet.touchedToday = true; pet.touchCount = (pet.touchCount||0) + 1; }
+  // ふれあい＝関係を育てるための世話。ごはん・そうじ・くすりは「生かすための世話」なので数えない。
+  //  そちらは病気・きげん・ケア度のほうで効いていて、なかよしの前提条件（ひもじくない・病気でない）
+  //  にもなっているので、ここで数えると二重取りになる。
+  //  同じことを何度しても1種類ぶん。「ほめる」を連打するだけで条件を満たせないよう、種類で数える。
+  //  kind を渡さない呼び出しは「来てくれた」だけ記録する（日記の「だれも こなかった」判定用）
+  function markTouch(kind){
+    pet.touchedToday = true;
+    if(!kind) return;
+    const k = pet.touchKinds || (pet.touchKinds = {});
+    if(!k[kind]){ k[kind] = 1; pet.touchCount = (pet.touchCount||0) + 1; }
+  }
   const DAY_MS = 86400000;
   function daysSince(ts){ return ts ? Math.max(0, (Date.now()-ts)/DAY_MS) : 0; }
 
@@ -1062,7 +1074,7 @@
       if(!r || !pet.name || pet.dead || pet.gone) return;
       if(Date.now() - r.at > 3600000) return;     // 1時間以上前の結果は無視
       raiseMood();                                // 遊んで楽しかった（汚れ・病気があるうちはMAXにならない）
-      gainB(2);
+      gainB(2, 'play');
       const h = new Date(r.at).getHours();
       if(h >= 22 || h < 4){ pet.nightPlays++; pet.nightPlayToday = true; addP(P_ADJ.nightPlay); }   // 夜更かしは生活リズムの話なのでPに効く
       // 入れ子のオブジェクトは defaultPet() とマージされず丸ごとセーブ側の値になるので、
@@ -1077,7 +1089,7 @@
       if(r.game==='spacewalk'){    note('playSw'); pet.best.sw = Math.max(pet.best.sw, r.score); pet.plays.sw++; }
       if(r.game==='shootingstar'){ note('playSs'); pet.best.ss = Math.max(pet.best.ss, r.score); pet.plays.ss++; }
       if(r.game==='abduction'){    note('playAb'); pet.best.ab = Math.max(pet.best.ab, r.score); pet.plays.ab++; if(r.score >= 400) pet.C = Math.min(100, pet.C + 2); }
-      addA(A_ADJ.play); markTouch();                // 遊んであげた＝ふれあい
+      addA(A_ADJ.play); markTouch('play');          // 遊んであげた＝ふれあい
       pet.C = Math.min(100, pet.C + 1);           // 遊んであげたケア加点
       // 遊ぶとおなかが減る。前回から間が空いていなければ「立て続け」とみなして消耗が増える
       const gap = r.at - (pet.lastPlayAt || 0);
@@ -2070,7 +2082,7 @@
       }
       pet.diary = nextMat;                              // 材料は日ごとにリセット（書いたあとのぶんだけ引き継ぐ）
       pet.calDay = tk;
-      pet.touchedToday = false; pet.touchCount = 0;
+      pet.touchedToday = false; pet.touchCount = 0; pet.touchKinds = {};
       pet.nightPlayToday = false; pet.nightCareToday = false;
     }
     // 旅立ちエンド（E4）：最終形態から14日・なつき度60以上・健康
@@ -3328,8 +3340,11 @@
   //  逆に毎日続けていれば上限が上がっていき、伸びが速くなる。
   const BOND_CAP = [1, 1, 2, 2, 3];   // 連続0日 / 1日 / 2日 / 3日 / 4日以上
   function bondCapToday(){ return BOND_CAP[Math.min(pet.careStreak||0, BOND_CAP.length-1)]; }
-  function gainB(n){
-    if(pet.dayKey !== todayKey()){ pet.dayKey = todayKey(); pet.bGainToday = 0; }
+  //  同じ世話を繰り返しても、その日に効くのは1回ぶん。ほめるを連打しても上限まで埋まらない
+  function gainB(n, key){
+    if(pet.dayKey !== todayKey()){ pet.dayKey = todayKey(); pet.bGainToday = 0; pet.bGainKinds = {}; }
+    const kinds = pet.bGainKinds || (pet.bGainKinds = {});
+    if(key){ if(kinds[key]) return; kinds[key] = 1; }
     const room = bondCapToday() - (pet.bGainToday||0);
     if(room <= 0) return;
     const add = Math.min(n, room);                 // 上限ぴったりで止める（以前は最後の1回がはみ出していた）
@@ -3398,7 +3413,7 @@
             //  ここで嫌がる仕草を出すと、わがままの拒否と区別がつかなくなる
         }
         else {
-          if(pet.hunger <= 1) gainB(1);                             // 空腹時に食べさせるとなつく
+          if(pet.hunger <= 1) gainB(1, 'feed');                     // 空腹時に食べさせるとなつく
           note('fed');
           addA(A_ADJ.feedHungry);
           feedFill(); schedulePoop(); eatReaction('meal');          // 3口で減っていく食事アニメ
@@ -3417,11 +3432,11 @@
           addA(A_ADJ.snackOver); note('snackMany');
           rollSick(SICK_P.snackNow + snackSeverity() * 0.12, true);  // おやつ漬け：しばらくしてから具合が悪くなる
         } else {
-          gainB(1);                                                 // 適度なおやつはなかよし度アップ
+          gainB(1, 'snack');                                        // 適度なおやつはなかよし度アップ
           note('snack');
           addA(A_ADJ.snackOk);
         }
-        markTouch();
+        markTouch('snack');
         schedulePoop(); eatReaction('snack');
         break;
       }
@@ -3434,7 +3449,7 @@
           pet.W = 0; pet.plateAt = 0; pet.plateSpoiled = false; pet.poopSince = 0;
           raiseMood();                                              // 汚れを消してから上げるので、病気でなければMAXまで戻せる
           note('cleaned');
-          addA(A_ADJ.clean); markTouch();
+          addA(A_ADJ.clean); markTouch();           // そうじは「来てくれた」だけ。ふれあいには数えない
           setReaction('clean', CLEAN_T, asleep || onlyFresh);       // ほうき掃きアニメ（睡眠中と、拒んだ皿を下げただけの時は音符を出さない）
         }
         // 掃除するものが無い時は無反応（退屈マークを出さない）
@@ -3451,7 +3466,7 @@
           else {
             pet.health = 'GOOD'; pet.sickAcc = 0; pet.sickCount++;  // 治療（回数は進化条件に使用）
             note('cured');
-            addA(A_ADJ.med); markTouch();
+            addA(A_ADJ.med); markTouch();           // くすりも同じく、ふれあいには数えない
             setReaction('cured');
           }
         }
@@ -3462,9 +3477,9 @@
         else {
           // 疎遠期は見た目そっけないが、褒めた事実は記録する（続ければ持ち直せるようにするため）
           pet.praiseCount = (pet.praiseCount||0) + 1;
-          addA(A_ADJ.praise); markTouch();
+          addA(A_ADJ.praise); markTouch('praise');
           if(isEstranged()){ setReaction('nothing'); }              // 疎遠期：反応しない（…）
-          else { raiseMood(); gainB(1); note('praised'); setReaction('heart'); }
+          else { raiseMood(); gainB(1, 'praise'); note('praised'); setReaction('heart'); }
         }
         break;
       case 'SCOLD':
@@ -3475,7 +3490,7 @@
           pet.wokeUntil = 0;                                        // シフトが外れるので、この時間はもう起きている扱い
           addP(P_ADJ.scoldRhythm);                                  // 夜型が少し戻る
           addD(+3);
-          addA(A_ADJ.scoldFair); markTouch();
+          addA(A_ADJ.scoldFair); markTouch('scold');
           note('rhythmDay');
           setReaction('sad');                                       // 起きて「・・・」
         } else if(asleep){                                          // 起こしてしまう
@@ -3491,7 +3506,7 @@
           pet.tantrumAt = 0; pet.tantrumType = '';
           addD(+5);
           if(pet.mood > 0) pet.mood--;
-          addA(A_ADJ.scoldFair); markTouch();   // しつけは甘やかしでも放置でもない（ふれあいには数える）
+          addA(A_ADJ.scoldFair); markTouch('scold');   // しつけは甘やかしでも放置でもない（ふれあいには数える）
           setReaction('sad');                                       // まずしゅんとする
           // ごはんを出したまましかった場合：しゅんとしたあとで、その皿を食べに行く。
           //  叱られた直後に♪で喜ばれると「叱ったのに喜んでいる」ように見えるので、音符は出さない
@@ -3502,7 +3517,7 @@
           pet.wokeUntil = Date.now() + SLEEP_DELAY_MS;              // ただし、この時間が過ぎるまでは起きている
           addP(P_ADJ.scoldRhythm);
           addD(+3);
-          addA(A_ADJ.scoldFair); markTouch();
+          addA(A_ADJ.scoldFair); markTouch('scold');
           note('rhythmNight');
           setReaction('sad');
         } else {                                                    // 不当なしかる
