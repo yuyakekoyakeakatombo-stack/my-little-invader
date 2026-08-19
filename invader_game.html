@@ -3490,6 +3490,14 @@
             setReaction('cured');
           }
         }
+        else if(pet.incubAt){
+          // 潜伏中：まだ発症していないが、体調は下り坂。ここで飲ませれば病気にならずに済む。
+          //  けんこう欄の「ふつう」に気づいた人だけが拾える救いなので、嫌がらせずに受け取る。
+          //  病気になったわけではないので sickCount は増やさない（進化条件に使われるため）
+          pet.incubAt = 0;
+          addA(A_ADJ.med); markTouch();
+          setReaction('cured');
+        }
         else { if(pet.mood > 0) pet.mood--; addM(M_ADJ.medWell); setReaction('anger'); } // 健康時は嫌がる
         break;
       case 'PET':  // PRAISE（褒める）
@@ -4542,6 +4550,10 @@
         // 空腹が続いている（このままだと衰弱）。以前は「ふつう」と出ていて、
         //  けんこう欄だけ見た人には問題なしに読めてしまっていた
         : pet.hunger===0      ? T('starving')
+        // 命に関わるほどではないが、本調子ではない状態。
+        //  潜伏中の病気・汚れ・きげんやおなかが下がりきる手前を、まとめてここで伝える。
+        //  潜伏中は、気づいてくすりを飲ませれば発症を防げる（下の MED を参照）
+        : (pet.incubAt || dirtCount() > 0 || pet.mood <= 1 || pet.hunger <= 1) ? T('normal')
         :                       T('good');
       // なかよし度Bは0〜100。20で割ると0〜5になり、下の×2で10本ぶんの目盛りになる
       const rows=[
