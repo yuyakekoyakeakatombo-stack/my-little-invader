@@ -746,11 +746,11 @@
       const lx=10+i*4, on=i<lives;
       d(lx,59,on?ON:DIM); d(lx+1,59,on?ON:DIM); d(lx,60,on?ON:DIM); d(lx+1,60,on?ON:DIM);
     }
-    // ワープの残り。使い切ると薄くなる。ライフと見分けがつくよう間をあけて右寄りに置く
-    for(let i=0;i<WARP_MAX;i++){
-      const wx=32+i*4, on=i<warpLeft;
-      d(wx,59,on?ON:DIM); d(wx+1,59,on?ON:DIM); d(wx,60,on?ON:DIM); d(wx+1,60,on?ON:DIM);
-    }
+    // ワープの残りは数字で出す。ライフと同じ形のピップを並べていたため、
+    //  間をあけても1列につながって見えて、どこまでがライフか分からなかった。
+    //  読み取るものの種類が違うと分かるよう、表示の形そのものを変えてある。
+    //  使い切ったら薄くして、押しても跳べないことを示す
+    txt('W'+warpLeft, 36, 59, 7, warpLeft>0 ? ON : DIM);
     txtR('ST'+(stage+1), W-1, 59, 7, ON);
   }
   function drawPlayer(){
