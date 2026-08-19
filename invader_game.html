@@ -661,7 +661,7 @@
       //  best は増える一方なので、低いCで g3 になった子があとから条件を満たしていると
       //  ごほうび側に見えてしまう。過去のセーブに限った近似として許容する
       if(p.stage === 'adult' || p.stage === 'final')
-        p.formWild = /3$/.test(p.form || '') && !isRewardForm(p);
+        p.formWild = /3$/.test(p.form || '') && !wasHiddenRoute(p);
       // 「生まれたては連続2日から」は新しく来た子のための下駄。
       //  すでに育っている子には与えない（既定値の2が入ってしまうため0に戻す）
       p.careStreak = 0;
@@ -1052,19 +1052,25 @@
   }
   // Stage4 形態分岐：成体になってからの行動だけで判定（前半と後半で育て方を変えられる）
   //   甘やかす→まるっと(1) ／ バランス→バランス(2) ／ 放置気味→やんちゃ(3)
+  // 隠しルートの条件。系統ごとに1つずつ。満たすとケア度が並でも「プチ」になる
+  function hiddenReward(q){
+    const s = q || pet, b = s.best || {};
+    if(s.lineage === 'tako') return (s.fullFeeds||0) >= 10 && (s.sickCount||0) >= 1;   // 大食い
+    if(s.lineage === 'grey') return (b.sw||0) >= 250 && (b.ss||0) >= 100 && (b.ab||0) >= 400;  // ミニゲーム3種
+    if(s.lineage === 'inv')  return (s.nightPlays||0) >= 7 && (s.D||0) >= 50;          // 夜更かしでも しつけは通っている
+    return false;
+  }
+  // Stage4 体型：プチ＝ごほうび ／ ノーマル＝標準 ／ ワイルド＝ひどい扱いを受けた姿。
+  //  以前は隠しルートがワイルドの枠に入っていたため、ミニゲームを極めた子が
+  //  「グレてしまった姿」になっていた。ごほうびはプチが担う。
   function pickForm(){
-    const L = pet.lineage;
+    const key = (pet.lineage==='grey' ? 'g' : pet.lineage==='tako' ? 't' : 'i');
     pet.formWild = false;
-    // 特殊条件（隠し進化）を優先。クラーケンとオールラウンダーは "3" でも ごほうびの姿なので、
-    //  ワイルド扱いにはしない（お迎えエンドを取り上げてしまわないように）
-    if(L==='tako' && pet.fullFeeds >= 10 && pet.sickCount >= 1) return 't3';   // クラーケン：大食いルート
-    if(L==='grey' && pet.best.sw >= 250 && pet.best.ss >= 100 && pet.best.ab >= 400) return 'g3';  // オールラウンダー
-    if(L==='inv'  && pet.nightPlays >= 7 && pet.D >= 50){ pet.formWild = true; return 'i3'; }      // ワイルド
-    // 層3：体型＝ケアの丁寧さ（C）。丁寧に育てるほど"大事にされた体つき"になり、
-    //  雑に育てると荒れた見た目（ワイルド）になる。ここは意図的に優劣がある。
-    const n = (pet.C >= C_FORM_GOOD) ? 1 : (pet.C < C_FORM_BAD ? 3 : 2);
-    if(n === 3) pet.formWild = true;
-    return (L==='grey'?'g':L==='tako'?'t':'i') + n;
+    // ワイルドは何よりも優先する。ミニゲームを極めていようが大食いだろうが、
+    //  そういう扱いをされた事実は上書きさせない
+    if(pet.C < C_FORM_BAD){ pet.formWild = true; return key + '3'; }
+    if(hiddenReward()) return key + '1';                       // 隠しルート → プチ
+    return key + (pet.C >= C_FORM_GOOD ? '1' : '2');
   }
   // ── 日記の口調 ──
   //  成体になった時に、系統とその時点の性格で確定させ、以後は動かさない。
@@ -1076,12 +1082,11 @@
     const v = pTrait(s) + (L==='tako' ? -0.4 : L==='grey' ? +0.4 : 0);   // マーシャン＝のんびり／グレイ＝活発
     return (v <= -0.35) ? 'calm' : (v >= 0.35 ? 'rough' : 'plain');
   }
-  // その姿が「ごほうびの隠し形態」か。進化のときとセーブ移行で同じ判定を使う
-  function isRewardForm(q){
-    const f = q.form || '', b = q.best || {};
-    if(f === 't3') return (q.fullFeeds||0) >= 10 && (q.sickCount||0) >= 1;   // クラーケン
-    if(f === 'g3') return (b.sw||0) >= 250 && (b.ss||0) >= 100 && (b.ab||0) >= 400;  // オールラウンダー
-    return false;
+  // 古い決まりで進化した子むけ。以前は隠しルートがワイルドの枠（"3"）に入っていたので、
+  //  その姿がケアの雑さで来たのか、隠しルートで来たのかを条件から推し量る。
+  //  すでに姿が決まっている子の見た目は変えられないため、移行でのみ使う
+  function wasHiddenRoute(q){
+    return /3$/.test(q.form || '') && hiddenReward(q);
   }
   function voice(){ return pet.voice || 'plain'; }
   // 言い回しの並び順は plain=0 / calm=1 / rough=2。0を今までの文面にしておくと、

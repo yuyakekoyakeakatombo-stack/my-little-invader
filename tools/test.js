@@ -389,26 +389,55 @@ describe('日記', () => {
 });
 
 // ══ 進化 ══════════════════════════════════════════════════
+//  プチ(1)＝ごほうび ／ ノーマル(2)＝標準 ／ ワイルド(3)＝ひどい扱いを受けた姿
 describe('進化', () => {
-  it('雑に育てるとワイルド系になり、印が残る', () => {
+  it('雑に育てるとワイルドになり、印が残る', () => {
     const { api, clock } = load();
     pet(api, clock, { stage:'larva', lineage:'inv', C:10, nightPlays:0, D:50 });
-    const form = api.pickForm();
-    eq(form, 'i3');
+    eq(api.pickForm(), 'i3');
     eq(api.pet.formWild, true);
   });
-  it('丁寧に育てればワイルドにならない', () => {
+  it('丁寧に育てるとプチになる', () => {
     const { api, clock } = load();
     pet(api, clock, { stage:'larva', lineage:'inv', C:90, nightPlays:0, D:50 });
-    api.pickForm();
+    eq(api.pickForm(), 'i1');
     eq(api.pet.formWild, false);
   });
-  it('隠しルートのオールラウンダーはワイルド扱いにしない', () => {
+  it('ケアが並なら、そのままではノーマル', () => {
+    const { api, clock } = load();
+    pet(api, clock, { stage:'larva', lineage:'grey', C:55, best:{sw:0,ss:0,ab:0} });
+    eq(api.pickForm(), 'g2');
+  });
+  it('隠しルートを満たすと、ケアが並でもプチになる', () => {
+    const { api, clock } = load();
+    pet(api, clock, { stage:'larva', lineage:'grey', C:55,
+                      best:{sw:300, ss:150, ab:500} });
+    eq(api.pickForm(), 'g1', 'ミニゲームを極めた:');
+    eq(api.pet.formWild, false);
+    pet(api, clock, { stage:'larva', lineage:'tako', C:55, fullFeeds:12, sickCount:2 });
+    eq(api.pickForm(), 't1', '大食い:');
+    pet(api, clock, { stage:'larva', lineage:'inv', C:55, nightPlays:8, D:60 });
+    eq(api.pickForm(), 'i1', '夜更かしでもしつけは通っている:');
+  });
+  it('ワイルドは何よりも優先する（隠しルートで上書きできない）', () => {
     const { api, clock } = load();
     pet(api, clock, { stage:'larva', lineage:'grey', C:10,
-               best:{sw:300, ss:150, ab:500} });
-    eq(api.pickForm(), 'g3');
-    eq(api.pet.formWild, false, 'ごほうびの姿なのでワイルドではない:');
+                      best:{sw:300, ss:150, ab:500} });
+    eq(api.pickForm(), 'g3', 'ミニゲームを極めていてもワイルド:');
+    eq(api.pet.formWild, true);
+    pet(api, clock, { stage:'larva', lineage:'tako', C:10, fullFeeds:12, sickCount:2 });
+    eq(api.pickForm(), 't3', '大食いでもワイルド:');
+    eq(api.pet.formWild, true);
+  });
+  it('ワイルドの3種は、どれもケアの雑さからしか出ない', () => {
+    const { api, clock } = load();
+    for(const L of ['grey','tako','inv']){
+      pet(api, clock, { stage:'larva', lineage:L, C:80,
+                        best:{sw:999,ss:999,ab:999}, fullFeeds:99, sickCount:9,
+                        nightPlays:99, D:99 });
+      const f = api.pickForm();
+      ok(!/3$/.test(f), `${L}: ケアが良ければワイルドにならない（実際 ${f}）`);
+    }
   });
 });
 
