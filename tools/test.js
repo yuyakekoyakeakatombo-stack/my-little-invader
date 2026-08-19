@@ -412,6 +412,101 @@ describe('進化', () => {
   });
 });
 
+// ══ セーブデータの移行 ════════════════════════════════════
+describe('セーブ移行', () => {
+  // 版番号を持たない、いちばん古い形のセーブ（隠しパラメータが増える前）
+  const old = (over = {}) => Object.assign({
+    name:'ZUZU', birth: 0, lastTick: 0, hunger:4, mood:4, health:'GOOD',
+    P:0, D:50, Dm:50, C:50, B:60, W:0, A:0, EP:11,
+    stage:'final', lineage:'inv', form:'i1',
+    best:{sw:0, ss:0, ab:0}, plays:{sw:0, ss:0, ab:0},
+    dead:'', gone:false, sickCount:0, fullFeeds:0,
+  }, over);
+
+  it('版番号が付き、欠けた項目が既定で埋まる', () => {
+    const { api } = load();
+    const p = api.migratePet(old());
+    eq(p.v, api.SAVE_V);
+    eq(p.M, 0);
+    eq(typeof p.touchKinds, 'object');
+    eq(p.rhythmUntil, 0);
+  });
+  it('すでに成体・最終形態の子には口調を与える（空のままにしない）', () => {
+    const { api } = load();
+    eq(api.migratePet(old({ stage:'final', lineage:'grey', P:60 })).voice, 'rough');
+    eq(api.migratePet(old({ stage:'adult', lineage:'tako', P:-60 })).voice, 'calm');
+    eq(api.migratePet(old({ stage:'final', lineage:'inv',  P:0   })).voice, 'plain');
+  });
+  it('まだ成体になっていない子には口調を与えない（成体で決まるため）', () => {
+    const { api } = load();
+    eq(api.migratePet(old({ stage:'larva', form:'' })).voice, '');
+  });
+  it('ワイルド系の印を姿から復元する', () => {
+    const { api } = load();
+    eq(api.migratePet(old({ form:'i3' })).formWild, true,  'i3はワイルド:');
+    eq(api.migratePet(old({ form:'i1' })).formWild, false, 'i1は違う:');
+    eq(api.migratePet(old({ form:'t2' })).formWild, false, 't2は違う:');
+  });
+  it('ごほうびの隠し形態はワイルド扱いにしない', () => {
+    const { api } = load();
+    eq(api.migratePet(old({ lineage:'grey', form:'g3',
+        best:{sw:300, ss:150, ab:500} })).formWild, false, 'オールラウンダー:');
+    eq(api.migratePet(old({ lineage:'tako', form:'t3',
+        fullFeeds:12, sickCount:2 })).formWild, false, 'クラーケン:');
+    eq(api.migratePet(old({ lineage:'grey', form:'g3',
+        best:{sw:0, ss:0, ab:0} })).formWild, true, '条件を満たさないg3はワイルド:');
+  });
+  it('育っている途中の子に、生まれたての下駄を与えない', () => {
+    const { api } = load();
+    eq(api.migratePet(old()).careStreak, 0);
+    eq(api.defaultPet().careStreak, 2, '新しく来る子には下駄がある:');
+  });
+  it('入れ子の項目が欠けていても埋まる', () => {
+    const { api } = load();
+    const p = api.migratePet(old({ best:{sw:100}, plays:{ab:3}, snapL:{praise:2} }));
+    eq(p.best,  {sw:100, ss:0, ab:0});
+    eq(p.plays, {sw:0, ss:0, ab:3});
+    eq(p.snapL, {praise:2, bad:0, plays:0});
+  });
+  it('壊れた数値は既定に戻す（NaNのまま比較すると静かに壊れる）', () => {
+    const { api } = load();
+    const p = api.migratePet(old({ B:'こわれた', C:null, EP:undefined }));
+    ok(Number.isFinite(p.B) && Number.isFinite(p.C) && Number.isFinite(p.EP));
+  });
+  it('移行ずみのセーブは、もう一度読んでも変わらない', () => {
+    const { api } = load();
+    const once  = api.migratePet(old({ form:'i3' }));
+    const twice = api.migratePet(JSON.parse(JSON.stringify(once)));
+    eq(twice, once);
+  });
+  //  移行関数そのものが正しくても、読み込みに繋がっていなければ意味がない。
+  //  localStorage に古いセーブを置いた状態で起動して、実際に適用されるかを見る
+  it('起動時に、保存されている古いセーブへ移行が実際に走る', () => {
+    const saved = old({ stage:'final', lineage:'grey', form:'g3', P:60, C:20,
+                        best:{sw:0, ss:0, ab:0} });
+    const { api } = load({ storage: { myvader_pet: JSON.stringify(saved) } });
+    eq(api.pet.name, 'ZUZU', '読み込めている:');
+    eq(api.pet.v, api.SAVE_V, '版番号が付く:');
+    eq(api.pet.voice, 'rough', '口調が与えられる:');
+    eq(api.pet.formWild, true, 'ワイルドの印が復元される:');
+    eq(api.pet.careStreak, 0, '生まれたての下駄を与えない:');
+  });
+  it('名前が無いセーブ（開始前）は読み込まない', () => {
+    const { api } = load({ storage: { myvader_pet: JSON.stringify({ name:'', B:99 }) } });
+    eq(api.pet.name, '');
+    eq(api.pet.B, api.defaultPet().B, '既定のまま:');
+  });
+  it('セーブが壊れていても起動できる', () => {
+    const { api } = load({ storage: { myvader_pet: '{壊れたJSON' } });
+    eq(api.pet.name, '');
+  });
+  it('版番号を上げたら手当てを書き忘れていないか', () => {
+    const { api } = load();
+    for(let v = 1; v <= api.SAVE_V; v++)
+      ok(typeof api.MIGRATIONS[v] === 'function', `v${v} の移行処理が無い`);
+  });
+});
+
 // ══ ファイル全体の健全性 ══════════════════════════════════
 //  ミニゲームは本体と別のHTMLで、この足場では動かせない。
 //  代わりに「構文が通るか」と「壊しやすい約束事」をソースの上で確かめる

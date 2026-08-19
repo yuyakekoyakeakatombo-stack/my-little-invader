@@ -588,7 +588,11 @@
   // ペット状態（フェーズ1: 名前・日数・表示用ステータスの骨格）
   // ════════════════════════════════════════
   const SAVE_KEY = 'myvader_pet';
+  // セーブデータの形式。項目を足したり意味を変えたら1つ上げて、MIGRATIONS に手当てを書く。
+  //  既定値まかせにすると、育っている途中の子に合わない値が入る（後述の v1 参照）
+  const SAVE_V = 1;
   function defaultPet(){ return {
+    v: SAVE_V,
     name:'', birth:0, lastTick:0,
     hunger:5, mood:4, health:'GOOD',      // 表示ステータス（おなか・きげんは0〜5の6段階）
     hungerAcc:0, moodAcc:0,               // 進行タイマー（分）
@@ -643,8 +647,45 @@
     larvaAt:0, snapL:null,                // 幼体到達時刻とスナップショット（帰還判定の起点）
     lineageAt:0, snapA:null,              // 成体到達時刻とスナップショット（Stage4形態判定の起点）
   }; }
+  // ── セーブデータの移行 ──────────────────────────────────
+  //  版ごとの手当て。p は既定値に保存値をかぶせたもの、sv は保存されていた生データ。
+  //  ここに書くのは「既定値のままだと、育っている途中の子にとって間違いになる」項目だけ
+  const MIGRATIONS = {
+    // v0（版番号を持たない、いちばん古いセーブ）→ v1
+    1(p){
+      // 口調は成体で決まる仕組みを後から入れた。すでに成体・最終形態の子は
+      //  空のままだと一生 plain になってしまうので、今の系統と性格から与える
+      if(!p.voice && (p.stage === 'adult' || p.stage === 'final')) p.voice = pickVoice(p);
+      // ワイルド系かどうかの印も後付け。姿から復元する。
+      //  ごほうびの隠し形態（クラーケン／オールラウンダー）はワイルド扱いにしない。
+      //  best は増える一方なので、低いCで g3 になった子があとから条件を満たしていると
+      //  ごほうび側に見えてしまう。過去のセーブに限った近似として許容する
+      if(p.stage === 'adult' || p.stage === 'final')
+        p.formWild = /3$/.test(p.form || '') && !isRewardForm(p);
+      // 「生まれたては連続2日から」は新しく来た子のための下駄。
+      //  すでに育っている子には与えない（既定値の2が入ってしまうため0に戻す）
+      p.careStreak = 0;
+    },
+  };
+  function migratePet(sv){
+    const p = Object.assign(defaultPet(), sv);
+    // 入れ子は Object.assign で丸ごと差し替わる。あとから増えたキーが欠けるので埋め直す
+    p.best  = Object.assign({sw:0, ss:0, ab:0}, sv.best);
+    p.plays = Object.assign({sw:0, ss:0, ab:0}, sv.plays);
+    if(sv.snapL) p.snapL = Object.assign({praise:0, bad:0, plays:0}, sv.snapL);
+    if(sv.snapA) p.snapA = Object.assign({A:0, sw:0, ss:0, ab:0}, sv.snapA);
+    if(!p.touchKinds || typeof p.touchKinds !== 'object') p.touchKinds = {};
+    if(!p.bGainKinds || typeof p.bGainKinds !== 'object') p.bGainKinds = {};
+    // 数えるはずの値が壊れていたら既定に戻す（NaN が入ると比較が全部falseになって静かに壊れる）
+    for(const k of ['B','C','D','Dm','P','M','A','EP','W','hunger','mood','careStreak'])
+      if(!Number.isFinite(p[k])) p[k] = defaultPet()[k];
+    const from = Number.isFinite(sv.v) ? sv.v : 0;
+    for(let v = from + 1; v <= SAVE_V; v++) if(MIGRATIONS[v]) MIGRATIONS[v](p, sv);
+    p.v = SAVE_V;
+    return p;
+  }
   let pet = defaultPet();
-  try { const sv = JSON.parse(localStorage.getItem(SAVE_KEY)); if(sv && sv.name) pet = Object.assign(defaultPet(), sv); } catch(e){}
+  try { const sv = JSON.parse(localStorage.getItem(SAVE_KEY)); if(sv && sv.name) pet = migratePet(sv); } catch(e){}
   if(pet.name && !pet.lastTick) pet.lastTick = Date.now();  // 旧セーブ互換
 
   // ミニゲームへ渡す自機系統（デフォルメ6種のキー）
@@ -734,7 +775,8 @@
   };
   function addM(n){ pet.M = Math.max(0, Math.min(100, (pet.M||0) + n)); }
   // 性格の強さ −1（おっとり）〜 +1（やんちゃ）
-  function pTrait(){ return Math.max(-1, Math.min(1, (pet.P||0) / 60)); }
+  //  引数を渡せば、いま育てている子でなくても計算できる（セーブデータの移行で使う）
+  function pTrait(q){ return Math.max(-1, Math.min(1, ((q||pet).P||0) / 60)); }
 
   // ── 時間進行（企画書§4 ドラフト値）──
   // ── 空腹サイクル（企画書§4）──
@@ -1029,10 +1071,17 @@
   //  性格（P）は毎日ゆれるので、そのつど参照すると日記の口調が日替わりになってしまう。
   //  姿が変わる瞬間に決まるなら「大人になった」と読めるので、そこを区切りにしてある。
   //  成体になる前は全員 'plain'（共通の子どもの口調）。
-  function pickVoice(){
-    const L = pet.lineage;
-    const v = pTrait() + (L==='tako' ? -0.4 : L==='grey' ? +0.4 : 0);   // マーシャン＝のんびり／グレイ＝活発
+  function pickVoice(q){
+    const s = q || pet, L = s.lineage;
+    const v = pTrait(s) + (L==='tako' ? -0.4 : L==='grey' ? +0.4 : 0);   // マーシャン＝のんびり／グレイ＝活発
     return (v <= -0.35) ? 'calm' : (v >= 0.35 ? 'rough' : 'plain');
+  }
+  // その姿が「ごほうびの隠し形態」か。進化のときとセーブ移行で同じ判定を使う
+  function isRewardForm(q){
+    const f = q.form || '', b = q.best || {};
+    if(f === 't3') return (q.fullFeeds||0) >= 10 && (q.sickCount||0) >= 1;   // クラーケン
+    if(f === 'g3') return (b.sw||0) >= 250 && (b.ss||0) >= 100 && (b.ab||0) >= 400;  // オールラウンダー
+    return false;
   }
   function voice(){ return pet.voice || 'plain'; }
   // 言い回しの並び順は plain=0 / calm=1 / rough=2。0を今までの文面にしておくと、
