@@ -1764,15 +1764,20 @@
     // ふれあい（ごはん以外の世話）が無い日が続くと、少しずつ心が離れる
     if(touched){ pet.noTouchDays = 0; }
     else { pet.noTouchDays = (pet.noTouchDays||0) + 1; addA(A_ADJ.noTouchDay); addP(P_ADJ.noTouchDay); }
+    // 病気に気づいて その日のうちに治したなら「放置」には数えない。
+    //  外出中に汚れから発病することは避けきれない（9時間で3〜6割）ので、
+    //  帰ってすぐ薬を飲ませたのに罰される、という形にはしない。
+    //  治さないまま日をまたいだ場合は、これまで通り放置として扱う
+    const sickLeft = d.sick && !d.cured;
     // おなかを空かせたまま・病気のままにした日は、世話をしていても
     //  「放っておかれた」事実が残る。かまった回数では帳消しにしない
-    const down = Math.max(bondDrop(touches), (d.hungry || d.sick) ? BOND_NEGLECT : 0);
+    const down = Math.max(bondDrop(touches), (d.hungry || sickLeft) ? BOND_NEGLECT : 0);
     if(down) pet.B = Math.max(0, pet.B - down);
     // 「きちんと世話をした日」が続いているか。翌日のなかよしの伸びしろがこれで決まる。
-    //  ふれあいが2回以上あって、ひもじい思いも病気の放置もさせなかった日だけ数える
+    //  ふれあいが2種類以上あって、ひもじい思いも病気の放置もさせなかった日だけ数える
     //  1日あけただけで積み上げが全部消えるのは厳しすぎるので、減るのは2日ぶん。
     //  ただし2日続けてあけると帳消しになるので、「放置してからまとめて世話」では伸びない
-    pet.careStreak = (touches >= 2 && !d.hungry && !d.sick)
+    pet.careStreak = (touches >= 2 && !d.hungry && !sickLeft)
       ? (pet.careStreak||0) + 1
       : Math.max(0, (pet.careStreak||0) - 2);
     pet.lowBDays = (pet.B < 20) ? pet.lowBDays + 1 : 0;
