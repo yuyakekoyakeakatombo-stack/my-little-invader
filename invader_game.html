@@ -817,6 +817,7 @@
   const A_NEGLECT_SCALE = 15;     // 1日あたりの−Aがこの値で「放置度100」
   // 帰還エンディング（幼体到達を起点に判定）
   const RET_GRACE_DAYS  = 3;      // 幼体到達からこの日数は判定しない（猶予）
+  const STUCK_DAYS      = 21;     // 成体のまま最終形態に届かずこの日数たつと、迎えが来る
   const RET_ESTR_DAYS   = 3;      // 疎遠期がこの日数続くと帰還
   const RET_PRAISE_RATE = 0.1;    // ほめる回数／日 がこれ未満で兆候（10日に1回未満＝極端に少ない）
   const RET_PLAY_RATE   = 0.1;    // ミニゲーム回数／日 がこれ未満で兆候（10日に1回未満）
@@ -1057,8 +1058,11 @@
   //  ミニゲーム制覇 … 3本すべてで基準の得点に届いた
   function bigEater(q){ const s = q || pet;
     return (s.fullFeeds||0) >= 10 && (s.sickCount||0) >= 1; }
+  //  3本すべての自己ベストがこの線を越えること。best は一生の最高記録なので、
+  //  同じ日にそろえる必要はない
+  const ALLROUND = { sw: 600, ss: 700, ab: 400 };
   function allRounder(q){ const s = q || pet, b = s.best || {};
-    return (b.sw||0) >= 250 && (b.ss||0) >= 100 && (b.ab||0) >= 400; }
+    return (b.sw||0) >= ALLROUND.sw && (b.ss||0) >= ALLROUND.ss && (b.ab||0) >= ALLROUND.ab; }
   // どれにも当たらなければ最終形態にならず、成体のままとどまる。
   //  中途半端な育て方では、その先の姿を見せない、という切り分け
   function pickForm(){
@@ -1068,7 +1072,7 @@
     //  そういう扱いをされた事実は上書きさせない
     if(pet.C < C_FORM_BAD){ pet.formWild = true; return key + '3'; }
     if(bigEater()) return key + '1';                                    // プチ
-    if(pet.C >= C_FORM_GOOD || allRounder()) return key + '2';          // ノーマル
+    if(pet.C >= C_FORM_GOOD && allRounder()) return key + '2';          // ノーマル（両方必要）
     return '';                                                         // まだ最終形態にならない
   }
   // ── 日記の口調 ──
@@ -1087,8 +1091,11 @@
   //  「夜更かし＋しつけ」はいまは廃止したが、当時のセーブを読むためにここに残す
   function wasHiddenRoute(q){
     if(!/3$/.test(q.form || '')) return false;
-    if(q.lineage === 'tako') return bigEater(q);
-    if(q.lineage === 'grey') return allRounder(q);
+    // 当時の条件をそのまま置いてある。いまの基準とは別物なので共有しない。
+    //  （読み込みの時点で走るため、あとで宣言される定数を参照できない事情もある）
+    if(q.lineage === 'tako') return (q.fullFeeds||0) >= 10 && (q.sickCount||0) >= 1;
+    if(q.lineage === 'grey'){ const b = q.best || {};
+      return (b.sw||0) >= 250 && (b.ss||0) >= 100 && (b.ab||0) >= 400; }
     if(q.lineage === 'inv')  return (q.nightPlays||0) >= 7 && (q.D||0) >= 50;
     return false;
   }
@@ -2162,6 +2169,15 @@
       pet.nightPlayToday = false; pet.nightCareToday = false;
     }
     // 旅立ちエンド（E4）：最終形態から14日・なつき度60以上・健康
+    // 育ちきらないまま成体でとどまり続けた子（E3）。
+    //  中途半端な育て方では最終形態にならない仕組みにしたので、そのままだと
+    //  物語が終わらなくなる。「育ちきる前に連れ戻される」という帰還の元の意味どおり、
+    //  ここで迎えが来る
+    if(pet.stage==='adult' && pet.lineageAt && !pet.ufoFlag && !pet.invadeFlag &&
+       now - pet.lineageAt >= STUCK_DAYS*86400000){
+      pet.ufoFlag = true;
+      addDiary({ d: petDay(), n: pet.name, t: ['farewell'], v: [voiceIdx()], c: '', ts: Date.now(), cd: todayKey() });
+    }
     // ワイルド系の幕引き（E3）：お迎え（E4）が来ない子にも、必ずどこかで区切りをつける。
     //  侵攻（E5）の条件に届かなかった子は、お迎えと同じ時期に、静かに連れ戻される
     if(pet.stage==='final' && pet.finalAt && isWild() && !pet.ufoFlag && !pet.invadeFlag &&

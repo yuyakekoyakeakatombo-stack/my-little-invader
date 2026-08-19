@@ -338,6 +338,36 @@ describe('エンディング', () => {
     ok(!api.pet.departFlag, '旅立ちは出ない');
     ok(api.pet.ufoFlag, 'かわりに静かな帰還で幕が下りる');
   });
+  it('成体のまま長くとどまった子には、やがて迎えが来る', () => {
+    const { api, clock } = load();
+    // 世話は行き届いていて放置の兆候も無いが、最終形態の条件に届いていない子
+    pet(api, clock, { stage:'adult', lineage:'inv', form:'', EP:30, C:55,
+                      B:100, health:'GOOD', best:{sw:0,ss:0,ab:0},
+                      fullFeeds:0, sickCount:0, praiseCount:99, touchCount:3,
+                      plays:{sw:30, ss:30, ab:30},          // 遊んでもいる（放置の兆候を出さない）
+                      snapL:{praise:0, bad:0, plays:0},
+                      larvaAt: clock.now() - 40*86400000,
+                      lineageAt: clock.now() - (api.STUCK_DAYS - 1)*86400000,
+                      lastTick: clock.now() - 120000 });
+    eq(api.returnSigns(), [], '放置の兆候は無い:');
+    api.advancePet();
+    ok(!api.pet.ufoFlag, `${api.STUCK_DAYS}日たつまでは来ない`);
+    api.pet.lineageAt = clock.now() - (api.STUCK_DAYS + 1)*86400000;
+    api.pet.lastTick  = clock.now() - 120000;
+    api.advancePet();
+    ok(api.pet.ufoFlag, `${api.STUCK_DAYS}日を過ぎたら迎えが来る`);
+    eq(api.pet.stage, 'adult', '成体のまま連れて行かれる:');
+  });
+  it('最終形態になった子は、成体の期限では連れて行かれない', () => {
+    const { api, clock } = load();
+    pet(api, clock, { stage:'final', lineage:'inv', form:'i2', formWild:false,
+                      B:100, health:'GOOD',
+                      lineageAt: clock.now() - 60*86400000,
+                      finalAt:   clock.now() - 2*86400000,
+                      lastTick:  clock.now() - 120000, touchCount:3 });
+    api.advancePet();
+    ok(!api.pet.ufoFlag, '最終形態には別の区切りがある');
+  });
   it('ワイルドでなければ、条件を満たすとお迎えが来る', () => {
     const { api, clock } = load();
     pet(api, clock, { stage:'final', lineage:'inv', form:'i1', formWild:false,
@@ -408,15 +438,24 @@ describe('進化', () => {
     eq(api.pickForm(), 'i1');
     eq(api.pet.formWild, false);
   });
-  it('ケアが丁寧ならノーマル', () => {
+  it('ノーマルは、ケアが丁寧かつミニゲーム制覇の両方が要る', () => {
     const { api, clock } = load();
-    setup(api, clock, { C:85 });
-    eq(api.pickForm(), 'i2');
+    const BEST = { sw:600, ss:700, ab:400 };
+    setup(api, clock, { C:85, best:BEST });
+    eq(api.pickForm(), 'i2', '両方そろえば:');
+    setup(api, clock, { C:85, best:{sw:0,ss:0,ab:0} });
+    eq(api.pickForm(), '', 'ケアだけでは足りない:');
+    setup(api, clock, { C:55, best:BEST });
+    eq(api.pickForm(), '', 'ミニゲームだけでも足りない:');
   });
-  it('ミニゲーム制覇でもノーマル', () => {
+  it('ミニゲームの基準は3本すべてを越えること', () => {
     const { api, clock } = load();
-    setup(api, clock, { C:55, best:{sw:300, ss:150, ab:500} });
-    eq(api.pickForm(), 'i2');
+    eq(api.ALLROUND, { sw:600, ss:700, ab:400 });
+    for(const k of ['sw','ss','ab']){
+      const b = Object.assign({}, api.ALLROUND); b[k] -= 1;   // 1本だけ届いていない
+      setup(api, clock, { C:85, best:b });
+      eq(api.pickForm(), '', k+' が届かない:');
+    }
   });
   it('どれにも当たらなければ最終形態にならない', () => {
     const { api, clock } = load();
@@ -439,7 +478,8 @@ describe('進化', () => {
     for(const [L, k] of [['grey','g'], ['tako','t'], ['inv','i']]){
       setup(api, clock, { lineage:L, C:10 });                      eq(api.pickForm(), k+'3', L+':');
       setup(api, clock, { lineage:L, fullFeeds:12, sickCount:2 });  eq(api.pickForm(), k+'1', L+':');
-      setup(api, clock, { lineage:L, C:85 });                      eq(api.pickForm(), k+'2', L+':');
+      setup(api, clock, { lineage:L, C:85, best:{sw:600,ss:700,ab:400} });
+                                                                  eq(api.pickForm(), k+'2', L+':');
     }
   });
   it('「夜更かし＋しつけ」ではもう進化しない（廃止した）', () => {
@@ -454,7 +494,7 @@ describe('進化', () => {
     api.maybeEvolve();
     eq(api.pet.stage, 'adult', 'まだ成体:');
     eq(api.pet.form, '', '姿も決まらない:');
-    api.pet.C = 85;                       // 世話を立て直した
+    api.pet.C = 85; api.pet.best = { sw:600, ss:700, ab:400 };   // 世話を立て直し、記録も伸ばした
     api.maybeEvolve();
     eq(api.pet.stage, 'final', '最終形態になる:');
     eq(api.pet.form, 'i2');
@@ -499,7 +539,8 @@ describe('セーブ移行', () => {
   it('ごほうびの隠し形態はワイルド扱いにしない', () => {
     const { api } = load();
     eq(api.migratePet(old({ lineage:'grey', form:'g3',
-        best:{sw:300, ss:150, ab:500} })).formWild, false, 'オールラウンダー:');
+        best:{sw:300, ss:150, ab:500} })).formWild, false,
+        'オールラウンダー（当時の基準で判定する）:');
     eq(api.migratePet(old({ lineage:'tako', form:'t3',
         fullFeeds:12, sickCount:2 })).formWild, false, 'クラーケン:');
     eq(api.migratePet(old({ lineage:'grey', form:'g3',

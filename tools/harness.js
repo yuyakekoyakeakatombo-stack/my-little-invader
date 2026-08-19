@@ -30,7 +30,7 @@ const EXPORTS = `
   get diaryLog(){ return diaryLog; },
   buildDiary, diaryBody, addDiary, clearDiary,
   SICK_P, SICK_DIRT_MIN, BOND_CAP, RET_ESTR_DAYS, RET_GRACE_DAYS,
-  INV_M_MIN, INV_B_MAX, INV_P_MIN, INV_DAYS, WRATH_HOLD,
+  STUCK_DAYS, ALLROUND, INV_M_MIN, INV_B_MAX, INV_P_MIN, INV_DAYS, WRATH_HOLD,
 };
 `;
 
