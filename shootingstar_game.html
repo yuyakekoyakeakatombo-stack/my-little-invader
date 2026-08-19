@@ -618,7 +618,9 @@
       ct.fillStyle=OFF; ct.fillRect(0,0,W*S,H*S);
       // ヘッダー：スコア
       txt('SCORE',1,1,8,ON);
-      txt((''+Math.max(0,score)).padStart(5,'0'),(W-11),1,8,ON);
+      //  桁があふれても右端がそろうよう、文字数から左端を出す（8pxフォント＝1文字2ドット）
+      const hud = String(Math.max(0,score)).padStart(4,'0');
+      txt(hud, W-1-hud.length*2, 1, 8, ON);
       hl(HDR_Y,DIM);
       // 地面
       hl(GY,ON);
@@ -670,7 +672,7 @@
       txtC('GAME',22,8,ON);
       txtC('OVER',32,8,ON);
       txtC('SCORE',44,7,ON);   // 薄くて読みにくかったので濃く・大きく
-      txtC((''+Math.max(0,score)).padStart(5,'0'),53,8,ON);
+      txtC((''+Math.max(0,score)).padStart(4,'0'),53,8,ON);
       if(Math.floor(Date.now()/450)%2===0) txtC('PRESS A',64,5,DIM);
       return;
     }
