@@ -1052,25 +1052,24 @@
   }
   // Stage4 形態分岐：成体になってからの行動だけで判定（前半と後半で育て方を変えられる）
   //   甘やかす→まるっと(1) ／ バランス→バランス(2) ／ 放置気味→やんちゃ(3)
-  // 隠しルートの条件。系統ごとに1つずつ。満たすとケア度が並でも「プチ」になる
-  function hiddenReward(q){
-    const s = q || pet, b = s.best || {};
-    if(s.lineage === 'tako') return (s.fullFeeds||0) >= 10 && (s.sickCount||0) >= 1;   // 大食い
-    if(s.lineage === 'grey') return (b.sw||0) >= 250 && (b.ss||0) >= 100 && (b.ab||0) >= 400;  // ミニゲーム3種
-    if(s.lineage === 'inv')  return (s.nightPlays||0) >= 7 && (s.D||0) >= 50;          // 夜更かしでも しつけは通っている
-    return false;
-  }
-  // Stage4 体型：プチ＝ごほうび ／ ノーマル＝標準 ／ ワイルド＝ひどい扱いを受けた姿。
-  //  以前は隠しルートがワイルドの枠に入っていたため、ミニゲームを極めた子が
-  //  「グレてしまった姿」になっていた。ごほうびはプチが担う。
+  // ── Stage4 の体型。系統とは独立に、育て方だけで決まる ──
+  //  大食い     … おっとりな子に満腹でも食べさせ続け、病気から生還した
+  //  ミニゲーム制覇 … 3本すべてで基準の得点に届いた
+  function bigEater(q){ const s = q || pet;
+    return (s.fullFeeds||0) >= 10 && (s.sickCount||0) >= 1; }
+  function allRounder(q){ const s = q || pet, b = s.best || {};
+    return (b.sw||0) >= 250 && (b.ss||0) >= 100 && (b.ab||0) >= 400; }
+  // どれにも当たらなければ最終形態にならず、成体のままとどまる。
+  //  中途半端な育て方では、その先の姿を見せない、という切り分け
   function pickForm(){
     const key = (pet.lineage==='grey' ? 'g' : pet.lineage==='tako' ? 't' : 'i');
     pet.formWild = false;
     // ワイルドは何よりも優先する。ミニゲームを極めていようが大食いだろうが、
     //  そういう扱いをされた事実は上書きさせない
     if(pet.C < C_FORM_BAD){ pet.formWild = true; return key + '3'; }
-    if(hiddenReward()) return key + '1';                       // 隠しルート → プチ
-    return key + (pet.C >= C_FORM_GOOD ? '1' : '2');
+    if(bigEater()) return key + '1';                                    // プチ
+    if(pet.C >= C_FORM_GOOD || allRounder()) return key + '2';          // ノーマル
+    return '';                                                         // まだ最終形態にならない
   }
   // ── 日記の口調 ──
   //  成体になった時に、系統とその時点の性格で確定させ、以後は動かさない。
@@ -1082,11 +1081,16 @@
     const v = pTrait(s) + (L==='tako' ? -0.4 : L==='grey' ? +0.4 : 0);   // マーシャン＝のんびり／グレイ＝活発
     return (v <= -0.35) ? 'calm' : (v >= 0.35 ? 'rough' : 'plain');
   }
-  // 古い決まりで進化した子むけ。以前は隠しルートがワイルドの枠（"3"）に入っていたので、
-  //  その姿がケアの雑さで来たのか、隠しルートで来たのかを条件から推し量る。
-  //  すでに姿が決まっている子の見た目は変えられないため、移行でのみ使う
+  // 古い決まりで進化した子むけ。以前は隠しルート3種がワイルドの枠（"3"）に入っていたので、
+  //  その姿がケアの雑さで来たのか、隠しルートで来たのかを当時の条件から推し量る。
+  //  すでに決まっている姿は変えられないため、移行でのみ使う。
+  //  「夜更かし＋しつけ」はいまは廃止したが、当時のセーブを読むためにここに残す
   function wasHiddenRoute(q){
-    return /3$/.test(q.form || '') && hiddenReward(q);
+    if(!/3$/.test(q.form || '')) return false;
+    if(q.lineage === 'tako') return bigEater(q);
+    if(q.lineage === 'grey') return allRounder(q);
+    if(q.lineage === 'inv')  return (q.nightPlays||0) >= 7 && (q.D||0) >= 50;
+    return false;
   }
   function voice(){ return pet.voice || 'plain'; }
   // 言い回しの並び順は plain=0 / calm=1 / rough=2。0を今までの文面にしておくと、
@@ -1122,7 +1126,9 @@
       return evolveTo('adult');
     }
     if(pet.stage==='adult' && pet.EP >= 11){
-      pet.form = pickForm();                      // 成体以降の世話スタイル＋特殊条件で形態決定
+      const f = pickForm();                       // 成体以降の育て方で形態決定
+      if(!f) return;                              // どの条件にも当たらないうちは成体のまま待つ
+      pet.form = f;
       pet.finalAt = Date.now();
       return evolveTo('final');
     }

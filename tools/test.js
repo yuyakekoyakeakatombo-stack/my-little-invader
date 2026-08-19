@@ -389,55 +389,75 @@ describe('日記', () => {
 });
 
 // ══ 進化 ══════════════════════════════════════════════════
-//  プチ(1)＝ごほうび ／ ノーマル(2)＝標準 ／ ワイルド(3)＝ひどい扱いを受けた姿
+//  プチ＝大食い ／ ノーマル＝丁寧なケア または ミニゲーム制覇 ／ ワイルド＝ケアが雑
+//  どれにも当たらなければ最終形態にならず、成体のままとどまる
 describe('進化', () => {
-  it('雑に育てるとワイルドになり、印が残る', () => {
+  const setup = (api, clock, o) => pet(api, clock, Object.assign({
+    stage:'larva', lineage:'inv', C:55, fullFeeds:0, sickCount:0,
+    best:{sw:0,ss:0,ab:0}, nightPlays:0, D:50 }, o));
+
+  it('ケアが雑ならワイルド。印が残る', () => {
     const { api, clock } = load();
-    pet(api, clock, { stage:'larva', lineage:'inv', C:10, nightPlays:0, D:50 });
+    setup(api, clock, { C:10 });
     eq(api.pickForm(), 'i3');
     eq(api.pet.formWild, true);
   });
-  it('丁寧に育てるとプチになる', () => {
+  it('大食いならプチ', () => {
     const { api, clock } = load();
-    pet(api, clock, { stage:'larva', lineage:'inv', C:90, nightPlays:0, D:50 });
+    setup(api, clock, { fullFeeds:12, sickCount:2 });
     eq(api.pickForm(), 'i1');
     eq(api.pet.formWild, false);
   });
-  it('ケアが並なら、そのままではノーマル', () => {
+  it('ケアが丁寧ならノーマル', () => {
     const { api, clock } = load();
-    pet(api, clock, { stage:'larva', lineage:'grey', C:55, best:{sw:0,ss:0,ab:0} });
-    eq(api.pickForm(), 'g2');
+    setup(api, clock, { C:85 });
+    eq(api.pickForm(), 'i2');
   });
-  it('隠しルートを満たすと、ケアが並でもプチになる', () => {
+  it('ミニゲーム制覇でもノーマル', () => {
     const { api, clock } = load();
-    pet(api, clock, { stage:'larva', lineage:'grey', C:55,
-                      best:{sw:300, ss:150, ab:500} });
-    eq(api.pickForm(), 'g1', 'ミニゲームを極めた:');
-    eq(api.pet.formWild, false);
-    pet(api, clock, { stage:'larva', lineage:'tako', C:55, fullFeeds:12, sickCount:2 });
-    eq(api.pickForm(), 't1', '大食い:');
-    pet(api, clock, { stage:'larva', lineage:'inv', C:55, nightPlays:8, D:60 });
-    eq(api.pickForm(), 'i1', '夜更かしでもしつけは通っている:');
+    setup(api, clock, { C:55, best:{sw:300, ss:150, ab:500} });
+    eq(api.pickForm(), 'i2');
   });
-  it('ワイルドは何よりも優先する（隠しルートで上書きできない）', () => {
+  it('どれにも当たらなければ最終形態にならない', () => {
     const { api, clock } = load();
-    pet(api, clock, { stage:'larva', lineage:'grey', C:10,
-                      best:{sw:300, ss:150, ab:500} });
-    eq(api.pickForm(), 'g3', 'ミニゲームを極めていてもワイルド:');
-    eq(api.pet.formWild, true);
-    pet(api, clock, { stage:'larva', lineage:'tako', C:10, fullFeeds:12, sickCount:2 });
-    eq(api.pickForm(), 't3', '大食いでもワイルド:');
+    setup(api, clock, { C:55 });
+    eq(api.pickForm(), '');
+  });
+  it('ワイルドは何よりも優先する', () => {
+    const { api, clock } = load();
+    setup(api, clock, { C:10, fullFeeds:12, sickCount:2, best:{sw:300,ss:150,ab:500} });
+    eq(api.pickForm(), 'i3');
     eq(api.pet.formWild, true);
   });
-  it('ワイルドの3種は、どれもケアの雑さからしか出ない', () => {
+  it('大食いはケアが丁寧より優先（プチが上）', () => {
     const { api, clock } = load();
-    for(const L of ['grey','tako','inv']){
-      pet(api, clock, { stage:'larva', lineage:L, C:80,
-                        best:{sw:999,ss:999,ab:999}, fullFeeds:99, sickCount:9,
-                        nightPlays:99, D:99 });
-      const f = api.pickForm();
-      ok(!/3$/.test(f), `${L}: ケアが良ければワイルドにならない（実際 ${f}）`);
+    setup(api, clock, { C:85, fullFeeds:12, sickCount:2 });
+    eq(api.pickForm(), 'i1');
+  });
+  it('体型は系統によらず、どの系統でも3つとも出る', () => {
+    const { api, clock } = load();
+    for(const [L, k] of [['grey','g'], ['tako','t'], ['inv','i']]){
+      setup(api, clock, { lineage:L, C:10 });                      eq(api.pickForm(), k+'3', L+':');
+      setup(api, clock, { lineage:L, fullFeeds:12, sickCount:2 });  eq(api.pickForm(), k+'1', L+':');
+      setup(api, clock, { lineage:L, C:85 });                      eq(api.pickForm(), k+'2', L+':');
     }
+  });
+  it('「夜更かし＋しつけ」ではもう進化しない（廃止した）', () => {
+    const { api, clock } = load();
+    setup(api, clock, { lineage:'inv', C:55, nightPlays:20, D:90 });
+    eq(api.pickForm(), '', '条件にならない:');
+  });
+  it('条件がそろわないうちは成体のまま。あとで満たせば最終形態になる', () => {
+    const { api, clock } = load();
+    pet(api, clock, { stage:'adult', lineage:'inv', EP:12, C:55,
+                      fullFeeds:0, sickCount:0, best:{sw:0,ss:0,ab:0} });
+    api.maybeEvolve();
+    eq(api.pet.stage, 'adult', 'まだ成体:');
+    eq(api.pet.form, '', '姿も決まらない:');
+    api.pet.C = 85;                       // 世話を立て直した
+    api.maybeEvolve();
+    eq(api.pet.stage, 'final', '最終形態になる:');
+    eq(api.pet.form, 'i2');
   });
 });
 
