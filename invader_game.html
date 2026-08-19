@@ -593,7 +593,8 @@
     hunger:5, mood:4, health:'GOOD',      // 表示ステータス（おなか・きげんは0〜5の6段階）
     hungerAcc:0, moodAcc:0,               // 進行タイマー（分）
     lastPlayAt:0, playStreak:0,           // 最後にミニゲームで遊んだ時刻／立て続けに遊んだ回数
-    P:0, D:50, Dm:50, C:50, B:50, W:0,    // 隠しパラメータ（性格/しつけ/しつけの移動平均/ケア/なつき/汚れ）
+    P:0, D:50, Dm:50, C:50, B:35, W:0,    // 隠しパラメータ（性格/しつけ/しつけの移動平均/ケア/なつき/汚れ）
+    careStreak:0,                         // きちんと世話をした日が続いている日数（なかよしの伸びしろ）
     M:0,                                  // 恨み（意図的ないじめだけが溜まる。侵攻エンドの条件）
     plateAt:0, plateSpoiled:false,        // 残った皿（放置で食べ残し汚れ化＝plateSpoiled）
     plateKind:'meal',                     // 残した皿の中身（'meal'=ごはん / 'snack'=おやつ）
@@ -1752,6 +1753,13 @@
     //  「放っておかれた」事実が残る。かまった回数では帳消しにしない
     const down = Math.max(bondDrop(touches), (d.hungry || d.sick) ? BOND_NEGLECT : 0);
     if(down) pet.B = Math.max(0, pet.B - down);
+    // 「きちんと世話をした日」が続いているか。翌日のなかよしの伸びしろがこれで決まる。
+    //  ふれあいが2回以上あって、ひもじい思いも病気の放置もさせなかった日だけ数える
+    //  1日あけただけで積み上げが全部消えるのは厳しすぎるので、減るのは2日ぶん。
+    //  ただし2日続けてあけると帳消しになるので、「放置してからまとめて世話」では伸びない
+    pet.careStreak = (touches >= 2 && !d.hungry && !d.sick)
+      ? (pet.careStreak||0) + 1
+      : Math.max(0, (pet.careStreak||0) - 2);
     pet.lowBDays = (pet.B < 20) ? pet.lowBDays + 1 : 0;
     // 起こさず・夜更かしもさせず・ちゃんと構った日は、生活リズムが整っておっとり寄りに戻る。
     //  これが無いとPは上がる一方になるので、性格の振り子はここで戻す
@@ -3311,9 +3319,19 @@
   }
 
   function todayKey(){ const d=new Date(); return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate(); }
-  function gainB(n){   // なつき度（日次上限+5）
+  // なかよしは「まとめて世話をした一日」ではなく「こまめに続けた日々」で積み上がる。
+  //  その日にもらえる量の上限が、直前まで何日きちんと世話が続いているかで決まる仕組み。
+  //  放置してから思い出したように世話をしても、その日は1しか入らない。
+  //  逆に毎日続けていれば上限が上がっていき、伸びが速くなる。
+  const BOND_CAP = [1, 1, 2, 2, 3];   // 連続0日 / 1日 / 2日 / 3日 / 4日以上
+  function bondCapToday(){ return BOND_CAP[Math.min(pet.careStreak||0, BOND_CAP.length-1)]; }
+  function gainB(n){
     if(pet.dayKey !== todayKey()){ pet.dayKey = todayKey(); pet.bGainToday = 0; }
-    if(pet.bGainToday < 5){ pet.B = Math.min(100, pet.B + n); pet.bGainToday += n; }
+    const room = bondCapToday() - (pet.bGainToday||0);
+    if(room <= 0) return;
+    const add = Math.min(n, room);                 // 上限ぴったりで止める（以前は最後の1回がはみ出していた）
+    pet.B = Math.min(100, pet.B + add);
+    pet.bGainToday = (pet.bGainToday||0) + add;
   }
   function schedulePoop(){  // 食後45±30分（DEBUG中は45〜75秒）
     const unit = debugMode ? 1000 : 60000;
