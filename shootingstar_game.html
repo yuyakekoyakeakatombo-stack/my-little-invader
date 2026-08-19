@@ -151,6 +151,8 @@
   // 上下中央そろえの中央寄せテキスト（網掛けの帯に文字を収めるのに使う）
   function txtCM(s,py,sz,col){ ct.font=`${sz}px "Press Start 2P"`; ct.fillStyle=col||ON; ct.textAlign='center'; ct.textBaseline='middle'; ct.fillText(s,(W*S)/2,py*S); }
   function txt(s,px,py,sz,col){ ct.font=`${sz}px "Press Start 2P"`; ct.fillStyle=col||ON; ct.textAlign='left'; ct.textBaseline='top'; ct.fillText(s,px*S,py*S); }
+  // 右そろえ。得点も進行度も右端をそろえるので、桁が増えてもレイアウトが崩れない
+  function txtR(s,px,py,sz,col){ ct.font=`${sz}px "Press Start 2P"`; ct.fillStyle=col||ON; ct.textAlign='right'; ct.textBaseline='top'; ct.fillText(s,px*S,py*S); }
   function txtC(s,py,sz,col){ ct.font=`${sz}px "Press Start 2P"`; ct.fillStyle=col||ON; ct.textAlign='center'; ct.textBaseline='top'; ct.fillText(s,(W*S)/2,py*S); }
 
   // ── 十字キーの向きを示す三角 ──
@@ -618,9 +620,7 @@
       ct.fillStyle=OFF; ct.fillRect(0,0,W*S,H*S);
       // ヘッダー：スコア
       txt('SCORE',1,1,8,ON);
-      //  桁があふれても右端がそろうよう、文字数から左端を出す（8pxフォント＝1文字2ドット）
-      const hud = String(Math.max(0,score)).padStart(4,'0');
-      txt(hud, W-1-hud.length*2, 1, 8, ON);
+      txtR(String(Math.max(0,score)).padStart(4,'0'), W-1, 1, 8, ON);
       hl(HDR_Y,DIM);
       // 地面
       hl(GY,ON);
@@ -657,13 +657,13 @@
         }
       });
 
-      // フッター：残りライフ＋レベル
-      txt('LIFE',1,H-5,7,ON);
+      // フッター：左にライフ、右に進行度（3本共通のかたち）
+      txt('LIFE',1,59,7,ON);
       for(let i=0;i<MISS_MAX;i++){
-        const lx=15+i*4, on=i<lives;
-        d(lx,H-4,on?ON:DIM); d(lx+1,H-4,on?ON:DIM); d(lx,H-3,on?ON:DIM); d(lx+1,H-3,on?ON:DIM);
+        const lx=10+i*4, on=i<lives;
+        d(lx,59,on?ON:DIM); d(lx+1,59,on?ON:DIM); d(lx,60,on?ON:DIM); d(lx+1,60,on?ON:DIM);
       }
-      txt('LV'+(level()+1),(W-11),H-5,7,ON);
+      txtR('LV'+(level()+1), W-1, 59, 7, ON);
       return;
     }
     if(state===STATE.GAMEOVER){

@@ -151,6 +151,8 @@
   function txtCM(s,py,sz,col){ ct.font=`${sz}px "Press Start 2P"`; ct.fillStyle=col||ON; ct.textAlign='center'; ct.textBaseline='middle'; ct.fillText(s,(W*S)/2,py*S); }
   function txt(s,px,py,sz,col){ ct.font=`${sz}px "Press Start 2P"`; ct.fillStyle=col||ON; ct.textAlign='left'; ct.textBaseline='top'; ct.fillText(s,px*S,py*S); }
   function hl(y,col,dash){ for(let x=0;x<W;x++) if(!dash||x%2===0) d(x,y,col||ON); }
+  // 右そろえ。得点も進行度も右端をそろえるので、桁が増えてもレイアウトが崩れない
+  function txtR(s,px,py,sz,col){ ct.font=`${sz}px "Press Start 2P"`; ct.fillStyle=col||ON; ct.textAlign='right'; ct.textBaseline='top'; ct.fillText(s,px*S,py*S); }
   function txtC(s,py,sz,col){ ct.font=`${sz}px "Press Start 2P"`; ct.fillStyle=col||ON; ct.textAlign='center'; ct.textBaseline='top'; ct.fillText(s,(W*S)/2,py*S); }
 
   // ── 十字キーの向きを示す三角 ──
@@ -729,26 +731,27 @@
   // ── 描画 ──
   function drawField(boss){
     ct.fillStyle=OFF; ct.fillRect(0,0,W*S,H*S);
-    // ヘッダー：タイトル＋ライフ
-    txt('SPACEWALK',1,1,5,ON);
-    for(let i=0;i<MISS_MAX;i++){
-      const lx=W-3-i*4, on=i<lives;
-      d(lx,1,on?ON:DIM); d(lx+1,1,on?ON:DIM); d(lx,2,on?ON:DIM); d(lx+1,2,on?ON:DIM);
-    }
+    // ヘッダー：得点（3本共通のかたち）
+    txt('SCORE',1,1,8,ON);
+    txtR(String(Math.max(0,score)).padStart(4,'0'), W-1, 1, 8, ON);
     // 区切り線
     for(let x=0;x<W;x+=2) d(x,GTOP-1,DIM);
     for(let x=0;x<W;x+=2) d(x,GBOT+1,DIM);
   }
   function drawHud(){
-    // スコアは視認性優先で大きく濃く（DIM→ON、5px→7px）。
-    // y=59 はフィールド下端の区切り線(GBOT+1=58)の直下。これより上げると線に食い込む。
-    txt('SCORE '+score,1,59,7,ON);
-    txt('ST'+(stage+1),(W-7),59,7,ON);
-    // ワープの残り。使い切ると薄くなる
+    // フッター：左にライフ、右に進行度（3本共通のかたち）。
+    //  y=59 はフィールド下端の区切り線(GBOT+1=58)の直下。これより上げると線に食い込む
+    txt('LIFE',1,59,7,ON);
+    for(let i=0;i<MISS_MAX;i++){
+      const lx=10+i*4, on=i<lives;
+      d(lx,59,on?ON:DIM); d(lx+1,59,on?ON:DIM); d(lx,60,on?ON:DIM); d(lx+1,60,on?ON:DIM);
+    }
+    // ワープの残り。使い切ると薄くなる。ライフと見分けがつくよう間をあけて右寄りに置く
     for(let i=0;i<WARP_MAX;i++){
-      const wx=W-20+i*4, on=i<warpLeft;
+      const wx=32+i*4, on=i<warpLeft;
       d(wx,59,on?ON:DIM); d(wx+1,59,on?ON:DIM); d(wx,60,on?ON:DIM); d(wx+1,60,on?ON:DIM);
     }
+    txtR('ST'+(stage+1), W-1, 59, 7, ON);
   }
   function drawPlayer(){
     // ワープの跡：跳ぶ前の場所と、そこから今の場所へ薄い点を並べる

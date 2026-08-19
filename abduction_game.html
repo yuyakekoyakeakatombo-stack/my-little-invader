@@ -147,6 +147,8 @@
   function d(x,y,col){ if(x<0||x>=W||y<0||y>=H)return; ct.fillStyle=col||ON; ct.fillRect(x*S,y*S,S,S); }
   function hl(y,col,dash){ for(let x=0;x<W;x++) if(!dash||x%2===0) d(x,y,col||ON); }
   function stamp(g,ox,oy,col){ g.forEach((r,ry)=>r.forEach((v,rx)=>{if(v)d(ox+rx,oy+ry,col||ON);})); }
+  // 右そろえ。得点も進行度も右端をそろえるので、桁が増えてもレイアウトが崩れない
+  function txtR(s,px,py,sz,col){ ct.font=`${sz}px "Press Start 2P"`; ct.fillStyle=col||ON; ct.textAlign='right'; ct.textBaseline='top'; ct.fillText(s,px*S,py*S); }
   function txtC(s,py,sz,col){ ct.font=`${sz}px "Press Start 2P"`; ct.fillStyle=col||ON; ct.textAlign='center'; ct.textBaseline='top'; ct.fillText(s,(W*S)/2,py*S); }
 
   // ── 十字キーの向きを示す三角 ──
@@ -542,18 +544,19 @@
     ct.fillStyle=OFF; ct.fillRect(0,0,W*S,H*S);
     // ヘッダー：スコア表示
     txt('SCORE',1,1,8,ON);
-    //  桁があふれても右端がそろうよう、文字数から左端を出す（8pxフォント＝1文字2ドット）
-    const sc = String(Math.max(0,score)).padStart(4,'0');
-    txt(sc, W-1-sc.length*2, 1, 8, ON);
+    txtR(String(Math.max(0,score)).padStart(4,'0'), W-1, 1, 8, ON);
     hl(10,DIM);
     // 地面
     hl(GY,ON);
     for(let x=0;x<W;x+=3) d(x,GY+1,DIM);
   }
   function drawHud(){
+    // フッター：左に状態、右に進行度（3本共通のかたち）。
+    //  このゲームだけライフの持ち合わせが無い（ビームに捕まったらそこで終わり）ので、
+    //  左は生き延びた時間を出す
     const t=Math.floor(elapsed/FPS);
-    txt('TIME '+t,1,H-5,7,ON);
-    txt('HIT '+hitCount,(W-20),H-5,7,ON);
+    txt('TIME '+t,1,59,7,ON);
+    txtR('HIT '+hitCount, W-1, 59, 7, ON);
   }
 
   function draw(){
