@@ -419,12 +419,22 @@ describe('日記', () => {
 });
 
 // ══ 進化 ══════════════════════════════════════════════════
-//  プチ＝大食い ／ ノーマル＝丁寧なケア または ミニゲーム制覇 ／ ワイルド＝ケアが雑
-//  どれにも当たらなければ最終形態にならず、成体のままとどまる
+//  プランプ＝大食い または 甘やかし ／ スリーク＝丁寧なケア かつ ミニゲーム制覇 ／
+//  プリックリー＝ケアが雑。どれにも当たらなければ最終形態にならず、成体のままとどまる
 describe('進化', () => {
-  const setup = (api, clock, o) => pet(api, clock, Object.assign({
-    stage:'larva', lineage:'inv', C:55, fullFeeds:0, sickCount:0,
-    best:{sw:0,ss:0,ab:0}, nightPlays:0, D:50 }, o));
+  const setup = (api, clock, o) => {
+    api.pet.total = { feed:0, snack:0, clean:0, med:0 };
+    return pet(api, clock, Object.assign({
+      stage:'larva', lineage:'inv', C:55, fullFeeds:0, sickCount:0, highBDays:0,
+      best:{sw:0,ss:0,ab:0}, nightPlays:0, D:50 }, o));
+  };
+  // 甘やかしルートを満たす一式。setup のあとに呼ぶこと（setup が total を戻すため）。
+  //  over で片方だけ崩して「両方いる」ことを確かめる
+  const pamper = (api, over) => {
+    api.pet.highBDays = api.PAMPER_DAYS;
+    api.pet.total.snack = api.PAMPER_SNACKS;
+    Object.assign(api.pet, over || {});
+  };
 
   it('ケアが雑ならワイルド。印が残る', () => {
     const { api, clock } = load();
@@ -468,10 +478,61 @@ describe('進化', () => {
     eq(api.pickForm(), 'i3');
     eq(api.pet.formWild, true);
   });
-  it('大食いはケアが丁寧より優先（プチが上）', () => {
+  it('大食いはケアが丁寧より優先（プランプが上）', () => {
     const { api, clock } = load();
     setup(api, clock, { C:85, fullFeeds:12, sickCount:2 });
     eq(api.pickForm(), 'i1');
+  });
+  it('甘やかしでもプランプになる（大食いを通らない道）', () => {
+    const { api, clock } = load();
+    setup(api, clock, { C:55 }); pamper(api);
+    ok(!api.bigEater(), '大食いは成立していないこと');
+    ok(api.pampered(), '甘やかしが成立すること');
+    eq(api.pickForm(), 'i1');
+    eq(api.pet.formWild, false);
+  });
+  it('甘やかしは「なかよしを長く保つ」と「おやつ」の両方が要る', () => {
+    const { api, clock } = load();
+    setup(api, clock, { C:55 }); pamper(api, { highBDays: api.PAMPER_DAYS - 1 });
+    eq(api.pickForm(), '', '連続日数が1日足りない:');
+    setup(api, clock, { C:55 }); pamper(api);
+    api.pet.total.snack = api.PAMPER_SNACKS - 1;
+    eq(api.pickForm(), '', 'おやつが1回足りない:');
+    setup(api, clock, { C:55, highBDays: api.PAMPER_DAYS });   // おやつを一度も与えていない
+    eq(api.pickForm(), '', 'なかよしだけでは足りない:');
+  });
+  it('甘やかしていてもケアが雑ならプリックリーが勝つ', () => {
+    const { api, clock } = load();
+    setup(api, clock, { C:10 }); pamper(api);
+    eq(api.pickForm(), 'i3');
+    eq(api.pet.formWild, true);
+  });
+  it('甘やかしとミニゲーム制覇が両立したらプランプになる', () => {
+    const { api, clock } = load();
+    setup(api, clock, { C:85, best:{sw:900,ss:900,ab:900} }); pamper(api);
+    ok(api.allRounder(), 'スリークの条件も満たしていること');
+    eq(api.pickForm(), 'i1', '接し方が戦績より優先される:');
+  });
+  it('なかよしを高く保った日数は、下がった日に切れる', () => {
+    const { api, clock } = load();
+    pet(api, clock, { B: api.B_PAMPER, careStreak:5 });
+    api.closeOneDay({}, 2, false);
+    eq(api.pet.highBDays, 1, '境目ちょうどでも数える:');
+    api.closeOneDay({}, 2, false);
+    eq(api.pet.highBDays, 2);
+    api.pet.B = api.B_PAMPER - 1;
+    api.closeOneDay({}, 2, false);
+    eq(api.pet.highBDays, 0, '1日でも下回れば0に戻る:');
+  });
+  // 少し余裕のある高さ（線+5）から放置すると、なかよしが削られて線を割る。
+  //  1日の遅れで即アウトにはしないが、放り出せば必ず切れる、という効き方
+  it('放置を続ければ、なかよしが削られて連続日数が切れる', () => {
+    const { api, clock } = load();
+    pet(api, clock, { B: api.B_PAMPER + 5, careStreak:5, highBDays:4 });
+    api.closeOneDay({}, 0, false);
+    eq(api.pet.highBDays, 5, '1日ぶんの余裕はある:');
+    api.closeOneDay({}, 0, false);
+    eq(api.pet.highBDays, 0, '2日目で線を割る:');
   });
   it('体型は系統によらず、どの系統でも3つとも出る', () => {
     const { api, clock } = load();
@@ -638,7 +699,9 @@ describe('おもいで', () => {
     eq(api.menuList()[0][0], 'MEMORY');
   });
   it('通算カウンタは世話をするたび増える', () => {
-    const { api, clock } = load();
+    const { api, clock, sandbox } = load();
+    // わがままの抽選は下限5%残るので、固定しないと20回に1回ほど落ちる
+    sandbox.Math.random = () => 0.999;
     clock.setTime(14, 0);
     pet(api, clock, { hunger:2, W:2, poopSince: clock.now(), health:'SICK', D:100, Dm:100 });
     const before = JSON.parse(JSON.stringify(api.pet.total));

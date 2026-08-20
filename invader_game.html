@@ -661,7 +661,7 @@
     sickAcc:0,                            // 病気放置時間（分。2160=死）
     sickCount:0, fullFeeds:0,             // 病気回数・満腹給餌回数（進化条件用・累計）
     overAcc:0,                            // 最近の食べすぎ具合（毎日減衰。病気のなりやすさに効く）
-    lowBDays:0, calDay:'',                // なつき度低下の連続日数（UFO帰還判定）
+    lowBDays:0, highBDays:0, calDay:'',   // なつき度が低い／高いまま続いた日数（帰還判定・甘やかし判定）
     dead:'', ufoFlag:false,               // 死因('starve'|'sick')・帰還トリガー
     gone:false, goneBy:'',                // 帰還/旅立ちが終わった状態。ALL RESET まで解けない
                                           //  goneBy: 'return'=帰還 / 'depart'=旅立ち（残す言葉が変わる）
@@ -1103,13 +1103,19 @@
     const top = bestOf(s);
     return (s[top] >= LINEAGE_TH) ? top : 'inv';
   }
-  // Stage4 形態分岐：成体になってからの行動だけで判定（前半と後半で育て方を変えられる）
-  //   甘やかす→まるっと(1) ／ バランス→バランス(2) ／ 放置気味→やんちゃ(3)
   // ── Stage4 の体型。系統とは独立に、育て方だけで決まる ──
-  //  大食い     … おっとりな子に満腹でも食べさせ続け、病気から生還した
-  //  ミニゲーム制覇 … 3本すべてで基準の得点に届いた
+  //  プランプへは2本の道がある。どちらも「与えすぎた」形は同じで、入口が違うだけ。
+  //   大食い   … 満腹でも食べさせ続け、病気から生還した
+  //   甘やかし … なかよしをほぼ満タンのまま保ちつつ、おやつを与え続けた
   function bigEater(q){ const s = q || pet;
     return (s.fullFeeds||0) >= 10 && (s.sickCount||0) >= 1; }
+  //  なかよしがこの線を越えたまま何日続いたか（highBDays）と、一生ぶんのおやつの回数で見る。
+  //  B は1日に3までしか伸びず、世話を1日でも怠ると下がって連続日数が切れるので、
+  //  「高いところで長く保つ」こと自体が手間になる。おやつはごはんより多くすると
+  //  おやつ漬け（病気になりやすい）に触れるため、与えすぎれば逆にとげとげへ落ちる
+  const B_PAMPER = 80, PAMPER_DAYS = 5, PAMPER_SNACKS = 25;
+  function pampered(q){ const s = q || pet;
+    return (s.highBDays||0) >= PAMPER_DAYS && ((s.total||{}).snack||0) >= PAMPER_SNACKS; }
   //  3本すべての自己ベストがこの線を越えること。best は一生の最高記録なので、
   //  同じ日にそろえる必要はない
   const ALLROUND = { sw: 600, ss: 700, ab: 400 };
@@ -1117,15 +1123,18 @@
     return (b.sw||0) >= ALLROUND.sw && (b.ss||0) >= ALLROUND.ss && (b.ab||0) >= ALLROUND.ab; }
   // どれにも当たらなければ最終形態にならず、成体のままとどまる。
   //  中途半端な育て方では、その先の姿を見せない、という切り分け
+  //
+  // 優先順は「どう扱ったか」＞「何を成しとげたか」。
+  //  とげとげ（雑に扱った）とプランプ（与えすぎた）はどちらも接し方そのものが姿に出たもので、
+  //  ミニゲームの戦績で塗り替えられるものではない、という考え方でこの順にしてある。
+  //  そのため 大食い/甘やかし と ミニゲーム制覇 を同時に満たした子はプランプになる
   function pickForm(){
     const key = (pet.lineage==='grey' ? 'g' : pet.lineage==='tako' ? 't' : 'i');
     pet.formWild = false;
-    // とげとげは何よりも優先する。ミニゲームを極めていようが大食いだろうが、
-    //  そういう扱いをされた事実は上書きさせない
-    if(pet.C < C_FORM_BAD){ pet.formWild = true; return key + '3'; }
-    if(bigEater()) return key + '1';                                    // ふっくら
-    if(pet.C >= C_FORM_GOOD && allRounder()) return key + '2';          // すらり（両方必要）
-    return '';                                                         // まだ最終形態にならない
+    if(pet.C < C_FORM_BAD){ pet.formWild = true; return key + '3'; }     // プリックリー
+    if(bigEater() || pampered()) return key + '1';                       // プランプ
+    if(pet.C >= C_FORM_GOOD && allRounder()) return key + '2';           // スリーク（両方必要）
+    return '';                                                          // まだ最終形態にならない
   }
   // ── 日記の口調 ──
   //  成体になった時に、系統とその時点の性格で確定させ、以後は動かさない。
@@ -1911,6 +1920,8 @@
       ? (pet.careStreak||0) + 1
       : Math.max(0, (pet.careStreak||0) - 2);
     pet.lowBDays = (pet.B < 20) ? pet.lowBDays + 1 : 0;
+    // なかよしを高く保てた日の連続数。1日でも切れると0に戻るので、途中で放り出せない
+    pet.highBDays = (pet.B >= B_PAMPER) ? (pet.highBDays||0) + 1 : 0;
     // 起こさず・夜更かしもさせず・ちゃんと構った日は、生活リズムが整っておっとり寄りに戻る。
     //  これが無いとPは上がる一方になるので、性格の振り子はここで戻す
     if(touched && !nightPlay && !d.woken) addP(P_ADJ.calmDay);

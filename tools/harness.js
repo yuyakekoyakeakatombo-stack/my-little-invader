@@ -17,7 +17,7 @@ const GAME = path.join(__dirname, '..', 'invader_game.html');
 const EXPORTS = `
 ;globalThis.__api = {
   get pet(){ return pet; }, set pet(v){ pet = v; },
-  defaultPet, savePet, migratePet, wasHiddenRoute, bigEater, allRounder, SAVE_V, MIGRATIONS,
+  defaultPet, savePet, migratePet, wasHiddenRoute, bigEater, allRounder, pampered, SAVE_V, MIGRATIONS,
   closeOneDay, checkReturn, checkInvade, returnSigns, invadeSigns, wrathful, isWild,
   gainB, bondCapToday, markTouch, bondDrop, dailyCareScore,
   doCare, careDisabled, advancePet, maybeEvolve,
@@ -31,7 +31,7 @@ const EXPORTS = `
   get diaryLog(){ return diaryLog; },
   buildDiary, diaryBody, addDiary, clearDiary,
   SICK_P, SICK_DIRT_MIN, BOND_CAP, RET_ESTR_DAYS, RET_GRACE_DAYS,
-  STUCK_DAYS, ALLROUND, INV_M_MIN, INV_B_MAX, INV_P_MIN, INV_DAYS, WRATH_HOLD,
+  STUCK_DAYS, ALLROUND, B_PAMPER, PAMPER_DAYS, PAMPER_SNACKS, INV_M_MIN, INV_B_MAX, INV_P_MIN, INV_DAYS, WRATH_HOLD,
 };
 `;
 
