@@ -597,6 +597,71 @@ describe('セーブ移行', () => {
   });
 });
 
+// ══ おもいで画面 ══════════════════════════════════════════
+describe('おもいで', () => {
+  it('体型の呼び名が形態IDの末尾で決まる', () => {
+    const { api, clock } = load({ storage: { myvader_lang: 'ja' } });
+    pet(api, clock, { form:'i1' }); eq(api.formLabel(), 'ふっくら');
+    pet(api, clock, { form:'g2' }); eq(api.formLabel(), 'すらり');
+    pet(api, clock, { form:'t3' }); eq(api.formLabel(), 'とげとげ');
+    pet(api, clock, { form:''   }); eq(api.formLabel(), '', '未確定なら空:');
+  });
+  it('体型の呼び名は英語でも出る', () => {
+    const { api, clock } = load({ storage: { myvader_lang: 'en' } });
+    pet(api, clock, { form:'i1' }); eq(api.formLabel(), 'PLUMP');
+    pet(api, clock, { form:'g2' }); eq(api.formLabel(), 'SLEEK');
+    pet(api, clock, { form:'t3' }); eq(api.formLabel(), 'PRICKLY');
+  });
+  it('お別れの形が5種とも言葉になる', () => {
+    const { api, clock } = load();
+    const got = {};
+    for(const [k, o] of [['餓死',{dead:'starve'}], ['病死',{dead:'sick'}],
+                         ['帰還',{gone:true, goneBy:'return'}], ['旅立ち',{gone:true, goneBy:'depart'}],
+                         ['侵攻',{gone:true, goneBy:'invade'}]]){
+      pet(api, clock, o); got[k] = api.endLabel();
+      ok(got[k], k + ' の言葉が無い');
+    }
+    eq(new Set(Object.values(got)).size, 5, '5種とも違う言葉であるべき:');
+    pet(api, clock, {});                       // まだ続いている子
+    eq(api.endLabel(), '', '別れていなければ空:');
+  });
+  it('おもいでは、別れたあとだけメニューに並ぶ', () => {
+    const { api, clock } = load();
+    const has = () => api.menuList().some(r => r[0] === 'MEMORY');
+    pet(api, clock, {});                       ok(!has(), '育成中は出ない');
+    pet(api, clock, { gone:true });            ok(has(),  '帰還後は出る');
+    pet(api, clock, { dead:'starve' });        ok(has(),  'おばけでも出る');
+  });
+  it('おもいでがメニューのいちばん上に来る', () => {
+    const { api, clock } = load();
+    pet(api, clock, { gone:true });
+    eq(api.menuList()[0][0], 'MEMORY');
+  });
+  it('通算カウンタは世話をするたび増える', () => {
+    const { api, clock } = load();
+    clock.setTime(14, 0);
+    pet(api, clock, { hunger:2, W:2, poopSince: clock.now(), health:'SICK', D:100, Dm:100 });
+    const before = JSON.parse(JSON.stringify(api.pet.total));
+    api.doCare('FEED');  api.doCare('CLEAN');  api.doCare('MED');
+    ok(api.pet.total.feed  > before.feed,  'ごはん:');
+    ok(api.pet.total.clean > before.clean, 'そうじ:');
+    ok(api.pet.total.med   > before.med,   'くすり:');
+  });
+  it('通算カウンタは日をまたいでも減らない（mealCountとは別）', () => {
+    const { api, clock } = load();
+    pet(api, clock, { total:{feed:50, snack:10, clean:20, med:3}, mealCount:9 });
+    api.closeOneDay({}, 2, false);
+    eq(api.pet.total.feed, 50, '通算はそのまま:');
+    ok(api.pet.mealCount < 9, '日次のほうは減衰する:');
+  });
+  it('古いセーブでも通算カウンタが用意される', () => {
+    const { api } = load({ storage: { myvader_pet: JSON.stringify({
+      name:'OLD', stage:'final', lineage:'inv', form:'i1', B:50, C:50, D:50, EP:11 }) } });
+    eq(api.pet.total, { feed:0, snack:0, clean:0, med:0 });
+    eq(api.pet.v, api.SAVE_V);
+  });
+});
+
 // ══ ファイル全体の健全性 ══════════════════════════════════
 //  ミニゲームは本体と別のHTMLで、この足場では動かせない。
 //  代わりに「構文が通るか」と「壊しやすい約束事」をソースの上で確かめる

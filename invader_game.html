@@ -296,6 +296,26 @@
           <div class="speaker-grille"></div>
         </div>
 
+        <!-- MEMORY（おもいで：エンディング後の振り返り） -->
+        <div class="view" id="view-memory">
+          <div class="lcd-wrap" style="margin-top:48px;"><canvas id="lcd-r"></canvas></div>
+          <div class="controller-wrap">
+            <div class="controller-row">
+              <div class="dpad">
+                <div class="dpad-h"></div><div class="dpad-v"></div><div class="dpad-center"></div>
+                <div class="dpad-arrow up">▲</div><div class="dpad-arrow down">▼</div>
+                <div class="dpad-arrow left">◀</div><div class="dpad-arrow right">▶</div>
+              </div>
+              <div class="btns"><div class="btn-row">
+                <div class="btns-wrap btn-b"><div class="action-btn" id="rb"><span class="btn-lbl lbl-b">B</span></div></div>
+                <div class="btns-wrap"><div class="action-btn" id="ra"><span class="btn-lbl lbl-a">A</span></div></div>
+              </div></div>
+            </div>
+            <div class="menu-btn" id="rmenu"><span class="menu-btn-lbl">MENU</span></div>
+          </div>
+          <div class="speaker-grille"></div>
+        </div>
+
         <!-- STORY -->
         <div class="view" id="view-story">
           <div class="lcd-wrap" style="margin-top:48px;"><canvas id="lcd-s"></canvas></div>
@@ -340,6 +360,7 @@
       feed:'FEED', clean:'CLEAN', med:'MEDICINE', pet:'PRAISE', scold:'SCOLD', game:'MINI GAME',
       meal:'MEAL', snack:'TREAT',
       status:'STATUS', story:'STORY', settings:'SETTINGS', play:'PLAY', diary:'DIARY', manual:'MANUAL',
+      MEMORY:'MEMORIES',
       sound:'SOUND', bodycolor:'BODY COLOR', weather:'WEATHER', language:'LANGUAGE', debug:'DEBUG', reset:'ALL RESET',
       where:'HERE',
       on:'ON', off:'OFF', sure:'SURE?', yesno:'A:YES  B:NO',
@@ -349,11 +370,22 @@
       newborn:'NEWBORN', baby:'BABY', child:'CHILD', adult:'ADULT', finalst:'FINAL',
       gray:'GRAY', martian:'MARTIAN', invader:'INVADER',
       nameq:'NAME?', done:'DONE', del:'DELETE', langval:'ENGLISH',
+      memory:'MEMORIES',
+      // 体型の呼び名。絵をそのまま言い当てる語にしてある
+      plump:'PLUMP', sleek:'SLEEK', prickly:'PRICKLY',
+      mdays:'DAYS TOGETHER', mfeed:'MEALS', msnack:'TREATS', mclean:'TIDYING',
+      mpraise:'PRAISE', mplay:'PLAYING', mmed:'MEDICINE', msick:'ILLNESS',
+      mgave:'WHAT YOU GAVE', mlast:'AT THE END',
+      mcare:'CARE', mdisc:'MANNERS', mtemper:'NATURE',
+      tlively:'LIVELY', tcalm:'CALM', tmid:'EVEN',
+      endReturn:'THEY CAME FOR THEM', endDepart:'THEY SET OFF',
+      endInvade:'THEY CALLED THEIR KIND', endStarve:'THEY WASTED AWAY', endSick:'ILLNESS TOOK THEM',
     },
     ja: {
       feed:'ごはん', clean:'そうじ', med:'くすり', pet:'ほめる', scold:'しかる', game:'ゲーム',
       meal:'ごはん', snack:'おやつ',
       status:'ステータス', story:'ストーリー', settings:'せってい', play:'あそぶ', diary:'にっき', manual:'せつめいしょ',
+      MEMORY:'おもいで',
       sound:'サウンド', bodycolor:'カラー', weather:'てんき', language:'げんご', debug:'デバッグ', reset:'リセット',
       where:'げんざいち',
       on:'オン', off:'オフ', sure:'ほんとうに？', yesno:'A:はい B:いいえ',
@@ -363,6 +395,16 @@
       newborn:'うまれたて', baby:'あかちゃん', child:'こども', adult:'おとな', finalst:'さいしゅう',
       gray:'グレイ', martian:'マーシャン', invader:'インベーダー',
       nameq:'なまえは？', done:'けってい', del:'けす', langval:'にほんご',
+      memory:'おもいで',
+      // 体型の呼び名。絵をそのまま言い当てる語にしてある
+      plump:'ふっくら', sleek:'すらり', prickly:'とげとげ',
+      mdays:'いっしょにいた ひ', mfeed:'ごはん', msnack:'おやつ', mclean:'そうじ',
+      mpraise:'ほめた', mplay:'あそんだ', mmed:'くすり', msick:'びょうき',
+      mgave:'してあげたこと', mlast:'さいごの すがた',
+      mcare:'ケア', mdisc:'しつけ', mtemper:'せいかく',
+      tlively:'やんちゃ', tcalm:'おっとり', tmid:'ふつう',
+      endReturn:'むかえが きた', endDepart:'たびだった',
+      endInvade:'なかまを よんだ', endStarve:'ちからつきた', endSick:'びょうきで たおれた',
     },
   };
   // 位置情報の用途説明。LCDの幅に収まるよう改行済み（行数は言語で違う）
@@ -590,7 +632,7 @@
   const SAVE_KEY = 'myvader_pet';
   // セーブデータの形式。項目を足したり意味を変えたら1つ上げて、MIGRATIONS に手当てを書く。
   //  既定値まかせにすると、育っている途中の子に合わない値が入る（後述の v1 参照）
-  const SAVE_V = 1;
+  const SAVE_V = 2;
   function defaultPet(){ return {
     v: SAVE_V,
     name:'', birth:0, lastTick:0,
@@ -606,6 +648,7 @@
     plateAt:0, plateSpoiled:false,        // 残った皿（放置で食べ残し汚れ化＝plateSpoiled）
     plateKind:'meal',                     // 残した皿の中身（'meal'=ごはん / 'snack'=おやつ）
     mealCount:0, snackCount:0,            // ごはん／おやつを与えた回数（日次で減衰。おやつ過多の判定用）
+    total:{feed:0, snack:0, clean:0, med:0},  // 一生ぶんの通算。おもいで画面でだけ使う（減衰させない）
     poopAt:0, poopSince:0,                // 次のうんち発生時刻／最初のうんちが出た時刻（放置でハエ）
     wokeUntil:0,                          // しかられて起きている期限
     rhythmUntil:0,                        // しかって正した生活リズムが続く期限（この間は夜型シフトを外す）
@@ -625,7 +668,9 @@
     stage:'egg', lineage:'', form:'',     // 育成段階: egg→mid→larva→adult(系統)→final(形態)
     EP:0, ageMin:0, eggTargetEP:0,        // 進化ポイント/年齢(分)/NEWBORN→BABYの個体別目標EP
     finalAt:0, departFlag:false,          // 最終形態到達時刻・旅立ちエンド確定
-    formWild:false,                       // 最終形態が「ワイルド系」か（お迎えエンドが出なくなる）
+    memShown:false,                       // おもいでを自動で開いたか（1回だけ）
+    formWild:false,                       // 最終形態が「とげとげ」か（お迎えエンドが出なくなる）
+                                          //  内部名は体型名を付け直す前のもの。セーブに載るので変えずに残してある
     voice:'',                             // 日記の口調（成体で確定。'' は未確定＝共通の子どもの口調）
     wrathDays:0, invadeFlag:false,        // 侵攻の兆候が続いた日数・侵攻エンド確定
     nightPlays:0, nightPlayToday:false,   // 夜更かしプレイ回数（22時以降。i3条件）／今日夜更かししたか
@@ -656,8 +701,8 @@
       // 口調は成体で決まる仕組みを後から入れた。すでに成体・最終形態の子は
       //  空のままだと一生 plain になってしまうので、今の系統と性格から与える
       if(!p.voice && (p.stage === 'adult' || p.stage === 'final')) p.voice = pickVoice(p);
-      // ワイルド系かどうかの印も後付け。姿から復元する。
-      //  ごほうびの隠し形態（クラーケン／オールラウンダー）はワイルド扱いにしない。
+      // とげとげかどうかの印も後付け。姿から復元する。
+      //  当時の隠しルートで進化した子は、とげとげ扱いにしない。
       //  best は増える一方なので、低いCで g3 になった子があとから条件を満たしていると
       //  ごほうび側に見えてしまう。過去のセーブに限った近似として許容する
       if(p.stage === 'adult' || p.stage === 'final')
@@ -666,6 +711,9 @@
       //  すでに育っている子には与えない（既定値の2が入ってしまうため0に戻す）
       p.careStreak = 0;
     },
+    // v1 → v2：おもいで画面のために通算カウンタを足した。
+    //  過去ぶんは数えようがないので0から始める（記録が途中から、という扱い）
+    2(p){ p.total = { feed:0, snack:0, clean:0, med:0 }; },
   };
   function migratePet(sv){
     const p = Object.assign(defaultPet(), sv);
@@ -674,6 +722,7 @@
     p.plays = Object.assign({sw:0, ss:0, ab:0}, sv.plays);
     if(sv.snapL) p.snapL = Object.assign({praise:0, bad:0, plays:0}, sv.snapL);
     if(sv.snapA) p.snapA = Object.assign({A:0, sw:0, ss:0, ab:0}, sv.snapA);
+    p.total = Object.assign({feed:0, snack:0, clean:0, med:0}, sv.total);
     if(!p.touchKinds || typeof p.touchKinds !== 'object') p.touchKinds = {};
     if(!p.bGainKinds || typeof p.bGainKinds !== 'object') p.bGainKinds = {};
     // 数えるはずの値が壊れていたら既定に戻す（NaN が入ると比較が全部falseになって静かに壊れる）
@@ -927,7 +976,7 @@
   }
   // ── 侵攻エンド（E5）：怒りと恨みを伴った「反逆」 ──
   //  家出（E3）との棲み分けが要点。E3は「心が離れた」＝放置と無関心で、成長途中でも起こる。
-  //  E5は「ひどい目に遭わされ続けた」＝意図的ないじめで、最終形態のワイルドでしか起こらない。
+  //  E5は「ひどい目に遭わされ続けた」＝意図的ないじめで、最終形態のとげとげでしか起こらない。
   //  そのままだと最終形態（12日前後）に届く前にE3が先に発火してしまうので、
   //  恨みが溜まっている間はE3を止める（心が離れるのではなく、居座って恨みを溜める）。
   const INV_M_MIN   = 60;   // これ以上の恨みが無ければ侵攻しない
@@ -937,7 +986,7 @@
   const WRATH_HOLD  = 40;   // 恨みがこれ以上あるあいだは、E3（家出）を止める
   // いじめられている最中か。E3を止める判定にも使う
   function wrathful(){ return (pet.M||0) >= WRATH_HOLD; }
-  // 侵攻の兆候がそろっているか（最終形態のワイルド限定）
+  // 侵攻の兆候がそろっているか（最終形態のとげとげ限定）
   function invadeSigns(){
     if(pet.stage !== 'final' || !isWild()) return false;
     if((pet.M||0) < INV_M_MIN) return false;          // 恨み
@@ -1017,6 +1066,9 @@
   let evoT = 0;                                   // 進化演出フレーム
   let departEnding = !!(pet.departFlag && !pet.dead), departT = 0;   // 旅立ちエンド（E4）
   let invadeEnding = !!(pet.invadeFlag && !pet.dead), invadeT = 0, invadeGoneAt = 0;   // 侵攻エンド（E5）
+  // 別れの直後に一度だけ「おもいで」を開く。見逃されると振り返りの意味がないため。
+  //  以後はメニューからいつでも読み返せる
+  function endedShowMemory(){ if(!pet.memShown){ pet.memShown = true; savePet(); memOpen('main'); } }
 
   function evolveTo(st){ pet.stage = st; evoT = 36; note('evolved'); savePet(); }
 
@@ -1068,11 +1120,11 @@
   function pickForm(){
     const key = (pet.lineage==='grey' ? 'g' : pet.lineage==='tako' ? 't' : 'i');
     pet.formWild = false;
-    // ワイルドは何よりも優先する。ミニゲームを極めていようが大食いだろうが、
+    // とげとげは何よりも優先する。ミニゲームを極めていようが大食いだろうが、
     //  そういう扱いをされた事実は上書きさせない
     if(pet.C < C_FORM_BAD){ pet.formWild = true; return key + '3'; }
-    if(bigEater()) return key + '1';                                    // プチ
-    if(pet.C >= C_FORM_GOOD && allRounder()) return key + '2';          // ノーマル（両方必要）
+    if(bigEater()) return key + '1';                                    // ふっくら
+    if(pet.C >= C_FORM_GOOD && allRounder()) return key + '2';          // すらり（両方必要）
     return '';                                                         // まだ最終形態にならない
   }
   // ── 日記の口調 ──
@@ -1085,7 +1137,7 @@
     const v = pTrait(s) + (L==='tako' ? -0.4 : L==='grey' ? +0.4 : 0);   // マーシャン＝のんびり／グレイ＝活発
     return (v <= -0.35) ? 'calm' : (v >= 0.35 ? 'rough' : 'plain');
   }
-  // 古い決まりで進化した子むけ。以前は隠しルート3種がワイルドの枠（"3"）に入っていたので、
+  // 古い決まりで進化した子むけ。以前は隠しルート3種が「とげとげ」の枠（"3"）に入っていたので、
   //  その姿がケアの雑さで来たのか、隠しルートで来たのかを当時の条件から推し量る。
   //  すでに決まっている姿は変えられないため、移行でのみ使う。
   //  「夜更かし＋しつけ」はいまは廃止したが、当時のセーブを読むためにここに残す
@@ -1104,7 +1156,7 @@
   //  口調を持たない古い日記（vが無い）を読み返しても文面が変わらない
   function voiceIdx(){ const v = voice(); return v==='calm' ? 1 : (v==='rough' ? 2 : 0); }
 
-  // ワイルド系＝荒れた見た目に育った子。ここに来たらもう「お迎え（旅立ち）」は来ない
+  // とげとげ＝荒れた見た目に育った子。ここに来たらもう「お迎え（旅立ち）」は来ない
   function isWild(){ return !!pet.formWild; }
   function maybeEvolve(){
     if(pet.dead || pet.gone || !pet.name) return;
@@ -1815,8 +1867,8 @@
   // C（ケア充実度）：世話の「丁寧さ」を毎日0〜100で採点し、移動平均で持つ。
   //  かまい度A（どれだけ構ったか）とは別の軸で、体型＝最終形態を決める。
   // ════════════════════════════════════════
-  const C_FORM_GOOD = 70;   // これ以上なら「プチ」（大事に育てられた体つき）
-  const C_FORM_BAD  = 40;   // これ未満なら「ワイルド」（荒れた見た目）
+  const C_FORM_GOOD = 70;   // ケアが丁寧といえる線（ミニゲーム制覇と両方そろえば「すらり」）
+  const C_FORM_BAD  = 40;   // これ未満なら「とげとげ」（荒れた見た目）
   const C_SMOOTH    = 0.3;  // その日の点数を取り込む割合（移動平均）
   function dailyCareScore(d){
     let v = 100;
@@ -1870,7 +1922,7 @@
     pet.overAcc    = (pet.overAcc||0)    * SNACK_DECAY;   // 食べすぎも日がたてば戻る
     // 恨みは「ちゃんと世話をした日」に目減りする。数回の失敗では溜まらないようにするため
     if(touched && !d.hungry && !d.sick && !d.woken) addM(M_ADJ.healDay);
-    checkInvade();                                        // 侵攻の兆候（最終形態のワイルド限定）
+    checkInvade();                                        // 侵攻の兆候（最終形態のとげとげ限定）
     checkReturn();                                        // 帰還の兆候（疎遠期）と確定を判定
     // C（ケア充実度）：その日の丁寧さを採点して移動平均へ
     pet.C = Math.round((pet.C||50) * (1 - C_SMOOTH) + dailyCareScore(d) * C_SMOOTH);
@@ -2178,14 +2230,14 @@
       pet.ufoFlag = true;
       addDiary({ d: petDay(), n: pet.name, t: ['farewell'], v: [voiceIdx()], c: '', ts: Date.now(), cd: todayKey() });
     }
-    // ワイルド系の幕引き（E3）：お迎え（E4）が来ない子にも、必ずどこかで区切りをつける。
+    // とげとげの幕引き（E3）：お迎え（E4）が来ない子にも、必ずどこかで区切りをつける。
     //  侵攻（E5）の条件に届かなかった子は、お迎えと同じ時期に、静かに連れ戻される
     if(pet.stage==='final' && pet.finalAt && isWild() && !pet.ufoFlag && !pet.invadeFlag &&
        !invadeSigns() && now - pet.finalAt >= 14*86400000){
       pet.ufoFlag = true;
       addDiary({ d: petDay(), n: pet.name, t: ['farewellWild'], v: [voiceIdx()], c: '', ts: Date.now(), cd: todayKey() });
     }
-    //  ワイルド系に育った子には来ない。あとからどれだけ世話を頑張っても、この道は閉じている
+    //  とげとげに育った子には来ない。あとからどれだけ世話を頑張っても、この道は閉じている
     if(pet.stage==='final' && pet.finalAt && !pet.departFlag && !isWild() &&
        now - pet.finalAt >= 14*86400000 && pet.B >= 60 && pet.health === 'GOOD'){
       pet.departFlag = true;
@@ -3493,6 +3545,7 @@
     switch(act){
       case 'FEED':                                                  // ごはん
         pet.mealCount = (pet.mealCount||0) + 1;
+        pet.total.feed++;                                           // 通算（おもいで用）
         if(asleep){ leavePlate('meal'); }                           // 起こさない。皿を残す（起床後に空腹なら食べる／放置で食べ残し化）
         // わがまま：食べないが、ごはんは出す。皿はそのまま残り、わがままが収まってから食べる
         //  （放置すれば他の拒否と同じく食べ残しとして傷む）
@@ -3519,6 +3572,7 @@
         // わがままが増え、病気にもなりやすくなる（おやつ漬け）。
         const over = snackOveruse();                                // 加算前の状態で判定する
         pet.snackCount = (pet.snackCount||0) + 1;
+        pet.total.snack++;                                          // 通算（おもいで用）
         if(asleep){ leavePlate('snack'); break; }                   // 起こさない。おやつの皿を残す
         // わがまま中でもおやつは食べる（わがまま自体は解消しない＝しかるまで続く）
         feedFill();
@@ -3544,6 +3598,7 @@
           pet.W = 0; pet.plateAt = 0; pet.plateSpoiled = false; pet.poopSince = 0;
           raiseMood();                                              // 汚れを消してから上げるので、病気でなければMAXまで戻せる
           note('cleaned');
+          pet.total.clean++;                        // 通算（おもいで用）
           addA(A_ADJ.clean); markTouch('clean');    // そうじは「その日世話をしたか」の判定には数える。
                                                     //  ただし gainB は呼ばないので、なかよしの点は入らない
           setReaction('clean', CLEAN_T, asleep || onlyFresh);       // ほうき掃きアニメ（睡眠中と、拒んだ皿を下げただけの時は音符を出さない）
@@ -3561,6 +3616,7 @@
           if(pet.tantrumAt || rollTantrum('med')){ setReaction('refuse'); }
           else {
             pet.health = 'GOOD'; pet.sickAcc = 0; pet.sickCount++;  // 治療（回数は進化条件に使用）
+            pet.total.med++;                                       // 通算（おもいで用）
             note('cured');
             addA(A_ADJ.med); markTouch();           // くすりも同じく、ふれあいには数えない
             setReaction('cured');
@@ -3571,6 +3627,7 @@
           //  けんこう欄の「ふつう」に気づいた人だけが拾える救いなので、嫌がらせずに受け取る。
           //  病気になったわけではないので sickCount は増やさない（進化条件に使われるため）
           pet.incubAt = 0;
+          pet.total.med++;                                         // 通算（おもいで用）
           addA(A_ADJ.med); markTouch();
           setReaction('cured');
         }
@@ -3774,7 +3831,7 @@
       //  最後の日記を読み返す時間を残し、ALL RESET を押すまでこのまま。
       pet.gone = true; pet.goneBy = 'return'; pet.ufoFlag = false;
       ufoEnding = false; ufoT = 0;
-      savePet();
+      savePet(); endedShowMemory();
     }
   }
 
@@ -3836,7 +3893,7 @@
     if(invadeGoneAt && t - invadeGoneAt >= INV_T_MSG + 40){
       pet.gone = true; pet.goneBy = 'invade'; pet.invadeFlag = false;
       invadeEnding = false; invadeT = 0; invadeGoneAt = 0;
-      savePet();
+      savePet(); endedShowMemory();
     }
   }
 
@@ -3917,7 +3974,7 @@
       //  次の子は ALL RESET を押すまで来ない
       pet.gone = true; pet.goneBy = 'depart'; pet.departFlag = false;
       departEnding = false; departT = 0;
-      savePet();
+      savePet(); endedShowMemory();
     }
   }
 
@@ -4437,8 +4494,10 @@
   // FEED/PLAY/CLEANはアクションバーに移管済み。DIARY は中間体になってから並ぶ
   const MENU_BASE = [['STATUS','status'], ['SETTINGS','settings'], ['STORY','story'], ['MANUAL','manual']];
   function menuList(){
-    if(!diaryUnlocked()) return MENU_BASE;
-    return [MENU_BASE[0], ['DIARY','diary'], ...MENU_BASE.slice(1)];   // STATUS の次に DIARY を挟む
+    // 別れたあとだけ「おもいで」が いちばん上に出る。ここが振り返りの入口
+    const head = (pet.gone || pet.dead) ? [['MEMORY','memory']] : [];
+    if(!diaryUnlocked()) return [...head, ...MENU_BASE];
+    return [...head, MENU_BASE[0], ['DIARY','diary'], ...MENU_BASE.slice(1)];   // STATUS の次に DIARY を挟む
   }
   const PLAY_ITEMS=['SPACEWALK','SHOOTING STAR','ABDUCTION'];
   const PLAY_FILES={'SPACEWALK':'spacewalk_game.html','SHOOTING STAR':'shootingstar_game.html','ABDUCTION':'abduction_game.html'};
@@ -4912,6 +4971,7 @@
         if(sel==='SETTINGS'){ inSettings=true; settingsSel=0; }
         else if(sel==='DIARY'){ openDiary(); }        // 日記は死んだあと・帰還したあとも読める
         else if(sel==='MANUAL'){ openManual(); }      // 説明書もいつでも読める
+        else if(sel==='MEMORY'){ memOpen('menu'); }   // おもいでは別れたあとだけ並ぶ
         else if(pet.dead || pet.gone){ /* おばけ・帰還後：上記以外は操作不可 */ }
         else if(sel==='STATUS'){ inStatus=true; }
         else if(sel==='STORY'){ showView('story'); }
@@ -5244,6 +5304,127 @@
       playClick(900); dpadAnim(el);
       if(el.classList.contains('up')||el.classList.contains('left'))    diaryPage = Math.max(0, diaryPage-1);
       if(el.classList.contains('down')||el.classList.contains('right')) diaryPage = Math.min(diaryLog.length-1, diaryPage+1);
+    });
+  });
+
+  // ════════════════════════════════════════
+  // おもいで（エンディング後の振り返り）
+  //  何が効いたかを言葉で説明はしない。毎回まったく同じ項目を同じ順で出し、
+  //  周回どうしを見比べれば分かる、という作りにしてある。
+  //  ただし最後の1ページだけは答え合わせとして、隠していた値を目盛りで開く。
+  // ════════════════════════════════════════
+  const ctxR = initCanvas('lcd-r');
+  const MEM_PAGES = 3;
+  let memPage = 0, memFrom = 'menu', fR = 0;
+  // 体型の呼び名。形態IDの末尾で決まる（1=ふっくら / 2=すらり / 3=とげとげ）
+  function formLabel(){
+    const n = (pet.form || '').slice(-1);
+    return n === '1' ? T('plump') : n === '2' ? T('sleek') : n === '3' ? T('prickly') : '';
+  }
+  // どんな別れだったか
+  function endLabel(){
+    if(pet.dead === 'starve') return T('endStarve');
+    if(pet.dead === 'sick')   return T('endSick');
+    if(pet.goneBy === 'depart') return T('endDepart');
+    if(pet.goneBy === 'invade') return T('endInvade');
+    if(pet.goneBy === 'return') return T('endReturn');
+    return '';
+  }
+  function memOpen(from){ memFrom = from || 'menu'; memPage = 0; fR = 0; showView('memory'); }
+  function memClose(){ showView(memFrom); }
+
+  //  項目名を左、値を右に置き、あいだを薄い点でつなぐ（STATUS と同じ組み方）
+  function memRow(label, val, y){
+    ctxR.font = uiFont(6); ctxR.fillStyle = ON;
+    ctxR.textAlign = 'left';  ctxR.fillText(label, 3*S, y*S);
+    ctxR.textAlign = 'right'; ctxR.fillText(val, (W-3)*S, y*S);
+    ctxR.textAlign = 'left';                           // 幅を測る前に必ず戻す（右寄せのままだと狂う）
+    const lw = ctxR.measureText(label).width / S, vw = ctxR.measureText(val).width / S;
+    for(let x = Math.floor(3 + lw) + 2; x < (W-3) - vw - 1.5; x += STAT_LEADER) dot(ctxR, x, y + 2, DIM);
+  }
+  //  10本の目盛り。STATUS と同じ見た目にして、同じものを見ていると分かるようにする
+  function memGauge(label, v01, y){
+    ctxR.font = uiFont(6); ctxR.fillStyle = ON; ctxR.textAlign = 'left';
+    ctxR.fillText(label, 3*S, y*S);
+    const lit = Math.round(Math.max(0, Math.min(1, v01)) * GAUGE_MAX * 2);
+    for(let k=0;k<GAUGE_MAX*2;k++){
+      const c = (k < lit) ? ON : DIM;
+      for(let dx=0;dx<GAUGE_W;dx++) for(let dy=0;dy<GAUGE_H;dy++)
+        dot(ctxR, GAUGE_X + k*(GAUGE_W+GAUGE_GAP) + dx, y + dy, c);
+    }
+  }
+  function tickMemory(){
+    if(scene !== 'memory') return;
+    const col = getColors(), BG = col.bg, DM = col.dim, NK = col.on;
+    ctxR.fillStyle = BG; ctxR.fillRect(0,0,W*S,H*S);
+    ctxR.textBaseline = 'top';
+    // 見出し
+    ctxR.font = uiFont(7); ctxR.fillStyle = NK; ctxR.textAlign = 'center';
+    ctxR.fillText(T('memory'), (W*S)/2, 3*S);
+    for(let x=6;x<W-6;x++) dot(ctxR, x, 13, DM);
+
+    if(memPage === 0){
+      // 1ページ目：だれと、どれだけ
+      ctxR.textAlign = 'center';
+      ctxR.font = nameFont(9, pet.name || '????'); ctxR.fillStyle = NK;
+      ctxR.fillText(pet.name || '????', (W*S)/2, 20*S);
+      ctxR.font = uiFont(6); ctxR.fillStyle = NK;
+      ctxR.fillText(T('mdays') + '  ' + petDay(), (W*S)/2, 31*S);
+      const f = formLabel();
+      if(f){
+        ctxR.font = uiFont(7);
+        ctxR.fillText(typeLabel() + (lang==='ja' ? '・' : ' ') + f, (W*S)/2, 39*S);
+      } else {
+        ctxR.font = uiFont(6); ctxR.fillStyle = DM;
+        ctxR.fillText(stageLabel(), (W*S)/2, 40*S);
+      }
+      const e = endLabel();
+      if(e){ ctxR.font = uiFont(6); ctxR.fillStyle = NK; ctxR.fillText(e, (W*S)/2, 49*S); }
+
+    } else if(memPage === 1){
+      // 2ページ目：してあげたこと。数だけを出し、多い少ないの評価はしない
+      ctxR.font = uiFont(6); ctxR.fillStyle = DM; ctxR.textAlign = 'center';
+      ctxR.fillText(T('mgave'), (W*S)/2, 17*S);
+      const t = pet.total || {};
+      const p = pet.plays || {};
+      const rows = [
+        [T('mfeed'),   (t.feed||0)],
+        [T('msnack'),  (t.snack||0)],
+        [T('mclean'),  (t.clean||0)],
+        [T('mpraise'), (pet.praiseCount||0)],
+        [T('mplay'),   ((p.sw||0)+(p.ss||0)+(p.ab||0))],
+        [T('mmed'),    (t.med||0)],
+      ];
+      rows.forEach((r,i)=> memRow(r[0], String(r[1]), 23 + i*6));   // 最終行(53)がページ数(57)に掛からない位置
+
+    } else {
+      // 3ページ目：さいごの姿。ここだけは隠していた値を開く
+      ctxR.font = uiFont(6); ctxR.fillStyle = DM; ctxR.textAlign = 'center';
+      ctxR.fillText(T('mlast'), (W*S)/2, 17*S);
+      memGauge(T('friend'), (pet.B||0)/100, 27);
+      memGauge(T('mcare'),  (pet.C||0)/100, 35);
+      memGauge(T('mdisc'),  (pet.D||0)/100, 43);
+      const t = pTrait();
+      memRow(T('mtemper'), t >= 0.35 ? T('tlively') : t <= -0.35 ? T('tcalm') : T('tmid'), 51);
+    }
+
+    // ページ位置。日記と同じ見た目にそろえる
+    ctxR.font = uiFont(6); ctxR.fillStyle = DM; ctxR.textAlign = 'center';
+    if(memPage > 0)             ctxR.fillText('<', 4*S, 7*S);
+    if(memPage < MEM_PAGES-1)   ctxR.fillText('>', (W-4)*S, 7*S);
+    ctxR.fillText((memPage+1) + ' / ' + MEM_PAGES, (W*S)/2, 57*S);
+    fR++;
+  }
+  setInterval(tickMemory, 100);
+  onPress(document.getElementById('ra'),()=>{ playClick(); btnAnim(document.getElementById('ra'));
+    if(memPage < MEM_PAGES-1) memPage++; else memClose(); });
+  onPress(document.getElementById('rb'),()=>{ playClick(); btnAnim(document.getElementById('rb')); memClose(); });
+  onPress(document.getElementById('rmenu'),()=>{ playClick(); btnAnim(document.getElementById('rmenu'),1,0.93); memClose(); });
+  document.querySelectorAll('#view-memory .dpad-arrow').forEach(el=>{
+    onPress(el,()=>{
+      playClick(900); dpadAnim(el);
+      if(el.classList.contains('right')||el.classList.contains('down')) memPage = Math.min(MEM_PAGES-1, memPage+1);
+      else memPage = Math.max(0, memPage-1);
     });
   });
 
