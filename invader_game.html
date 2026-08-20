@@ -5670,31 +5670,44 @@
     diaryWords(e).forEach(words => { if(words.length) rows.push({ words }); });
     return rows;
   }
+  // 本文の文字の大きさ。日本語は実フォント10px、英語は Press Start 2P の6px
+  function diaryFontSize(){ return (lang === 'ja') ? 10 : 6; }
+  // 宇宙文字・絵記号の1ドットの大きさ。
+  //  言葉が混ざる段階（こども）では、文字と同じ高さに収まる大きさまで落とす。
+  //  英語は文字が6pxしかないので、日本語と同じ2ドット（＝10px）だと
+  //  宇宙文字だけが文字の倍近く大きくなって浮いてしまう。
+  //  あかちゃんまでは1文字も混ざらないので、大きいまま（そのほうが幼く見える）
+  function diaryBaseDot(lv){
+    const textU = Math.max(1, Math.round(diaryFontSize() / 5));   // 5ドットで文字の高さに並ぶ大きさ
+    return (lv === LV_CHILD) ? Math.min(LV_DOT[lv], textU) : LV_DOT[lv];
+  }
   function drawDiaryWords(e){
-    const lv = entryLevel(e), u = LV_DOT[lv], lines = diaryRows(e);
-    const fs = (lang === 'ja') ? 10 : 6;
+    const lv = entryLevel(e), lines = diaryRows(e);
+    const fs = diaryFontSize();
     ctxT.font = (lang==='ja') ? (fs+'px '+JP_FONT) : fs+'px "Press Start 2P"';
     ctxT.textAlign = 'left'; ctxT.fillStyle = ON;
-    const gap = fs * 0.4;                                         // 単語のあいだ
+    const gap = Math.max(4, fs * 0.4);                            // 単語のあいだ（英語でも詰まりすぎない）
     const MAXW = W*S - 8;                                         // 左右に少し余白を残す
     const wordW = (w, k) => w.t ? ctxT.measureText(w.t).width : [...w.r].length * 6 * k - k;
     const lineW = (words, k) => words.reduce((a,w)=>a + wordW(w, k) + gap, -gap);
-    // 自分の文字は1字ぶんが日本語より横に広い。英語のように長い行だと はみ出すので、
-    //  その行だけ字を小さくして収める（日本語の行は既定の大きさのまま収まる）
-    const fit = words => { let k = u; while(k > 1 && lineW(words, k) > MAXW) k--; return k; };
-    const hRow = Math.max(fs, 5 * u);
+    // ドットの大きさはページ全体で1つに決める。行ごとに決めると、同じページの中で
+    //  縮んだ行と縮まない行が混ざって不揃いに見える。
+    //  そのうえで、どれか1行でもはみ出すならページごと小さくする（英語は1行が長い）
+    let k = diaryBaseDot(lv);
+    while(k > 1 && lines.some(r => r.words && lineW(r.words, k) > MAXW)) k--;
+    const rh = 5 * k;
+    const hRow = Math.max(fs, rh);
     const { y0, lh } = bodyRows(lines.length, hRow, 6);
     lines.forEach((row, li) => {
       const top = y0 + li * lh;
       // 絵の行：その日の出来事をそのまま並べる
       if(row.marks){
-        const mw = row.marks.reduce((a,g)=>a + (g[0].length + 2) * u, -2 * u);
+        const mw = row.marks.reduce((a,g)=>a + (g[0].length + 2) * k, -2 * k);
         let mx = Math.round((W*S - mw) / 2);
-        row.marks.forEach(g => { stampU(g, mx, top + (hRow - 5*u)/2, u, ON); mx += (g[0].length + 2) * u; });
+        row.marks.forEach(g => { stampU(g, mx, top + (hRow - rh)/2, k, ON); mx += (g[0].length + 2) * k; });
         return;
       }
       const words = row.words;
-      const k = fit(words), rh = 5 * k;
       let x = Math.round((W*S - lineW(words, k)) / 2);
       words.forEach((w, wi) => {
         if(w.t){ ctxT.fillText(w.t, x, top + (hRow - fs)/2); }

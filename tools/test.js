@@ -582,10 +582,15 @@ describe('にっきの字', () => {
   it('同じ日記は何度組み直しても同じ形になる（開くたびに変わらない）', () => {
     const { api, clock } = load({ storage:{ myvader_lang:'ja' } });
     pet(api, clock);
-    const e = entry(api, { lv: api.LV_CHILD, wr:0.5 });
-    eq(api.diaryWords(e), api.diaryWords(e), '単語の置き換えが毎回同じ:');
-    const m = entry(api, { lv: api.LV_NEW });
-    eq(api.diaryMarks(m).map(r=>r.length), api.diaryMarks(m).map(r=>r.length), '絵の並びが毎回同じ:');
+    // 2回だけ比べると、乱数で偶然そろって見逃すことがある。
+    //  回数を増やし、絵も「並びの数」ではなく字形そのものを見比べる
+    const e = entry(api, { lv: api.LV_CHILD, wr:0.5,
+                           t:['fed','praised','slept'], v:[0,0,0], c:'plain' });
+    const words = api.diaryWords(e);
+    for(let i=0;i<6;i++) eq(api.diaryWords(e), words, `${i+2}回目で単語の置き換えが変わった:`);
+    const m = entry(api, { lv: api.LV_NEW, t:['fed','praised','slept'], v:[0,0,0] });
+    const marks = api.diaryMarks(m);
+    for(let i=0;i<6;i++) eq(api.diaryMarks(m), marks, `${i+2}回目で絵の並びが変わった:`);
   });
   it('うまれたては、その日の出来事が絵になる', () => {
     const { api, clock } = load();
@@ -601,6 +606,26 @@ describe('にっきの字', () => {
     pet(api, clock);
     const rows = api.diaryMarks(entry(api, { lv: api.LV_NEW, t:['evolved'] }));
     ok(rows.flat().length > 0, '空白のページにはしないこと');
+  });
+  // 英語は本文が6pxしかないので、日本語と同じ2ドット（＝10px）で宇宙文字を描くと
+  //  記号だけが文字の倍近く大きくなって浮く。言葉が混ざる段階では文字に合わせる
+  it('言葉が混ざる段階では、宇宙文字が文字より大きくならない', () => {
+    // 本文の大きさそのものを押さえる。文字と記号を見比べるだけだと、
+    //  両方が一緒に動く壊し方（文字も10pxにする）を見逃す
+    for(const [lg, expect] of [['ja', 10], ['en', 6]]){
+      const { api } = load({ storage:{ myvader_lang: lg } });
+      const fs = api.diaryFontSize();
+      eq(fs, expect, `${lg} の本文の大きさ:`);
+      const h = 5 * api.diaryBaseDot(api.LV_CHILD);        // 宇宙文字は5ドットぶんの高さ
+      ok(h <= fs, `${lg}: 宇宙文字${h}px が 文字${fs}px より大きい`);
+      ok(h >= fs - 2, `${lg}: 宇宙文字${h}px が 文字${fs}px に対して小さすぎる`);
+    }
+  });
+  it('言葉が混ざらない段階は、言語に関係なく大きいまま', () => {
+    const ja = load({ storage:{ myvader_lang:'ja' } }).api;
+    const en = load({ storage:{ myvader_lang:'en' } }).api;
+    for(const lv of [ja.LV_NEW, ja.LV_BABY])
+      eq(en.diaryBaseDot(lv), ja.diaryBaseDot(lv), `段階${lv}は言語で変わらないこと:`);
   });
   it('段階が上がるほど字は小さくなる', () => {
     const { api } = load();

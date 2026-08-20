@@ -31,7 +31,7 @@ const EXPORTS = `
   DIARY_LINES, DIARY_MUSINGS, DIARY_CLOSE, DIARY_PRIORITY,
   get diaryLog(){ return diaryLog; },
   buildDiary, diaryBody, addDiary, clearDiary,
-  diaryWriting, diaryLevel, diaryStyle, writeRatio, entryLevel, diaryWords, diaryMarks, diaryRows,
+  diaryWriting, diaryLevel, diaryStyle, writeRatio, entryLevel, diaryWords, diaryMarks, diaryRows, diaryBaseDot, diaryFontSize,
   DIARY_PICT, DIARY_RUNE, RUNE_KEYS, KANA_LETTER, runeOf, TAG_PICT, LV_NEW, LV_BABY, LV_CHILD, LV_ADULT, LV_DOT,
   SICK_P, SICK_DIRT_MIN, BOND_CAP, RET_ESTR_DAYS, RET_GRACE_DAYS,
   STUCK_DAYS, ALLROUND, B_PAMPER, PAMPER_DAYS, PAMPER_SNACKS, INV_M_MIN, INV_B_MAX, INV_P_MIN, INV_DAYS, WRATH_HOLD,
