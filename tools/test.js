@@ -667,6 +667,11 @@ describe('おもいで', () => {
     pet(api, clock, { form:'t3' }); eq(api.formLabel(), 'プリックリー');
     pet(api, clock, { form:''   }); eq(api.formLabel(), '', '未確定なら空:');
   });
+  // 言語の選択が保存されていない＝初回起動。日本語で始める
+  it('言語の指定が無ければ日本語で始まる', () => {
+    const { api, clock } = load();
+    pet(api, clock, { form:'i1' }); eq(api.formLabel(), 'プランプ');
+  });
   it('体型の呼び名は英語でも出る', () => {
     const { api, clock } = load({ storage: { myvader_lang: 'en' } });
     pet(api, clock, { form:'i1' }); eq(api.formLabel(), 'PLUMP');

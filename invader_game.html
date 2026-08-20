@@ -351,10 +351,11 @@
   const MAIN_GY = 61;
 
   // ════════════════════════════════════════
-  // 多言語（EN/JP。デフォルトEN。※日本語はPress Start 2P非対応のためフォールバック表示）
+  // 多言語（EN/JP。デフォルトJA。※日本語はPress Start 2P非対応のためフォールバック表示）
   // ════════════════════════════════════════
-  let lang = 'en';
-  try{ if(localStorage.getItem('myvader_lang') === 'ja') lang = 'ja'; }catch(e){}
+  //  保存された選択があればそれを使う。無ければ日本語で始める
+  let lang = 'ja';
+  try{ if(localStorage.getItem('myvader_lang') === 'en') lang = 'en'; }catch(e){}
   const I18N = {
     en: {
       feed:'FEED', clean:'CLEAN', med:'MEDICINE', pet:'PRAISE', scold:'SCOLD', game:'MINI GAME',
