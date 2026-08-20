@@ -601,9 +601,9 @@ describe('セーブ移行', () => {
 describe('おもいで', () => {
   it('体型の呼び名が形態IDの末尾で決まる', () => {
     const { api, clock } = load({ storage: { myvader_lang: 'ja' } });
-    pet(api, clock, { form:'i1' }); eq(api.formLabel(), 'ふっくら');
-    pet(api, clock, { form:'g2' }); eq(api.formLabel(), 'すらり');
-    pet(api, clock, { form:'t3' }); eq(api.formLabel(), 'とげとげ');
+    pet(api, clock, { form:'i1' }); eq(api.formLabel(), 'プランプ');
+    pet(api, clock, { form:'g2' }); eq(api.formLabel(), 'スリーク');
+    pet(api, clock, { form:'t3' }); eq(api.formLabel(), 'プリックリー');
     pet(api, clock, { form:''   }); eq(api.formLabel(), '', '未確定なら空:');
   });
   it('体型の呼び名は英語でも出る', () => {
