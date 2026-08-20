@@ -1819,49 +1819,163 @@
     playSw:'play', playSs:'play', playAb:'play',
     slept:'slept', clear:'clear', rain:'rain', snow:'rain',
   };
-  // 地球外の文字。意味は持たない。書けなかった単語の代わりに置く
-  const DIARY_RUNE = [
-    dotArt(`#...#
-            .#.#.
+  // ── 地球外の文字 26字 ──
+  //  A〜Z に1字ずつ対応させ、かなを「ローマ字の頭文字」に落として引く。
+  //  でたらめに散らすのではなく規則で決まるので、同じ言葉はいつ書いてもおなじ形になる。
+  //  読み比べれば、どの並びがどの言葉なのか見当がつくようになっている
+  const DIARY_RUNE = {
+    a: dotArt(`#.#.#
+            .###.
             ..#..
+            .###.
+            #.#.#`),
+    b: dotArt(`####.
+            #....
+            ###.#
+            #....
+            ####.`),
+    c: dotArt(`..#..
+            #####
+            ..#..
+            #####
+            ..#..`),
+    d: dotArt(`#...#
+            .###.
             .#.#.
+            .###.
             #...#`),
-    dotArt(`#####
+    e: dotArt(`#....
+            #.##.
+            #.#.#
+            #.##.
+            #....`),
+    f: dotArt(`.#.#.
+            #####
+            .....
+            #####
+            .#.#.`),
+    g: dotArt(`..##.
+            .#...
+            ####.
+            ...#.
+            .##..`),
+    h: dotArt(`#...#
+            ##.##
+            #.#.#
+            ##.##
+            #...#`),
+    i: dotArt(`.###.
+            #...#
+            #.#.#
+            #...#
+            .###.`),
+    j: dotArt(`.#.#.
+            #####
+            ..#..
+            ##.##
+            ..#..`),
+    k: dotArt(`#..#.
+            .##..
+            ..#..
+            ..##.
+            .#..#`),
+    l: dotArt(`#.#.#
+            #.#.#
+            #####
+            ..#..
+            ..#..`),
+    m: dotArt(`##.##
+            #.#.#
+            #...#
+            #.#.#
+            ##.##`),
+    n: dotArt(`.#..#
+            .#.#.
+            .##..
+            .#.#.
+            .#..#`),
+    o: dotArt(`#####
+            #.#.#
+            ..#..
+            #.#.#
+            #####`),
+    p: dotArt(`#...#
+            .###.
+            #####
+            .###.
+            #...#`),
+    q: dotArt(`.###.
+            #...#
+            #..#.
+            #.#..
+            .##.#`),
+    r: dotArt(`##..#
+            #.#.#
+            #..##
+            #.#.#
+            ##..#`),
+    s: dotArt(`#.###
+            #.#..
+            #.#.#
+            ..#.#
+            ###.#`),
+    t: dotArt(`#####
             ..#..
             .###.
             ..#..
             #####`),
-    dotArt(`..#..
-            .###.
+    u: dotArt(`#...#
             #.#.#
-            ..#..
-            ..#..`),
-    dotArt(`#...#
-            #####
-            ..#..
-            #####
-            #...#`),
-    dotArt(`.###.
-            #...#
-            #.###
-            #...#
+            #.#.#
+            #.#.#
             .###.`),
-    dotArt(`#..#.
-            .#..#
-            #..#.
-            .#..#
-            #..#.`),
-    dotArt(`..#..
-            #####
+    v: dotArt(`#...#
+            .#.#.
+            .#.#.
             ..#..
-            #####
             ..#..`),
-    dotArt(`##.##
+    w: dotArt(`#.#.#
+            #.#.#
+            #####
+            .#.#.
+            #...#`),
+    x: dotArt(`#...#
             .#.#.
             ..#..
             .#.#.
-            ##.##`),
-  ];
+            #...#`),
+    y: dotArt(`#...#
+            .#.#.
+            ..#..
+            ..#..
+            .###.`),
+    z: dotArt(`#.#.#
+            .....
+            #####
+            .....
+            #.#.#`),
+  };
+  const RUNE_KEYS = Object.keys(DIARY_RUNE);
+  // かな→ローマ字の頭文字。清音と濁音は別の字になる（か行=k／が行=g）
+  const KANA_LETTER = {
+    あ:'a',い:'i',う:'u',え:'e',お:'o',
+    か:'k',き:'k',く:'k',け:'k',こ:'k', が:'g',ぎ:'g',ぐ:'g',げ:'g',ご:'g',
+    さ:'s',し:'s',す:'s',せ:'s',そ:'s', ざ:'z',じ:'z',ず:'z',ぜ:'z',ぞ:'z',
+    た:'t',ち:'t',つ:'t',て:'t',と:'t', だ:'d',ぢ:'d',づ:'d',で:'d',ど:'d',
+    な:'n',に:'n',ぬ:'n',ね:'n',の:'n', ん:'n',
+    は:'h',ひ:'h',ふ:'h',へ:'h',ほ:'h', ば:'b',び:'b',ぶ:'b',べ:'b',ぼ:'b',
+    ぱ:'p',ぴ:'p',ぷ:'p',ぺ:'p',ぽ:'p',
+    ま:'m',み:'m',む:'m',め:'m',も:'m',
+    や:'y',ゆ:'y',よ:'y', ゃ:'y',ゅ:'y',ょ:'y',
+    ら:'r',り:'r',る:'r',れ:'r',ろ:'r',
+    わ:'w',を:'w', っ:'t', ー:'u',
+  };
+  // 1文字ぶんの宇宙文字。表にない字（カタカナ・記号）は字形をならして拾う
+  function runeOf(ch){
+    const k = KANA_LETTER[ch] || (/^[a-zA-Z]$/.test(ch) ? ch.toLowerCase() : null);
+    if(k && DIARY_RUNE[k]) return DIARY_RUNE[k];
+    return DIARY_RUNE[RUNE_KEYS[ch.charCodeAt(0) % RUNE_KEYS.length]];
+  }
   // うまれたてだけに混じる、意味のない筆致
   const DIARY_SCRAWL = [
     dotArt(`.....
@@ -1890,11 +2004,14 @@
   // 性格で書き方が変わる。おっとりはまめに長く、やんちゃは書き忘れる日があって短い
   function diaryStyle(){
     const t = pTrait();                       // -1=おっとり … +1=やんちゃ
+    // まだ字を覚えていないうちは、書ける量そのものが少ない。
+    //  ここを段階で絞らないと、生まれて2日の子が画面いっぱいに書くことになる
+    const cap = [1, 2, 4, 4][diaryLevel()];
     return {
       skip:   Math.max(0, t) * 0.35,          // その日は書かずに終わる確率
       putOff: Math.max(0, t) * 0.50,          // 寝る前に書かず、翌日に回す確率
-      topics: (t <= -0.4) ? 4 : (t >= 0.4 ? 2 : 3),
-      close:  voice(),                        // 口調は成体で確定。それまでは共通の 'plain'
+      topics: Math.min((t <= -0.4) ? 4 : (t >= 0.4 ? 2 : 3), cap),
+      close:  diaryLevel() <= LV_BABY ? '' : voice(),   // 口調は成体で確定。それまでは共通の 'plain'
     };
   }
   // 日記を書く時刻＝就寝の1時間前。就寝が遅い子でも深夜には回さない
@@ -2042,8 +2159,9 @@
     const rnd = diaryRnd('w' + (e.cd || '') + (e.d || 0));
     return diaryBody(e).map(l => {
       if(!l) return [];
+      // r には もとの単語をそのまま入れる。1字ずつ宇宙文字に置き換えて書くため
       return l.split(' ').filter(w => w.length)
-              .map(w => (rnd() < ratio) ? { t: w } : { r: [...w].length });
+              .map(w => (rnd() < ratio) ? { t: w } : { r: w });
     });
   }
   // うまれたて：まだ単語という形になっていない。その日の出来事を絵にして、
@@ -2055,7 +2173,7 @@
     (e.t || []).forEach(t => { const k = TAG_PICT[t]; if(k) items.push(DIARY_PICT[k]); });
     if(!items.length) items.push(pick(DIARY_SCRAWL));       // 絵にならない日でも、書いた跡は残す
     items.push(pick(DIARY_SCRAWL));
-    items.push(pick(DIARY_RUNE));                           // 自分の文字がひとつだけ混じる
+    items.push(DIARY_RUNE[pick(RUNE_KEYS)]);                // 自分の文字がひとつだけ混じる
     // 3つずつの行に折り返して、行ごとに並びを崩す
     const rows = [];
     for(let i=0;i<items.length;i+=3) rows.push(items.slice(i, i+3));
@@ -5502,7 +5620,7 @@
     ctxT.textAlign = 'left'; ctxT.fillStyle = ON;
     const gap = fs * 0.4;                                         // 単語のあいだ
     const MAXW = W*S - 8;                                         // 左右に少し余白を残す
-    const wordW = (w, k) => w.t ? ctxT.measureText(w.t).width : w.r * 6 * k - k;
+    const wordW = (w, k) => w.t ? ctxT.measureText(w.t).width : [...w.r].length * 6 * k - k;
     const lineW = (words, k) => words.reduce((a,w)=>a + wordW(w, k) + gap, -gap);
     // 自分の文字は1字ぶんが日本語より横に広い。英語のように長い行だと はみ出すので、
     //  その行だけ字を小さくして収める（日本語の行は既定の大きさのまま収まる）
@@ -5519,7 +5637,7 @@
         else {
           // 行の中で縦位置をそろえる（日本語と同じ高さに乗っているように見せる）
           const ry = top + (hRow - rh)/2;
-          for(let i=0;i<w.r;i++) stampU(DIARY_RUNE[(li*3 + wi*5 + i*3) & 7], x + i*6*k, ry, k, ON);
+          [...w.r].forEach((ch, i) => stampU(runeOf(ch), x + i*6*k, ry, k, ON));
         }
         x += wordW(w, k) + gap;
       });

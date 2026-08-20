@@ -510,11 +510,11 @@ describe('にっきの字', () => {
     const words = api.diaryWords(entry(api, { lv: api.LV_BABY }));
     const flat = words.flat();
     ok(flat.length > 0, '単語が取れること');
-    ok(flat.every(w => w.r > 0), '日本語がまじらないこと');
+    ok(flat.every(w => typeof w.r === 'string' && w.r.length), '日本語がまじらないこと');
     // 宇宙文字の数＝もとの単語の字数。書けなかった単語の長さがそのまま残る
     const body = api.diaryBody(entry(api, { lv: api.LV_BABY }));
     const lens = body.filter(l=>l).flatMap(l => l.split(' ').filter(w=>w).map(w => [...w].length));
-    eq(flat.map(w => w.r), lens, '字数がもとの単語と合うこと:');
+    eq(flat.map(w => [...w.r].length), lens, '字数がもとの単語と合うこと:');
   });
   it('おとなは、ぜんぶ日本語になる', () => {
     const { api, clock } = load({ storage:{ myvader_lang:'ja' } });
@@ -558,6 +558,57 @@ describe('にっきの字', () => {
     const d = api.LV_DOT;
     ok(d[api.LV_NEW] > d[api.LV_BABY] && d[api.LV_BABY] > d[api.LV_CHILD],
        `うまれたて>あかちゃん>こども であること（${d.join(',')}）`);
+  });
+  // ── 宇宙文字26字（A〜Z）──
+  it('宇宙文字は26字あって、同じ形が2つない', () => {
+    const { api } = load();
+    eq(api.RUNE_KEYS.length, 26);
+    const seen = new Map();
+    for(const k of api.RUNE_KEYS){
+      const sig = api.DIARY_RUNE[k].map(r => r.join('')).join('/');
+      ok(!seen.has(sig), `${k} と ${seen.get(sig)} が同じ形`);
+      seen.set(sig, k);
+    }
+  });
+  it('かなの表は、すべて実在する宇宙文字を指している', () => {
+    const { api } = load();
+    for(const [kana, letter] of Object.entries(api.KANA_LETTER))
+      ok(api.DIARY_RUNE[letter], `${kana} → ${letter} の字が無い`);
+  });
+  // でたらめに散らすのではなく規則で決まるので、読み比べれば見当がつく
+  it('同じ音はいつも同じ字になる（規則で決まる）', () => {
+    const { api } = load();
+    eq(api.runeOf('こ'), api.runeOf('か'), 'か行は同じ字:');
+    eq(api.runeOf('ご'), api.runeOf('が'), 'が行は同じ字:');
+    ok(api.runeOf('か') !== api.runeOf('が'), '清音と濁音は別の字であること');
+    ok(api.runeOf('あ') !== api.runeOf('い'), '母音どうしも別の字であること');
+  });
+  it('表に無い字でも、字形が返る（欠けたマスにしない）', () => {
+    const { api } = load();
+    for(const ch of ['ア','ー','Ｚ','!','漢'])
+      ok(Array.isArray(api.runeOf(ch)), `${ch} の字形が無い`);
+  });
+  it('同じ単語は、いつ書いても同じ並びになる', () => {
+    const { api } = load();
+    const a = [...'ごはん'].map(c => api.runeOf(c));
+    const b = [...'ごはん'].map(c => api.runeOf(c));
+    eq(a, b);
+  });
+  // 生まれて2日の子が画面いっぱいに書くのは、絵として不自然
+  it('幼いうちは、書く量そのものが少ない', () => {
+    const { api, clock } = load();
+    pet(api, clock, { P:0 });
+    const topics = st => { api.pet.stage = st; return api.diaryStyle().topics; };
+    const nw = topics('egg'), bb = topics('mid'), ch = topics('larva'), ad = topics('adult');
+    eq([nw, bb], [1, 2], 'うまれたて1話題／あかちゃん2話題:');
+    ok(ch >= bb && ad >= bb, `育つほど増えること（${nw},${bb},${ch},${ad}）`);
+  });
+  it('幼いうちは結びの言葉を書かない', () => {
+    const { api, clock } = load();
+    pet(api, clock);
+    api.pet.stage = 'egg';   eq(api.diaryStyle().close, '');
+    api.pet.stage = 'mid';   eq(api.diaryStyle().close, '');
+    api.pet.stage = 'larva'; ok(api.diaryStyle().close !== '', 'こどもからは書くこと');
   });
   it('絵記号の対応表は、すべて実在する絵を指している', () => {
     const { api } = load();
