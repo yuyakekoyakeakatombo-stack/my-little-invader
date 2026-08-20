@@ -3,14 +3,15 @@
 # これを忘れると、更新をpushしてもテスターの端末に古い版が出続ける。
 set -e
 # まず回帰テスト。ここで落ちたらコミットさせない
-if [ -f tools/test.js ]; then
-  if ! node tools/test.js; then
+for t in tools/test.js tools/mg-test.js; do
+  [ -f "$t" ] || continue
+  if ! node "$t"; then
     echo ""
-    echo "テストが通らないのでコミットを中止しました。"
+    echo "テストが通らないのでコミットを中止しました（$t）。"
     echo "どうしても通したい場合は git commit --no-verify"
     exit 1
   fi
-fi
+done
 
 WATCH='invader_game.html spacewalk_game.html shootingstar_game.html abduction_game.html index.html manual.html fonts.css register-sw.js manifest.json apple-touch-icon.png pressstart2p-latin.woff2'
 STAGED=$(git diff --cached --name-only | tr '\n' ' ')
