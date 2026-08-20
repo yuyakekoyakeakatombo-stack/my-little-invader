@@ -329,6 +329,43 @@ describe('エンディング', () => {
     for(let i=0;i<5;i++) api.checkInvade();
     ok(!api.pet.invadeFlag);
   });
+  // C（ケア度）と帰還の兆候は見ている材料が違う。あそぶ・ほめるを毎日していれば
+  //  兆候はそろわないが、ごはん・そうじ・病気を放置すればCは落ちる
+  it('帰還しない程度の放置でも、プリックリーにはなる', () => {
+    const { api, clock } = load();
+    pet(api, clock, { C:60, B:40, careStreak:2,
+                      larvaAt: clock.now() - 10*86400000, snapL:{praise:0,bad:0,plays:0} });
+    let wildAt = 0;
+    for(let d=1; d<=10; d++){
+      const p = api.pet;
+      p.dayKey = ''; p.plays.sw++; p.praiseCount++;
+      api.markTouch('play'); api.markTouch('praise');
+      api.gainB(2,'play'); api.gainB(1,'praise');
+      api.closeOneDay({ hungry:1, dirty:1, sick:1, playSw:1 }, p.touchCount, false);
+      p.touchCount = 0; p.touchKinds = {};
+      if(!wildAt && p.C < 40) wildAt = d;
+    }
+    ok(wildAt > 0, `Cが40を割るはず（実際 ${api.pet.C}）`);
+    ok(!api.pet.ufoFlag, '帰還は確定しないこと');
+    // 帰還の線は「ふれあいゼロが続く」か「兆候が2つ以上」。あそぶ・ほめるがある限り届かない
+    const sg = api.returnSigns();
+    ok(!sg.includes('notouch') && sg.length < 2, `兆候が帰還の線に届かないこと（実際 [${sg}]）`);
+  });
+  // 放置だけではPが下がる（構えば構うほど落ち着く）ので、昼夜逆転の条件に届かない。
+  //  侵攻は「夜に起こす・理不尽にしかる・夜更かしさせる」を重ねた時だけ
+  it('プリックリーになっても、放置だけなら侵攻は確定しない', () => {
+    const { api, clock } = load();
+    pet(api, clock, { stage:'final', lineage:'inv', form:'i3', formWild:true,
+               C:21, M:100, B:0, P:-100, noTouchDays:0, lowBDays:10,
+               finalAt: clock.now() - 15*86400000, lastTick: clock.now() - 3600000 });
+    ok(api.isWild(), 'プリックリーであること');
+    ok(!api.invadeSigns(), 'Pが低いので侵攻の兆候は立たない');
+    for(let i=0;i<5;i++) api.checkInvade();
+    ok(!api.pet.invadeFlag, '侵攻しないこと');
+    api.advancePet();                       // 最終形態から14日 → プリックリーの幕引き
+    ok(api.pet.ufoFlag, '行き止まりにはならず、静かな幕引きが来る');
+    eq(api.diaryLog.slice(-1)[0].t, ['farewellWild']);
+  });
   it('ワイルドにはお迎え（E4）が来ない', () => {
     const { api, clock } = load();
     pet(api, clock, { stage:'final', lineage:'inv', form:'i3', formWild:true,
