@@ -395,6 +395,55 @@ describe('エンディング', () => {
     ok(api.pet.ufoFlag, `${api.STUCK_DAYS}日を過ぎたら迎えが来る`);
     eq(api.pet.stage, 'adult', '成体のまま連れて行かれる:');
   });
+  // 21日だったころ、「週に1日だけ休む」人の甘やかしは成立と期限が同じ日になり、
+  //  間に合わなかった。なかよしは1日に3までしか伸びず、休んだ日は5下がるので、
+  //  B80まで積むのに時間がかかる。期限のほうを1週間ぶん延ばして直した
+  it('週に1日休みながら通う人でも、甘やかしが期限に間に合う', () => {
+    const { api, clock } = load();
+    Object.assign(api.pet, api.defaultPet(), { name:'T', stage:'adult', lineage:'inv' });
+    api.pet.B = 35; api.pet.careStreak = 2;
+    api.pet.total = { feed:0, snack:0, clean:0, med:0 };
+    const ADULT_DAY = 7;                       // 成体になるのは7日目あたり
+    let at = 0;
+    for(let d=1; d<=60 && !at; d++){
+      api.pet.dayKey = '';
+      if(d % 7 !== 0){                         // 週に1日だけ休む
+        api.pet.total.snack += 2;
+        api.gainB(2,'play'); api.gainB(1,'praise'); api.gainB(1,'snack'); api.gainB(1,'feed');
+        api.closeOneDay({ playSw:1 }, 3, false);
+      } else {
+        api.closeOneDay({}, 0, false);
+      }
+      if(api.pampered()) at = d;
+    }
+    ok(at > 0, `甘やかしが成立しないまま60日たった（B=${api.pet.B}）`);
+    // ちょうど期限の日に成立するのでは「間に合った」とは言えない。数日の余裕を求める
+    const margin = ADULT_DAY + api.STUCK_DAYS - at;
+    ok(margin >= 5,
+       `余裕が${margin}日しかない（成立${at}日目 / 期限${ADULT_DAY + api.STUCK_DAYS}日目）`);
+  });
+  it('毎日通う人には、この期限は邪魔をしない', () => {
+    const { api, clock } = load();
+    Object.assign(api.pet, api.defaultPet(), { name:'T', stage:'adult', lineage:'inv' });
+    api.pet.B = 35; api.pet.careStreak = 2;
+    api.pet.total = { feed:0, snack:0, clean:0, med:0 };
+    let at = 0;
+    for(let d=1; d<=60 && !at; d++){
+      api.pet.dayKey = '';
+      api.pet.total.snack += 2;
+      api.gainB(2,'play'); api.gainB(1,'praise'); api.gainB(1,'snack'); api.gainB(1,'feed');
+      api.closeOneDay({ playSw:1 }, 3, false);
+      if(api.pampered()) at = d;
+    }
+    ok(at > 0, `毎日通っても甘やかしが成立しない（B=${api.pet.B}）`);
+    const margin = 7 + api.STUCK_DAYS - at;
+    ok(margin >= 7, `毎日通っても余裕が${margin}日しかない（成立${at}日目）`);
+  });
+  it('期限は現実的な長さである', () => {
+    const { api } = load();
+    ok(api.STUCK_DAYS >= 21 && api.STUCK_DAYS <= 60,
+       `成体で止まる期限が極端（${api.STUCK_DAYS}日）`);
+  });
   it('最終形態になった子は、成体の期限では連れて行かれない', () => {
     const { api, clock } = load();
     pet(api, clock, { stage:'final', lineage:'inv', form:'i2', formWild:false,
