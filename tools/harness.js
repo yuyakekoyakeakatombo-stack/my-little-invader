@@ -17,7 +17,8 @@ const GAME = path.join(__dirname, '..', 'invader_game.html');
 const EXPORTS = `
 ;globalThis.__api = {
   get pet(){ return pet; }, set pet(v){ pet = v; },
-  defaultPet, savePet, migratePet, wasHiddenRoute, bigEater, allRounder, pampered, SAVE_V, MIGRATIONS,
+  defaultPet, savePet, migratePet, loadPet, readSave,
+  SAVE_KEY, SAVE_BAK, SAVE_BAD, get saveRecovered(){ return saveRecovered; }, wasHiddenRoute, bigEater, allRounder, pampered, SAVE_V, MIGRATIONS,
   closeOneDay, checkReturn, checkInvade, returnSigns, invadeSigns, wrathful, isWild,
   gainB, bondCapToday, markTouch, bondDrop, dailyCareScore,
   doCare, careDisabled, advancePet, maybeEvolve,

@@ -631,6 +631,8 @@
   // ペット状態（フェーズ1: 名前・日数・表示用ステータスの骨格）
   // ════════════════════════════════════════
   const SAVE_KEY = 'myvader_pet';
+  const SAVE_BAK = 'myvader_pet_bak';   // 最後に読み込めたセーブの原文（本体が壊れたときの控え）
+  const SAVE_BAD = 'myvader_pet_bad';   // 読めなかった原文の退避先。上書きせずに残しておく
   // セーブデータの形式。項目を足したり意味を変えたら1つ上げて、MIGRATIONS に手当てを書く。
   //  既定値まかせにすると、育っている途中の子に合わない値が入る（後述の v1 参照）
   const SAVE_V = 2;
@@ -734,8 +736,44 @@
     p.v = SAVE_V;
     return p;
   }
-  let pet = defaultPet();
-  try { const sv = JSON.parse(localStorage.getItem(SAVE_KEY)); if(sv && sv.name) pet = migratePet(sv); } catch(e){}
+  // ── セーブの読み込み ──
+  //  以前はここが try{ }catch(e){} ひとつで、読めなければ黙って新しいたまごから
+  //  始まっていた。移行の途中で例外が出ると、3週間育てた子が何の断りもなく消える。
+  //  実際に一度起きている（ALLROUND を宣言前に参照して、全セーブが読めなくなった）。
+  //
+  //  そこで2つ手を入れた。
+  //   ・読み込みに成功したセーブの原文を控え（_bak）に残す。次に本体が壊れていたら控えから戻す
+  //   ・読めなかった原文は捨てずに _bad へ退避する。あとから直せる余地を残すため。
+  //     控えは「一度は読めた」ものなので中身が壊れた事故には効くが、
+  //     読み込み側のコードが原因なら控えも同じように読めない。_bad はそのための保険
+  function readSave(raw){
+    if(!raw) return null;
+    const sv = JSON.parse(raw);
+    return (sv && sv.name) ? migratePet(sv) : null;
+  }
+  function loadPet(){
+    let main = null;
+    try{ main = localStorage.getItem(SAVE_KEY); }catch(e){}
+    let broken = false;
+    try {
+      const p = readSave(main);
+      if(p){ try{ localStorage.setItem(SAVE_BAK, main); }catch(e){} return p; }
+    } catch(e){
+      // 原文を退避してから控えを見る。ここで上書きすると復旧の手が無くなる
+      broken = true;
+      try{ if(main) localStorage.setItem(SAVE_BAD, main); }catch(_){}
+    }
+    // 壊れていたときだけ控えに頼る。「まだ子がいない」状態で
+    //  前の子を掘り起こしてしまわないようにするため
+    if(!broken) return null;
+    try {
+      const p = readSave(localStorage.getItem(SAVE_BAK));
+      if(p){ saveRecovered = true; return p; }
+    } catch(e){}
+    return null;
+  }
+  let saveRecovered = false;        // 控えから戻したか（日記の「ゆうべのこと」判定などには使わない）
+  let pet = loadPet() || defaultPet();
   if(pet.name && !pet.lastTick) pet.lastTick = Date.now();  // 旧セーブ互換
 
   // ミニゲームへ渡す自機系統（デフォルメ6種のキー）
@@ -5246,7 +5284,9 @@
           setWeatherMode('off'); cityIdx = 0; inWeather = false;
           clearInterval(debugTimer);
           timeOfDay=getTimeOfDay();
-          try{ localStorage.removeItem(SAVE_KEY); }catch(e){}
+          // 控えと退避も一緒に消す。残すと、次の子を育てたあとで
+          //  前の子のセーブが復活してしまう
+          try{ [SAVE_KEY, SAVE_BAK, SAVE_BAD].forEach(k => localStorage.removeItem(k)); }catch(e){}
           clearDiary();                    // 日記が消えるのはこのリセットの時だけ
           pet = defaultPet(); nameBuf=''; nameCur=0; onSlots=false;
           ufoEnding = false; ufoT = 0; departEnding = false; departT = 0; invadeEnding = false; invadeT = 0; invadeGoneAt = 0; evoT = 0;

@@ -778,6 +778,58 @@ describe('進化', () => {
 });
 
 // ══ セーブデータの移行 ════════════════════════════════════
+// ══ セーブの保護 ══════════════════════════════════════════
+//  読めなかったときに黙って新しいたまごから始めると、3週間育てた子が
+//  何の断りもなく消える。実際に一度起きているので、控えと退避で守る
+describe('セーブの保護', () => {
+  const good = JSON.stringify({ name:'GOOD', stage:'larva', lineage:'inv',
+    B:50, C:50, D:50, Dm:50, P:0, EP:4, v:2, hunger:4, mood:4, health:'GOOD' });
+
+  it('読み込めたら、その原文を控えに残す', () => {
+    const { api, store } = load({ storage:{ myvader_pet: good } });
+    eq(api.pet.name, 'GOOD', 'ふつうに読めること:');
+    eq(store.get('myvader_pet_bak'), good, '控えが原文のまま残ること:');
+    ok(!store.has('myvader_pet_bad'), '退避は作られないこと');
+  });
+  it('本体が壊れていたら、控えから戻す', () => {
+    const { api } = load({ storage:{ myvader_pet: '{こわれた', myvader_pet_bak: good } });
+    eq(api.pet.name, 'GOOD', '控えの子が戻ること:');
+    ok(api.saveRecovered, '控えから戻したことが分かること');
+  });
+  it('読めなかった原文は捨てずに退避する', () => {
+    const { store } = load({ storage:{ myvader_pet: '{こわれた' } });
+    eq(store.get('myvader_pet_bad'), '{こわれた', '原文がそのまま残ること:');
+  });
+  it('本体も控えも壊れていても、落ちずに新しく始まる', () => {
+    const { api } = load({ storage:{ myvader_pet: '{こわれた', myvader_pet_bak: 'これも壊れている' } });
+    eq(api.pet.name, '', '新しいたまごから始まること:');
+  });
+  // 「まだ子がいない」状態と「壊れている」状態を取り違えると、
+  //  リセットしたあとに前の子が掘り起こされてしまう
+  it('まだ子がいないときは、控えを掘り起こさない', () => {
+    const empty = JSON.stringify({ name:'', stage:'egg' });
+    const { api } = load({ storage:{ myvader_pet: empty, myvader_pet_bak: good } });
+    eq(api.pet.name, '', '前の子が戻ってこないこと:');
+  });
+  it('セーブが空でも、控えを掘り起こさない', () => {
+    const { api } = load({ storage:{ myvader_pet_bak: good } });
+    eq(api.pet.name, '', '');
+  });
+  it('控えから戻した子も、ちゃんと移行を通る', () => {
+    const oldSave = JSON.stringify({ name:'OLD', stage:'final', lineage:'inv', form:'i1',
+      B:50, C:50, D:50, EP:11 });                       // 版番号なし
+    const { api } = load({ storage:{ myvader_pet: '{こわれた', myvader_pet_bak: oldSave } });
+    eq(api.pet.name, 'OLD');
+    eq(api.pet.v, api.SAVE_V, '最新の版に上がっていること:');
+    eq(api.pet.total, { feed:0, snack:0, clean:0, med:0 }, '欠けた項目が埋まること:');
+  });
+  it('控え・退避の鍵は本体とぶつからない', () => {
+    const { api } = load();
+    const keys = [api.SAVE_KEY, api.SAVE_BAK, api.SAVE_BAD];
+    eq(new Set(keys).size, 3, '3つとも別の名前であること:');
+  });
+});
+
 describe('セーブ移行', () => {
   // 版番号を持たない、いちばん古い形のセーブ（隠しパラメータが増える前）
   const old = (over = {}) => Object.assign({
@@ -992,6 +1044,14 @@ describe('ファイル', () => {
          `${f}: 得点が右そろえ4桁になっていない`);
       ok(/,\s*59,\s*7,/.test(src), `${f}: フッターが y=59 / 7px になっていない`);
     }
+  });
+  // ALL RESET の処理は画面の操作の中にあり、テストから呼べない。
+  //  控えを消し忘れると、リセットして育て直した子のセーブが壊れたときに
+  //  前の子が掘り起こされる。消しているかをソースで押さえておく
+  it('ALL RESET が控えと退避もまとめて消している', () => {
+    const src = read('invader_game.html');
+    ok(/\[SAVE_KEY,\s*SAVE_BAK,\s*SAVE_BAD\]\.forEach\(k\s*=>\s*localStorage\.removeItem\(k\)\)/.test(src),
+       'ALL RESET が3つの鍵をまとめて消していない');
   });
   it('サービスワーカーのVERSIONが日付の形をしている', () => {
     const m = read('sw.js').match(/const VERSION = '([^']+)'/);
