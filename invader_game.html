@@ -1726,9 +1726,166 @@
   }catch(e){}
   function saveDiary(){ try{ localStorage.setItem(DIARY_KEY, JSON.stringify({log:diaryLog, unread:diaryUnread})); }catch(e){} }
   function clearDiary(){ diaryLog = []; diaryUnread = 0; try{ localStorage.removeItem(DIARY_KEY); }catch(e){} }
-  // 中間体になったら日記を書き始める。書いたものは死んでも帰還しても読み返せる
-  function diaryWriting(){ return !!pet.stage && pet.stage !== 'egg'; }
+  // 来たその日から日記を書く。書いたものは死んでも帰還しても読み返せる。
+  //  名前をつける前（まだ来ていない）は書かない
+  function diaryWriting(){ return !!pet.name && !!pet.stage; }
   function diaryUnlocked(){ return diaryWriting() || diaryLog.length > 0; }
+
+  // ════════════════════════════════════════
+  // にっきの「字」──よその星から来たばかりの子は、地球の言葉をまだ書けない。
+  //  うまれたて：絵とらくがき／あかちゃん：ぜんぶ自分の文字／
+  //  こども：書ける単語から日本語になる／おとな：ぜんぶ書ける。
+  //  段階は書いた時点で日記に焼き付ける（lv）。あとから読み返しても、その日の字のままにするため
+  // ════════════════════════════════════════
+  const LV_NEW = 0, LV_BABY = 1, LV_CHILD = 2, LV_ADULT = 3;
+  const LV_DOT = [4, 3, 2, 0];        // 段階ごとの1ドットの大きさ。育つほど字が小さく整っていく
+  function diaryLevel(){
+    return pet.stage === 'egg'   ? LV_NEW
+         : pet.stage === 'mid'   ? LV_BABY
+         : pet.stage === 'larva' ? LV_CHILD : LV_ADULT;
+  }
+  // こどもの間に、書ける単語が増えていく割合。幼体はEP 1→4 で成体になるので、その進み具合で見る
+  function writeRatio(){ return Math.max(0, Math.min(1, ((pet.EP||0) - 1) / 3)); }
+  const dotArt = s => s.trim().split('\n').map(r => r.trim().split('').map(c => c === '#' ? 1 : 0));
+
+  // 絵記号 7×5。日記の出来事タグをそのまま絵にしたもの（保存する情報は増えない）
+  const DIARY_PICT = {
+    fed:     dotArt(`..#.#..
+                     .......
+                     #######
+                     .#####.
+                     ..###..`),
+    hungry:  dotArt(`.......
+                     .......
+                     #######
+                     .#...#.
+                     ..###..`),
+    snack:   dotArt(`#.....#
+                     .#####.
+                     .#####.
+                     .#####.
+                     #.....#`),
+    praised: dotArt(`.##.##.
+                     #######
+                     #######
+                     .#####.
+                     ...#...`),
+    scolded: dotArt(`...#...
+                     ...#...
+                     ...#...
+                     .......
+                     ...#...`),
+    dirty:   dotArt(`...#...
+                     ..###..
+                     ..###..
+                     .#####.
+                     #######`),
+    cleaned: dotArt(`#..#..#
+                     .#.#.#.
+                     ..###..
+                     .#.#.#.
+                     #..#..#`),
+    play:    dotArt(`#.#####
+                     .#####.
+                     #######
+                     .#...#.
+                     #.#.#.#`),
+    slept:   dotArt(`#####..
+                     ...#...
+                     ..#....
+                     .#.....
+                     #####..`),
+    clear:   dotArt(`#..#..#
+                     .#####.
+                     .#...#.
+                     .#####.
+                     #..#..#`),
+    rain:    dotArt(`#######
+                     .......
+                     #..#..#
+                     .#..#..
+                     #..#..#`),
+    sick:    dotArt(`...#...
+                     ...#...
+                     .#####.
+                     ...#...
+                     ...#...`),
+  };
+  // 出来事タグ → 絵記号。絵にならないタグ（別れ・進化など）は描かない
+  const TAG_PICT = {
+    fed:'fed', hungry:'hungry', snack:'snack', snackMany:'snack',
+    praised:'praised', scolded:'scolded', woken:'scolded', tantrum:'scolded',
+    dirty:'dirty', cleaned:'cleaned', sick:'sick', cured:'sick',
+    playSw:'play', playSs:'play', playAb:'play',
+    slept:'slept', clear:'clear', rain:'rain', snow:'rain',
+  };
+  // 地球外の文字。意味は持たない。書けなかった単語の代わりに置く
+  const DIARY_RUNE = [
+    dotArt(`#...#
+            .#.#.
+            ..#..
+            .#.#.
+            #...#`),
+    dotArt(`#####
+            ..#..
+            .###.
+            ..#..
+            #####`),
+    dotArt(`..#..
+            .###.
+            #.#.#
+            ..#..
+            ..#..`),
+    dotArt(`#...#
+            #####
+            ..#..
+            #####
+            #...#`),
+    dotArt(`.###.
+            #...#
+            #.###
+            #...#
+            .###.`),
+    dotArt(`#..#.
+            .#..#
+            #..#.
+            .#..#
+            #..#.`),
+    dotArt(`..#..
+            #####
+            ..#..
+            #####
+            ..#..`),
+    dotArt(`##.##
+            .#.#.
+            ..#..
+            .#.#.
+            ##.##`),
+  ];
+  // うまれたてだけに混じる、意味のない筆致
+  const DIARY_SCRAWL = [
+    dotArt(`.....
+            #..#.
+            .##..
+            ...#.
+            .....`),
+    dotArt(`.....
+            ..#..
+            .#.#.
+            #...#
+            .....`),
+    dotArt(`.....
+            #####
+            .....
+            .....
+            .....`),
+  ];
+  // 日付から決まる乱数。同じ日記を開き直しても毎回おなじ形にするため（日替わりでちらつかせない）
+  function diaryRnd(seedStr){
+    let s = 2166136261;
+    for(let i=0;i<seedStr.length;i++){ s ^= seedStr.charCodeAt(i); s = Math.imul(s, 16777619); }
+    return () => { s ^= s << 13; s ^= s >>> 17; s ^= s << 5; s |= 0; return ((s >>> 0) % 100000) / 100000; };
+  }
 
   // 性格で書き方が変わる。おっとりはまめに長く、やんちゃは書き忘れる日があって短い
   function diaryStyle(){
@@ -1824,8 +1981,11 @@
     });
     const c = solo ? '' : st.close;
     const cv = c ? pickFresh(DIARY_CLOSE[c].map((_, i) => i), i => 'c:' + c + ':' + i, used) : 0;
+    // lv＝書いた時点の字の段階／wr＝そのとき書けた単語の割合。焼き付けておかないと、
+    //  育ったあとに読み返したとき、幼いころの日記まで達筆になってしまう
     return { d: dayNo || petDay(), n: pet.name, t: picked, v: v,
-             s: solo, vo: voice(), c: c, cv: cv, ts: Date.now(), cd: cd || todayKey() };
+             s: solo, vo: voice(), c: c, cv: cv, ts: Date.now(), cd: cd || todayKey(),
+             lv: diaryLevel(), wr: Math.round(writeRatio() * 100) / 100 };
   }
   function addDiary(e){
     if(!e) return;
@@ -1870,6 +2030,36 @@
       lines.forEach(l=>out.push(l));
     });
     return out;
+  }
+  // 日記の字の段階。lv を持たない古い日記は、これまで通りの日本語で読ませる
+  function entryLevel(e){ return (e && e.lv != null) ? (e.lv|0) : LV_ADULT; }
+  // あかちゃん・こども：本文の単語を、書けるものは日本語、書けないものは自分の文字にする。
+  //  本文はもともと単語がスペースで区切られているので、その区切りをそのまま使える。
+  //  どの単語を書けるかは日付から決まるので、開き直しても毎回おなじになる
+  function diaryWords(e){
+    const lv = entryLevel(e);
+    const ratio = (lv <= LV_BABY) ? 0 : (e.wr == null ? 1 : e.wr);
+    const rnd = diaryRnd('w' + (e.cd || '') + (e.d || 0));
+    return diaryBody(e).map(l => {
+      if(!l) return [];
+      return l.split(' ').filter(w => w.length)
+              .map(w => (rnd() < ratio) ? { t: w } : { r: [...w].length });
+    });
+  }
+  // うまれたて：まだ単語という形になっていない。その日の出来事を絵にして、
+  //  らくがきと、ひとつだけ自分の文字を混ぜる
+  function diaryMarks(e){
+    const rnd = diaryRnd('m' + (e.cd || '') + (e.d || 0));
+    const pick = a => a[Math.floor(rnd() * a.length) % a.length];
+    const items = [];
+    (e.t || []).forEach(t => { const k = TAG_PICT[t]; if(k) items.push(DIARY_PICT[k]); });
+    if(!items.length) items.push(pick(DIARY_SCRAWL));       // 絵にならない日でも、書いた跡は残す
+    items.push(pick(DIARY_SCRAWL));
+    items.push(pick(DIARY_RUNE));                           // 自分の文字がひとつだけ混じる
+    // 3つずつの行に折り返して、行ごとに並びを崩す
+    const rows = [];
+    for(let i=0;i<items.length;i+=3) rows.push(items.slice(i, i+3));
+    return rows;
   }
 
 
@@ -5268,6 +5458,75 @@
     if(diaryUnread > 0){ diaryUnread = 0; saveDiary(); }   // 開いたら既読
     showView('diary');
   }
+  // ── 日記の本文を描く（3通り）──
+  //  本文の入る帯は y20〜50。どの描き方でも、この中で上下中央にそろえる
+  const DBODY_TOP = 20, DBODY_BOT = 50;
+  function stampU(g, px, py, u, col){         // 1ドットの大きさを変えて置く
+    ctxT.fillStyle = col || ON;
+    g.forEach((row,ry)=>row.forEach((v,rx)=>{ if(v) ctxT.fillRect(px+rx*u, py+ry*u, u, u); }));
+  }
+  function drawDiaryText(e){
+    const body = e ? diaryBody(e) : (lang==='ja' ? DIARY_EMPTY.ja : DIARY_EMPTY.en);
+    const fs = (lang === 'ja') ? 10 : 6;
+    const { y0, lh } = bodyRows(body.length, fs, body.length <= 5 ? 14 : 10);   // 行数が多い時だけ詰める
+    ctxT.font = (lang==='ja') ? (fs+'px '+JP_FONT) : fs+'px "Press Start 2P"';
+    ctxT.fillStyle = ON;
+    ctxT.textAlign = 'center';
+    body.forEach((line,i)=>{ if(line) ctxT.fillText(line, (W*S)/2, y0 + i*lh); });
+  }
+  // 本文を帯（y20〜50）の中で上下中央にそろえる。はみ出しそうなら行間を詰める。
+  //  このキャンバスは textBaseline='top' なので、返す y は「行の上端」
+  function bodyRows(n, hRow, hGap){
+    const top = DBODY_TOP * S, bot = DBODY_BOT * S;
+    let lh = hRow + hGap;
+    if(n > 1 && top + (n-1)*lh + hRow > bot) lh = Math.max(hRow + 1, (bot - top - hRow) / (n - 1));
+    const y0 = Math.max(top, Math.round((top + bot)/2 - ((n-1)*lh + hRow)/2));
+    return { y0, lh };
+  }
+  // うまれたて：絵とらくがきを行に並べる。1ドットは画面のドットと同じ大きさ＝いちばん字が大きい
+  function drawDiaryMarks(e){
+    const u = LV_DOT[LV_NEW], rows = diaryMarks(e), h = 5 * u;
+    const { y0, lh } = bodyRows(rows.length, h, 3 * u);
+    rows.forEach((row, ri) => {
+      const w = row.reduce((a,g)=>a + (g[0].length + 2) * u, -2 * u);
+      let x = Math.round((W*S - w) / 2);
+      row.forEach(g => { stampU(g, x, y0 + ri*lh, u, ON); x += (g[0].length + 2) * u; });
+    });
+  }
+  // あかちゃん・こども：単語ごとに、日本語か自分の文字か。
+  //  自分の文字は「その単語の字数ぶん」置くので、書けなかった単語の長さがそのまま残る
+  function drawDiaryWords(e){
+    const lv = entryLevel(e), u = LV_DOT[lv], lines = diaryWords(e);
+    const fs = (lang === 'ja') ? 10 : 6;
+    ctxT.font = (lang==='ja') ? (fs+'px '+JP_FONT) : fs+'px "Press Start 2P"';
+    ctxT.textAlign = 'left'; ctxT.fillStyle = ON;
+    const gap = fs * 0.4;                                         // 単語のあいだ
+    const MAXW = W*S - 8;                                         // 左右に少し余白を残す
+    const wordW = (w, k) => w.t ? ctxT.measureText(w.t).width : w.r * 6 * k - k;
+    const lineW = (words, k) => words.reduce((a,w)=>a + wordW(w, k) + gap, -gap);
+    // 自分の文字は1字ぶんが日本語より横に広い。英語のように長い行だと はみ出すので、
+    //  その行だけ字を小さくして収める（日本語の行は既定の大きさのまま収まる）
+    const fit = words => { let k = u; while(k > 1 && lineW(words, k) > MAXW) k--; return k; };
+    const hRow = Math.max(fs, 5 * u);
+    const { y0, lh } = bodyRows(lines.length, hRow, 6);
+    lines.forEach((words, li) => {
+      if(!words.length) return;
+      const k = fit(words), rh = 5 * k;
+      let x = Math.round((W*S - lineW(words, k)) / 2);
+      const top = y0 + li * lh;
+      words.forEach((w, wi) => {
+        if(w.t){ ctxT.fillText(w.t, x, top + (hRow - fs)/2); }
+        else {
+          // 行の中で縦位置をそろえる（日本語と同じ高さに乗っているように見せる）
+          const ry = top + (hRow - rh)/2;
+          for(let i=0;i<w.r;i++) stampU(DIARY_RUNE[(li*3 + wi*5 + i*3) & 7], x + i*6*k, ry, k, ON);
+        }
+        x += wordW(w, k) + gap;
+      });
+    });
+    ctxT.textAlign = 'center';
+  }
+
   function tickDiary(){
     if(scene !== 'diary') return;
     ctxT.fillStyle=OFF; ctxT.fillRect(0,0,W*S,H*S);
@@ -5295,16 +5554,10 @@
     }
     for(let x=6;x<W-6;x++) dot(ctxT, x, 17, DIM);
     // 本文（材料から組み立てた行）。ページ数(y57)に掛からないよう上下中央に置く
-    const body = e ? diaryBody(e) : (lang==='ja' ? DIARY_EMPTY.ja : DIARY_EMPTY.en);
-    const TOP = 20, BOT = 50;
-    const LH = (body.length <= 5) ? 6 : 5;         // 行数が多い時だけ詰める
-    const y0 = Math.max(TOP, Math.round((TOP + BOT)/2 - (body.length - 1)*LH/2));
-    ctxT.font = (lang==='ja') ? ('10px '+JP_FONT) : '6px "Press Start 2P"';
-    ctxT.fillStyle = ON;
-    body.forEach((line,i)=>{
-      if(!line) return;
-      ctxT.fillText(line, (W*S)/2, (y0 + i*LH)*S);
-    });
+    const lv = e ? entryLevel(e) : LV_ADULT;
+    if(!e || lv === LV_ADULT) drawDiaryText(e);   // ぜんぶ書ける（いままでどおり）
+    else if(lv === LV_NEW)    drawDiaryMarks(e);  // 絵とらくがき
+    else                      drawDiaryWords(e);  // 単語ごとに日本語か自分の文字か
     // ページ数（本文の下）。書いた本人の名前は見出しに出るので、ここでは繰り返さない
     if(e){
       ctxT.font = uiFont(6); ctxT.fillStyle = DIM;

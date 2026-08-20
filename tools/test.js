@@ -455,6 +455,117 @@ describe('日記', () => {
   });
 });
 
+// ══ にっきの字 ══════════════════════════════════════════
+//  よその星から来たばかりの子は地球の言葉を書けない。段階が上がるにつれて書けるようになる
+describe('にっきの字', () => {
+  // その日1日ぶんの材料を持たせた日記をひとつ作る
+  const entry = (api, over) => Object.assign({
+    d:1, n:'T', t:['fed','praised'], v:[0,0], s:'', vo:'plain', c:'', cv:0,
+    ts:0, cd:'2026-8-20' }, over);
+
+  it('来たその日から日記を書く（うまれたてでも書く）', () => {
+    const { api, clock } = load();
+    pet(api, clock, { stage:'egg', name:'T' });
+    ok(api.diaryWriting(), 'うまれたてでも書くこと');
+    eq(api.diaryLevel(), api.LV_NEW);
+    ok(api.menuList().some(m => m[1] === 'diary'), 'メニューに にっき が並ぶこと');
+  });
+  it('名前をつける前は書かない', () => {
+    const { api, clock } = load();
+    pet(api, clock, { stage:'egg', name:'' });
+    ok(!api.diaryWriting());
+    ok(!api.menuList().some(m => m[1] === 'diary'), 'まだ来ていないので並ばないこと');
+  });
+  it('到着した日の夜に、その日ぶんが1件書かれる', () => {
+    const { api, clock } = load();
+    const now = clock.now();
+    pet(api, clock, { stage:'egg', name:'DAY1', birth:now, lastTick:now,
+                      calDay:api.todayKey(), diaryDay:'', EP:0.2, eggTargetEP:1.25,
+                      wokeUntil: now + 86400000 });
+    api.pet.diary = { fed:1, cleaned:1, praised:1 };
+    const base = (()=>{ const x = new Date(now); x.setHours(0,0,0,0); return x.getTime(); })();
+    for(let h=10; h<=22; h++){ clock.set(base + h*3600000); api.advancePet(); }
+    eq(api.diaryLog.length, 1, '初日の夜に届くこと:');
+    eq(api.diaryLog[0].lv, api.LV_NEW, 'うまれたての字で書かれること:');
+  });
+  it('段階は書いた時点で焼き付ける（あとから読み返しても変わらない）', () => {
+    const { api, clock } = load();
+    pet(api, clock, { stage:'egg', name:'T', diary:{fed:1} });
+    const e = api.buildDiary({ fed:1 }, 1);
+    eq(e.lv, api.LV_NEW);
+    api.pet.stage = 'final';                       // 育っても、その日記の段階は動かない
+    eq(api.entryLevel(e), api.LV_NEW);
+  });
+  it('段階を持たない古い日記は、これまで通り日本語で読める', () => {
+    const { api, clock } = load();
+    pet(api, clock);
+    const e = entry(api, {});
+    delete e.lv;
+    eq(api.entryLevel(e), api.LV_ADULT);
+    ok(api.diaryBody(e).length > 0, '本文が出ること');
+  });
+  it('あかちゃんは、単語がぜんぶ自分の文字になる', () => {
+    const { api, clock } = load({ storage:{ myvader_lang:'ja' } });
+    pet(api, clock);
+    const words = api.diaryWords(entry(api, { lv: api.LV_BABY }));
+    const flat = words.flat();
+    ok(flat.length > 0, '単語が取れること');
+    ok(flat.every(w => w.r > 0), '日本語がまじらないこと');
+    // 宇宙文字の数＝もとの単語の字数。書けなかった単語の長さがそのまま残る
+    const body = api.diaryBody(entry(api, { lv: api.LV_BABY }));
+    const lens = body.filter(l=>l).flatMap(l => l.split(' ').filter(w=>w).map(w => [...w].length));
+    eq(flat.map(w => w.r), lens, '字数がもとの単語と合うこと:');
+  });
+  it('おとなは、ぜんぶ日本語になる', () => {
+    const { api, clock } = load({ storage:{ myvader_lang:'ja' } });
+    pet(api, clock);
+    const flat = api.diaryWords(entry(api, { lv: api.LV_ADULT, wr:1 })).flat();
+    ok(flat.length > 0 && flat.every(w => w.t), '自分の文字が残らないこと');
+  });
+  it('こどもは、書ける単語の割合が増えるほど日本語が増える', () => {
+    const { api, clock } = load({ storage:{ myvader_lang:'ja' } });
+    pet(api, clock);
+    const jp = wr => api.diaryWords(entry(api, { lv: api.LV_CHILD, wr })).flat().filter(w => w.t).length;
+    const lo = jp(0.1), hi = jp(0.9);
+    ok(lo < hi, `割合が高いほど日本語が多いこと（0.1→${lo}語 / 0.9→${hi}語）`);
+    eq(jp(0), 0, '0なら1語も書けないこと:');
+  });
+  it('同じ日記は何度組み直しても同じ形になる（開くたびに変わらない）', () => {
+    const { api, clock } = load({ storage:{ myvader_lang:'ja' } });
+    pet(api, clock);
+    const e = entry(api, { lv: api.LV_CHILD, wr:0.5 });
+    eq(api.diaryWords(e), api.diaryWords(e), '単語の置き換えが毎回同じ:');
+    const m = entry(api, { lv: api.LV_NEW });
+    eq(api.diaryMarks(m).map(r=>r.length), api.diaryMarks(m).map(r=>r.length), '絵の並びが毎回同じ:');
+  });
+  it('うまれたては、その日の出来事が絵になる', () => {
+    const { api, clock } = load();
+    pet(api, clock);
+    const rows = api.diaryMarks(entry(api, { lv: api.LV_NEW, t:['fed','praised'] }));
+    const flat = rows.flat();
+    ok(flat.includes(api.DIARY_PICT.fed), 'ごはんの絵が入ること');
+    ok(flat.includes(api.DIARY_PICT.praised), 'ほめられた絵が入ること');
+    ok(flat.length >= 3, 'らくがきと自分の文字も混じること');
+  });
+  it('絵にならないタグの日でも、書いた跡は残る', () => {
+    const { api, clock } = load();
+    pet(api, clock);
+    const rows = api.diaryMarks(entry(api, { lv: api.LV_NEW, t:['evolved'] }));
+    ok(rows.flat().length > 0, '空白のページにはしないこと');
+  });
+  it('段階が上がるほど字は小さくなる', () => {
+    const { api } = load();
+    const d = api.LV_DOT;
+    ok(d[api.LV_NEW] > d[api.LV_BABY] && d[api.LV_BABY] > d[api.LV_CHILD],
+       `うまれたて>あかちゃん>こども であること（${d.join(',')}）`);
+  });
+  it('絵記号の対応表は、すべて実在する絵を指している', () => {
+    const { api } = load();
+    for(const [tag, key] of Object.entries(api.TAG_PICT))
+      ok(api.DIARY_PICT[key], `${tag} → ${key} の絵が無い`);
+  });
+});
+
 // ══ 進化 ══════════════════════════════════════════════════
 //  プランプ＝大食い または 甘やかし ／ スリーク＝丁寧なケア かつ ミニゲーム制覇 ／
 //  プリックリー＝ケアが雑。どれにも当たらなければ最終形態にならず、成体のままとどまる
