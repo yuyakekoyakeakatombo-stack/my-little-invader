@@ -3174,6 +3174,12 @@
     drawFly(px+3, topY - lump.length - 1, 0, NK, DM);
     drawFly(px + foodW(kind) - 3, topY - lump.length - 2, 1, NK, DM);
   }
+  // うんち1個につきハエは2匹。位相をずらして別々に舞わせる（cx＝うんちの中心）。
+  //  ハエは左右±2ふらつき、羽が±1つくので、bx は 3〜50 に収めないと画面外へ出る
+  function drawPoopFlies(cx, i, NK, DM){
+    drawFly(Math.max(3,  cx - 1), MAIN_GY-6, i*2,     NK, DM);
+    drawFly(Math.min(50, cx + 2), MAIN_GY-8, i*2 + 1, NK, DM);
+  }
   // うんちを放置するとハエがたかる（傷んだ皿と同じ2時間。DEBUG中は2分）
   function poopHasFlies(){
     if(!pet.W || !pet.poopSince) return false;
@@ -4370,7 +4376,7 @@
     const poopFly = poopHasFlies();
     for(let i=0;i<pet.W && i<POOP_X.length;i++){
       stamp(ctxM, POOP_SPR, POOP_X[i], MAIN_GY-4, NK);          // 足元を地面に接地させる
-      if(poopFly) drawFly(POOP_X[i]+2, MAIN_GY-6, i, NK, DM);   // 放置中はハエがたかる
+      if(poopFly) drawPoopFlies(POOP_X[i]+2, i, NK, DM);        // 放置中はハエがたかる
     }
 
     // ── CLEAN：汚れが左から順に消えて、消えた場所にキラキラが弾ける ──
@@ -4388,7 +4394,7 @@
         if(prog < gone){
           if(it.kind==='poop'){
             stamp(ctxM, POOP_SPR, it.x, MAIN_GY-4, NK);
-            if(cleanSnapPoopFly) drawFly(it.cx, MAIN_GY-6, it.i, NK, DM);
+            if(cleanSnapPoopFly) drawPoopFlies(it.cx, it.i, NK, DM);
           } else if(cleanSnapSpoiled){
             drawSpoiledPlate(plateX, MAIN_GY-1, NK, DM, cleanSnapKind);
           } else {
