@@ -300,6 +300,54 @@ describe('生活リズム', () => {
   });
 });
 
+// ══ 来たばかりのころ ══════════════════════════════════════
+//  うまれたては19時〜8時が就寝。夜に始めると、名前をつけた直後に
+//  寝顔だけ見て終わってしまうので、しばらくは起きているようにした
+describe('到着', () => {
+  // 指定した時刻ちょうどに名前をつけた状態にする
+  const arriveAt = (api, clock, hour) => {
+    const x = new Date(clock.now()); x.setHours(hour, 0, 0, 0);
+    clock.set(x.getTime());
+    Object.assign(api.pet, api.defaultPet(), { stage:'egg', hunger:4, mood:4 });
+    api.birthPet('YORU');
+    return x.getTime();
+  };
+  it('夜に始めても、しばらくは起きている', () => {
+    for(const h of [23, 2, 5]){
+      const { api, clock } = load();
+      const t0 = arriveAt(api, clock, h);
+      ok(api.isAsleep(new Date(t0)), `${h}時は本来なら就寝中であること`);
+      ok(!api.effectiveAsleep(), `${h}時: 来た直後に寝てしまっている`);
+      clock.set(t0 + api.ARRIVE_AWAKE_MS - 60000);
+      ok(!api.effectiveAsleep(), `${h}時: 30分たつ前に寝てしまっている`);
+    }
+  });
+  it('しばらくしたら、ちゃんと寝る', () => {
+    const { api, clock } = load();
+    const t0 = arriveAt(api, clock, 23);
+    clock.set(t0 + api.ARRIVE_AWAKE_MS + 60000);
+    ok(api.effectiveAsleep(), '起きたままにはしない');
+  });
+  it('起きている時間は30分ぶん（長すぎず短すぎず）', () => {
+    const { api } = load();
+    eq(api.ARRIVE_AWAKE_MS, 30 * 60000);
+  });
+  it('昼に始めた場合は、いつもどおり起きている', () => {
+    const { api, clock } = load();
+    const t0 = arriveAt(api, clock, 10);
+    clock.set(t0 + 3 * 3600000);              // 3時間たっても昼のうち
+    ok(!api.effectiveAsleep());
+  });
+  it('名前をつけた時刻が、その子の起点になる', () => {
+    const { api, clock } = load();
+    const t0 = arriveAt(api, clock, 23);
+    eq(api.pet.birth, t0, 'たんじょう:');
+    eq(api.pet.lastTick, t0, '時間の進行の起点:');
+    ok(api.pet.eggTargetEP > 0, '進化までの目標が決まること');
+    eq(api.petDay(), 1, '1日目から始まること:');
+  });
+});
+
 // ══ エンディングの棲み分け ════════════════════════════════
 describe('エンディング', () => {
   it('無関心な放置は帰還（E3）になる', () => {

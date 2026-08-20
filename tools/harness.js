@@ -23,7 +23,7 @@ const EXPORTS = `
   gainB, bondCapToday, markTouch, bondDrop, dailyCareScore,
   doCare, careDisabled, advancePet, maybeEvolve,
   hungerMin, feedGain, feedFill, HUNGER_MAX,
-  sleepConfig, isAsleep, sleepKind, stayingUpLate, effectiveAsleep, owlShift,
+  sleepConfig, isAsleep, birthPet, ARRIVE_AWAKE_MS, sleepKind, stayingUpLate, effectiveAsleep, owlShift,
   pickForm, pickLineage, pickVoice, voice, voiceIdx, pTrait,
   todayKey, petDay, daysBetweenKeys,
   formLabel, endLabel, typeLabel, stageLabel, menuList,

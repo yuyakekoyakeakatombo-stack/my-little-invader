@@ -653,7 +653,7 @@
     mealCount:0, snackCount:0,            // ごはん／おやつを与えた回数（日次で減衰。おやつ過多の判定用）
     total:{feed:0, snack:0, clean:0, med:0},  // 一生ぶんの通算。おもいで画面でだけ使う（減衰させない）
     poopAt:0, poopSince:0,                // 次のうんち発生時刻／最初のうんちが出た時刻（放置でハエ）
-    wokeUntil:0,                          // しかられて起きている期限
+    wokeUntil:0,                          // 一時的に起きている期限（しかられて／来たばかりで）
     rhythmUntil:0,                        // しかって正した生活リズムが続く期限（この間は夜型シフトを外す）
     nightCareAt:0,                        // 最後に夜ふけの世話をした時刻（Pの加算を1時間に1回に絞る）
     dayKey:'', bGainToday:0,              // なつき度の日次獲得上限管理
@@ -2316,6 +2316,19 @@
   //  睡眠時間そのものは変えない。ずれた結果、昼間に寝ている時間が生まれるのがこの仕組みの肝。
   const OWL_MAX = 5;   // やんちゃMAXでのシフト量（時間）。inv基準なら就寝23時→4時、起床8時→13時
   const SLEEP_DELAY_MS  = 8 * 60000;   // 夜更かしをしかってから、実際に寝入るまでの間
+  // 来たばかりの子は、就寝時間帯に着いてもしばらく起きている。
+  //  夜に始めた人が、名前をつけた直後に寝顔だけ見て終わるのを避けるため。
+  //  はじめましての時間は要る、という理屈でもある
+  const ARRIVE_AWAKE_MS = 30 * 60000;
+  // 名前が決まった＝この子が来た瞬間。一生の起点をここでそろえる
+  function birthPet(name){
+    pet.name = name;
+    if(!pet.birth) pet.birth = Date.now();
+    pet.lastTick = Date.now();
+    pet.wokeUntil = Date.now() + ARRIVE_AWAKE_MS;   // 就寝時間帯に来てもしばらくは起きている
+    pet.eggTargetEP = rollEggTarget();              // この個体のNEWBORN→BABY時間(30h±5h)を決定
+    savePet();
+  }
   const NIGHT_CARE_FROM = 22, NIGHT_CARE_TO = 4;   // この時間帯の世話は「夜型のお世話」とみなす
   //  ミニゲームの夜更かし判定と同じ窓にしてある。就寝時刻より前から数えないと、
   //  リズムが整っている子は23時にはもう寝ていて、夜型の世話が一度も成立しない
@@ -2760,11 +2773,7 @@
     if(onDone){
       if(nameBuf.length >= 1){
         playClick(1400);
-        pet.name = nameBuf;
-        if(!pet.birth) pet.birth = Date.now();
-        pet.lastTick = Date.now();
-        pet.eggTargetEP = rollEggTarget();   // この個体のNEWBORN→BABY時間(30h±5h)を決定
-        savePet();
+        birthPet(nameBuf);
         showView('main');
       } else { playClick(300); }
     } else {
