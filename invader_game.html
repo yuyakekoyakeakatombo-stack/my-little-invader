@@ -2004,9 +2004,10 @@
   // 性格で書き方が変わる。おっとりはまめに長く、やんちゃは書き忘れる日があって短い
   function diaryStyle(){
     const t = pTrait();                       // -1=おっとり … +1=やんちゃ
-    // まだ字を覚えていないうちは、書ける量そのものが少ない。
-    //  ここを段階で絞らないと、生まれて2日の子が画面いっぱいに書くことになる
-    const cap = [1, 2, 4, 4][diaryLevel()];
+    // 書ける量は日を追って増える。1日目は1話題、4日目で通常にもどる。
+    //  段階ではなく日数で見るのは、来たばかりの子がいきなり画面いっぱいに
+    //  書くのを防ぎつつ、増え方を滑らかにするため
+    const cap = Math.min(4, Math.max(1, petDay()));
     return {
       skip:   Math.max(0, t) * 0.35,          // その日は書かずに終わる確率
       putOff: Math.max(0, t) * 0.50,          // 寝る前に書かず、翌日に回す確率
@@ -5613,8 +5614,19 @@
   }
   // あかちゃん・こども：単語ごとに、日本語か自分の文字か。
   //  自分の文字は「その単語の字数ぶん」置くので、書けなかった単語の長さがそのまま残る
+  // 1ページぶんの行。あかちゃんのうちは、その日の出来事の絵が上に1行だけ残る
+  //  （いきなり全部が文字になるより、絵から言葉へ移っていくほうが自然）
+  function diaryRows(e){
+    const rows = [];
+    if(entryLevel(e) === LV_BABY){
+      const pics = (e.t || []).map(t => TAG_PICT[t]).filter(Boolean).map(k => DIARY_PICT[k]);
+      if(pics.length) rows.push({ marks: pics });
+    }
+    diaryWords(e).forEach(words => { if(words.length) rows.push({ words }); });
+    return rows;
+  }
   function drawDiaryWords(e){
-    const lv = entryLevel(e), u = LV_DOT[lv], lines = diaryWords(e);
+    const lv = entryLevel(e), u = LV_DOT[lv], lines = diaryRows(e);
     const fs = (lang === 'ja') ? 10 : 6;
     ctxT.font = (lang==='ja') ? (fs+'px '+JP_FONT) : fs+'px "Press Start 2P"';
     ctxT.textAlign = 'left'; ctxT.fillStyle = ON;
@@ -5627,11 +5639,18 @@
     const fit = words => { let k = u; while(k > 1 && lineW(words, k) > MAXW) k--; return k; };
     const hRow = Math.max(fs, 5 * u);
     const { y0, lh } = bodyRows(lines.length, hRow, 6);
-    lines.forEach((words, li) => {
-      if(!words.length) return;
+    lines.forEach((row, li) => {
+      const top = y0 + li * lh;
+      // 絵の行：その日の出来事をそのまま並べる
+      if(row.marks){
+        const mw = row.marks.reduce((a,g)=>a + (g[0].length + 2) * u, -2 * u);
+        let mx = Math.round((W*S - mw) / 2);
+        row.marks.forEach(g => { stampU(g, mx, top + (hRow - 5*u)/2, u, ON); mx += (g[0].length + 2) * u; });
+        return;
+      }
+      const words = row.words;
       const k = fit(words), rh = 5 * k;
       let x = Math.round((W*S - lineW(words, k)) / 2);
-      const top = y0 + li * lh;
       words.forEach((w, wi) => {
         if(w.t){ ctxT.fillText(w.t, x, top + (hRow - fs)/2); }
         else {

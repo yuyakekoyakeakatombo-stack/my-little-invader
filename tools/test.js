@@ -594,14 +594,30 @@ describe('にっきの字', () => {
     const b = [...'ごはん'].map(c => api.runeOf(c));
     eq(a, b);
   });
-  // 生まれて2日の子が画面いっぱいに書くのは、絵として不自然
-  it('幼いうちは、書く量そのものが少ない', () => {
+  // 来たばかりの子がいきなり画面いっぱいに書くのは、絵として不自然
+  it('書く量は日を追って少しずつ増える', () => {
     const { api, clock } = load();
     pet(api, clock, { P:0 });
-    const topics = st => { api.pet.stage = st; return api.diaryStyle().topics; };
-    const nw = topics('egg'), bb = topics('mid'), ch = topics('larva'), ad = topics('adult');
-    eq([nw, bb], [1, 2], 'うまれたて1話題／あかちゃん2話題:');
-    ok(ch >= bb && ad >= bb, `育つほど増えること（${nw},${bb},${ch},${ad}）`);
+    const at = d => { api.pet.birth = clock.now() - (d-1)*86400000; return api.diaryStyle().topics; };
+    const got = [1,2,3,4,5].map(at);
+    eq(got.slice(0,3), [1,2,3], '1日目1話題／2日目2話題／3日目3話題:');
+    eq(got[3], got[4], '4日目で通常にもどり、以後は増えない:');
+    ok(got.every((v,i) => i === 0 || v >= got[i-1]), `減らないこと（${got}）`);
+  });
+  it('あかちゃんの日記には、まだ絵が残っている', () => {
+    const { api, clock } = load({ storage:{ myvader_lang:'ja' } });
+    pet(api, clock);
+    const rows = api.diaryRows(entry(api, { lv: api.LV_BABY, t:['fed','praised'], v:[0,0] }));
+    const marks = rows.filter(r => r.marks);
+    eq(marks.length, 1, '絵の行が1行あること:');
+    ok(marks[0].marks.includes(api.DIARY_PICT.fed), 'その日の出来事の絵であること');
+    ok(rows.some(r => r.words), '自分の文字の行もあること');
+  });
+  it('こどもになると絵は出ず、言葉だけになる', () => {
+    const { api, clock } = load({ storage:{ myvader_lang:'ja' } });
+    pet(api, clock);
+    const rows = api.diaryRows(entry(api, { lv: api.LV_CHILD, wr:0.5 }));
+    ok(rows.length > 0 && rows.every(r => r.words), '絵の行が混ざらないこと');
   });
   it('幼いうちは結びの言葉を書かない', () => {
     const { api, clock } = load();
