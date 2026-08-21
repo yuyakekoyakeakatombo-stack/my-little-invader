@@ -128,7 +128,7 @@
 
   // ── BODY COLOR（本体SETTINGSの設定を反映） ──
   (function(){
-    const COLORS=["#e8e3d8","#272727","#9ed0d8","#c8b8e0","#e8a89a","#98d0b0"];
+    const COLORS=["#e8e3d8","#434347","#9ed0d8","#c8b8e0","#e8a89a","#98d0b0"];
     let idx=1; // 本体のデフォルト(ONYX)に合わせる
     try{ const b=localStorage.getItem("myvader_bodycolor"); if(b!==null) idx=Math.min(COLORS.length-1, Math.max(0, Number(b)||0)); }catch(e){}
     const bg=COLORS[idx], isDark=(idx===1);

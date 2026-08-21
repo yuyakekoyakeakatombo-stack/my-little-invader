@@ -5055,8 +5055,8 @@
   try{ if(localStorage.getItem('myvader_sound') === 'off') soundOn = false; }catch(e){}
   function setSound(on){ soundOn = on; try{ localStorage.setItem('myvader_sound', on?'on':'off'); }catch(e){} }
   // ボディカラー（面：明るめ / 側面ボタン：やや暗め）
-  const BODY_COLORS  = ['#e8e3d8','#272727','#9ed0d8','#c8b8e0','#e8a89a','#98d0b0'];
-  const BODY_SHELLS  = ['#ccc8bc','#383838','#7ec0c8','#b8a8d0','#d89888','#82bf9e'];
+  const BODY_COLORS  = ['#e8e3d8','#434347','#9ed0d8','#c8b8e0','#e8a89a','#98d0b0'];
+  const BODY_SHELLS  = ['#ccc8bc','#545458','#7ec0c8','#b8a8d0','#d89888','#82bf9e'];
   const BODY_LABELS  = ['IVORY','ONYX','AQUA','LILAC','CORAL','MINT'];
   let bodyColorIdx = 1; // デフォルト: ONYX（黒）
   // 保存済みのBODY COLORを復元（ミニゲームとも共有）
