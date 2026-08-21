@@ -1623,6 +1623,10 @@ describe('ファイル', () => {
     // 条件そのものは伏せておく。名前が出ていたら、それは書きすぎ
     for(const bad of ['プランプ','スリーク','プリックリー'])
       ok(!src.includes(bad), `説明書が最終形態の名前（${bad}）まで明かしている`);
+    // 右端の枝は ::before の角が縦線を兼ねる。::after の border-left を残すと
+    //  2本が隣り合って縦線が二重に見える（一度そうなった）
+    ok(/\.tree li:last-child::after\s*\{[^}]*border-left:\s*0/.test(src),
+       'ツリーの右端で、縦線が二重になる指定が戻っている');
   });
   it('ミニゲーム3本とも、得点は0未満にならない', () => {
     for(const f of ['spacewalk_game.html','shootingstar_game.html','abduction_game.html']){

@@ -123,17 +123,23 @@ p.cap{ font-size:12px; color:#3c4a30; margin:14px 0 0; font-weight:700 }
 /* タイプごとの枝を離す。くっついていると、どの ？ が どのタイプの下か読めない */
 .tree > ul > li > ul > li{ padding-left:12px; padding-right:12px }
 /*  親から降りる縦線は ul 自身の padding-top を埋める（top:0 で padding の上端から）。
-    ここを外すと、線が親の箱の中に入りこんだり、箱と横線のあいだが切れたりする */
-.tree ul ul::before{ content:''; position:absolute; top:0; left:50%;
+    ここを外すと、線が親の箱の中に入りこんだり、箱と横線のあいだが切れたりする。
+    縦線は 2px なので、margin で半分ずらして 50% の位置をまたがせる。
+    こうしないと線が中心から1pxずれ、箱との縦の通りが揃わない */
+.tree ul ul::before{ content:''; position:absolute; top:0; left:50%; margin-left:-1px;
                      width:0; height:16px; border-left:2px solid #5b6b47 }
 .tree li::before, .tree li::after{ content:''; position:absolute; top:0;   /* 横線＋縦線 */
                                    width:50%; height:16px; border-top:2px solid #5b6b47 }
 .tree li::before{ right:50% }
-.tree li::after { left:50%; border-left:2px solid #5b6b47 }
+.tree li::after { left:50%; margin-left:-1px; border-left:2px solid #5b6b47 }
 .tree > ul > li::before, .tree > ul > li::after{ display:none }
 .tree li:first-child::before, .tree li:last-child::after{ border-top:0 }
-.tree li:last-child::before{ border-right:2px solid #5b6b47; border-radius:0 5px 0 0 }
 .tree li:first-child::after{ border-radius:5px 0 0 0 }
+/*  右端は ::before の角（border-right）が縦線を兼ねる。
+    ::after の border-left を残すと、2本が隣り合って縦線が二重に見える */
+.tree li:last-child::after { border-left:0 }
+.tree li:last-child::before{ margin-right:-1px;
+                             border-right:2px solid #5b6b47; border-radius:0 5px 0 0 }
 /*  本文の行送り(2.5)のままだと箱が間延びし、箱の下に余白が残って線が届かなくなる。
     行送りを詰め、vertical-align:top でベースライン分の空きも消す */
 .tree li{ line-height:1.4 }
