@@ -26,7 +26,7 @@ const EXPORTS = `
   sleepConfig, isAsleep, birthPet, ARRIVE_AWAKE_MS, sleepKind, stayingUpLate, effectiveAsleep, owlShift,
   pickForm, pickLineage, pickVoice, voice, voiceIdx, pTrait,
   todayKey, petDay, daysBetweenKeys,
-  formLabel, endLabel, typeLabel, stageLabel, menuList,
+  formLabel, endLabel, typeLabel, stageLabel, menuList, menuCols, MENU_RIGHT,
   addM, addP, addA, addD, M_ADJ, P_ADJ, A_ADJ,
   DIARY_LINES, DIARY_MUSINGS, DIARY_CLOSE, DIARY_PRIORITY,
   get diaryLog(){ return diaryLog; },

@@ -4899,6 +4899,15 @@
     if(!diaryUnlocked()) return [...head, ...MENU_BASE];
     return [...head, MENU_BASE[0], ['DIARY','diary'], ...MENU_BASE.slice(1)];   // STATUS の次に DIARY を挟む
   }
+  // 下段の項目は2列に分ける。ストーリーと説明書は「読みもの」なので右の列へ。
+  //  左＝その子の状態を見るもの、右＝読みもの、という分け方。
+  //  返すのは menuList() の添字なので、選択位置（menuSel）の意味は変えなくてよい
+  const MENU_RIGHT = ['story', 'manual'];
+  function menuCols(){
+    const list = menuList(), left = [], right = [];
+    list.forEach((it, i) => (MENU_RIGHT.includes(it[1]) ? right : left).push(i));
+    return { list, left, right };
+  }
   const PLAY_ITEMS=['SPACEWALK','SHOOTING STAR','ABDUCTION'];
   const PLAY_FILES={'SPACEWALK':'spacewalk_game.html','SHOOTING STAR':'shootingstar_game.html','ABDUCTION':'abduction_game.html'};
   let playSel=0;
@@ -5202,29 +5211,36 @@
       }
       for(let x=1;x<W-1;x++) dot(ctxN,x,40,DIM);
 
-      // サブ項目（STATUS / DIARY / SETTINGS / STORY / MANUAL）。
-      //  DIARYの有無で4〜5項目になるので、いちばん下の行が画面(y=64)に収まるよう行間を決める
-      const list = menuList();
-      const HL_H = (list.length >= 5) ? 5 : (list.length >= 4 ? 6 : 7);
-      const Y0   = (list.length >= 5) ? 40 : (list.length >= 4 ? 41 : 43);
-      list.forEach(([item,key],i)=>{
-        const y = Y0 + i*HL_H;
-        const isSel = (menuSel === 6+i);
-        const cy = (y + HL_H/2)*S;                           // 文字は網掛けの上下中央に置く
-        if(isSel){ for(let dx=1;dx<W-1;dx++) for(let dy=0;dy<HL_H;dy++) dot(ctxN,dx,y+dy,DIM); }
+      // サブ項目（左＝STATUS / DIARY / SETTINGS ／ 右＝STORY / MANUAL）。
+      //  2列にしたので行数は最大3。1列だったころより行間を広く取れる
+      const { list, left, right } = menuCols();
+      //  左は最大4行（おもいで＋ステータス＋にっき＋せってい）。
+      //  いちばん下の行が画面(y=65)に収まるよう、行数で行間を決める
+      const rows = Math.max(left.length, right.length);
+      const HL_H = (rows >= 4) ? 6 : 7;
+      const Y0   = (rows >= 4) ? 41 : (rows === 3 ? 42 : 45);
+      // 列の範囲（網掛けの幅）と、文字を置く位置
+      const COL = [ { x0:1, x1:26, mark:2,  text:8  },       // 左
+                    { x0:27, x1:W-1, mark:28, text:34 } ];   // 右
+      const draw = (idx, ci, row) => {
+        const [item, key] = list[idx];
+        const c = COL[ci], y = Y0 + row*HL_H, cy = (y + HL_H/2)*S;
+        const isSel = (menuSel === 6+idx);
+        if(isSel){ for(let dx=c.x0;dx<c.x1;dx++) for(let dy=0;dy<HL_H;dy++) dot(ctxN,dx,y+dy,DIM); }
         ctxN.font=uiFont(7); ctxN.fillStyle=ON; ctxN.textAlign='left'; ctxN.textBaseline='middle';
-        if(isSel) ctxN.fillText('>',2*S,cy);
-        ctxN.fillText(T(key), 8*S, cy);
+        if(isSel) ctxN.fillText('>', c.mark*S, cy);
+        ctxN.fillText(T(key), c.text*S, cy);
         ctxN.textBaseline='top';
-        // 未読があるDIARYには封筒を添える
-        // 未読があるDIARYには「NEW」を点滅させる
+        // 未読があるDIARYには「NEW」を点滅させる。列の右端にそろえる
         if(item==='DIARY' && diaryUnread > 0 && fN%16 < 10){
           ctxN.textAlign='right'; ctxN.textBaseline='middle';
           ctxN.font=uiFont(6); ctxN.fillStyle=ON;
-          ctxN.fillText('NEW', (W-3)*S, cy);
+          ctxN.fillText('NEW', (c.x1-1)*S, cy);
           ctxN.textAlign='left'; ctxN.textBaseline='top';
         }
-      });
+      };
+      left.forEach((idx, r) => draw(idx, 0, r));
+      right.forEach((idx, r) => draw(idx, 1, r));
     }
 
     fN++;
@@ -5264,18 +5280,27 @@
         // アイコングリッド(0..5) ⇔ サブ項目(6..8) のナビゲーション
         const dir = el.classList.contains('up')?'up' : el.classList.contains('down')?'down'
                   : el.classList.contains('left')?'left' : 'right';
-        const last = 6 + menuList().length - 1;    // サブ項目の最後（DIARYの有無で変わる）
+        const { left, right } = menuCols();
+        const lastLeft = 6 + left[left.length-1];   // 左の列のいちばん下
         if(menuSel < 6){
           const r = Math.floor(menuSel/3);
           // 左右は6アイコンを一列としてループ（くすり→ほめる、ゲーム→ごはん）
           if(dir==='left')  menuSel = (menuSel+5)%6;
           if(dir==='right') menuSel = (menuSel+1)%6;
-          // 上下もループ：上段から上で最後のサブ項目へ、下段から下でサブ項目へ
-          if(dir==='up')    menuSel = (r===1) ? menuSel-3 : last;
+          // 上下もループ：上段から上で左の列のいちばん下へ、下段から下でサブ項目の先頭へ
+          if(dir==='up')    menuSel = (r===1) ? menuSel-3 : lastLeft;
           if(dir==='down')  menuSel = (r===0) ? menuSel+3 : 6;
         } else {
-          if(dir==='up')   menuSel = (menuSel===6) ? 4 : menuSel-1;      // 先頭から上でグリッド下段中央へ
-          if(dir==='down') menuSel = (menuSel===last) ? 0 : menuSel+1;   // 末尾から下で先頭アイコンへループ
+          // サブ項目は2列。上下は同じ列の中を動き、左右で列を移る
+          const cur = menuSel - 6;
+          const inR = right.includes(cur);
+          const col = inR ? right : left, other = inR ? left : right;
+          const row = col.indexOf(cur);
+          if(dir==='up')    menuSel = (row === 0) ? 4 : 6 + col[row-1];              // 先頭から上でグリッド下段中央へ
+          if(dir==='down')  menuSel = (row === col.length-1) ? 0 : 6 + col[row+1];   // 末尾から下で先頭アイコンへループ
+          // 移った先に同じ行が無ければ、その列のいちばん下に着く
+          if((dir==='left' || dir==='right') && other.length)
+            menuSel = 6 + other[Math.min(row, other.length-1)];
         }
       }
     });

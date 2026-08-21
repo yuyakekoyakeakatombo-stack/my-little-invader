@@ -670,6 +670,39 @@ describe('にっきの字', () => {
     ok(api.diaryLog.length > 0, '1件書かれたこと');
     ok(api.menuList().some(m => m[1] === 'diary'), '書かれたら並ぶこと');
   });
+  // 下段は2列。左＝その子の状態を見るもの、右＝読みもの
+  it('ストーリーと説明書は右の列に入る', () => {
+    const { api, clock } = load({ storage:{ myvader_lang:'ja' } });
+    pet(api, clock, { name:'T' });
+    api.clearDiary();
+    const name = (list, idx) => list[idx][1];
+    let { list, left, right } = api.menuCols();
+    eq(right.map(i => name(list,i)), ['story','manual'], '右の列:');
+    eq(left.map(i => name(list,i)), ['status','settings'], '左の列（日記なし）:');
+    api.addDiary(api.buildDiary({ fed:1, praised:1 }, 1));
+    ({ list, left, right } = api.menuCols());
+    eq(left.map(i => name(list,i)), ['status','diary','settings'], '左の列（日記あり）:');
+    eq(right.map(i => name(list,i)), ['story','manual'], '日記が増えても右は変わらない:');
+  });
+  it('おもいでが出ても、左の列は4つまでに収まる', () => {
+    const { api, clock } = load({ storage:{ myvader_lang:'ja' } });
+    pet(api, clock, { name:'T', gone:true, goneBy:'return' });
+    api.clearDiary();
+    api.addDiary(api.buildDiary({ fed:1, praised:1 }, 1));
+    const { list, left, right } = api.menuCols();
+    eq(left.map(i => list[i][1]), ['memory','status','diary','settings']);
+    eq(right.length, 2);
+    // 画面は65ドット。4行でも下端が収まる行間になっていること
+    ok(left.length <= 4, `左の列が${left.length}行ある（4行までを前提に行間を決めている）`);
+  });
+  it('全部そろっても、項目はメニューから消えない', () => {
+    const { api, clock } = load({ storage:{ myvader_lang:'ja' } });
+    pet(api, clock, { name:'T', dead:'starve' });
+    api.clearDiary();
+    api.addDiary(api.buildDiary({ fed:1 }, 1));
+    const { list, left, right } = api.menuCols();
+    eq(left.length + right.length, list.length, '振り分けで抜け落ちが無いこと:');
+  });
   it('帰ったあと・死んだあとも、書いた日記は読み返せる', () => {
     const { api, clock } = load();
     pet(api, clock, { stage:'final', lineage:'inv', name:'T' });
