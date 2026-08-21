@@ -1315,6 +1315,26 @@ describe('おもいで', () => {
     ok(row / n < 0.25, `横に同じ値が並びすぎ（${(row/n*100).toFixed(0)}%）`);
     ok(col / n < 0.25, `縦に同じ値が並びすぎ（${(col/n*100).toFixed(0)}%）`);
   });
+  // 上下のばらつきで、チリが地面の線を突き抜けて見えていた
+  it('チリは地面より下へ飛ばない', () => {
+    const { api, clock } = load();
+    for(const st of ['egg','mid','larva','adult','final']){
+      pet(api, clock, { dead:'starve', stage:st, lineage:'inv', form:'i2' });
+      const b = api.charSprites().sleep || api.charSprites().rest;
+      const by = api.MAIN_GY - b.length;
+      let worst = -99;
+      for(let f=0; f<=api.GHOST_RISE_T; f++){
+        const p = f / api.GHOST_RISE_T, drift = p * api.GHOST_DUST_X;
+        b.forEach((row,ry)=>row.forEach((v,rx)=>{
+          if(!v || !api.fadeKeeps(rx, ry, 1-p)) return;
+          const y = Math.min(api.MAIN_GY - 1,
+                             by + ry + Math.round(drift * 0.15 * api.dustLift(rx, ry)));
+          if(y > worst) worst = y;
+        }));
+      }
+      ok(worst < api.MAIN_GY, `${st}: チリが y=${worst} まで出る（地面は ${api.MAIN_GY}）`);
+    }
+  });
   it('魂は画面のまんなかまで昇り、はみ出さない', () => {
     const { api, clock } = load();
     pet(api, clock, { dead:'starve', stage:'larva' });
@@ -1484,8 +1504,9 @@ describe('ファイル', () => {
     ok(/const from  = MAIN_GY - GHOST_SPR\.length;/.test(src),
        '魂の出発点が「足元を地面に置いた高さ」になっていない');
     // 左へ流すだけだと横一列のまま動くので、上下にもばらけさせる
-    ok(/oy \+ ry \+ Math\.round\(drift \* [\d.]+ \* dustLift\(rx, ry\)\), col\);/.test(src),
+    ok(/oy \+ ry \+ Math\.round\(drift \* [\d.]+ \* dustLift\(rx, ry\)\)\)/.test(src),
        '粒が上下にばらける処理が無い');
+    ok(/Math\.min\(MAIN_GY - 1,/.test(src), 'チリが地面より下へ出ないようにしていない');
   });
   it('サービスワーカーのVERSIONが日付の形をしている', () => {
     const m = read('sw.js').match(/const VERSION = '([^']+)'/);

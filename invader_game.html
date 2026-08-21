@@ -4138,9 +4138,10 @@
   //  風にさらわれて消えていく体。残った点ほど左へ流れ、上下にもばらけて、やがて全部消える
   function stampDust(g, ox, oy, col, keep, drift){
     g.forEach((row,ry)=>row.forEach((v,rx)=>{
-      if(v && fadeKeeps(rx, ry, keep))
-        dot(ctxM, ox + rx - Math.round(drift * dustDrift(rx, ry)),
-                  oy + ry + Math.round(drift * 0.15 * dustLift(rx, ry)), col);
+      if(!v || !fadeKeeps(rx, ry, keep)) return;
+      // 上下のばらつきで地面より下へ出ると、線を突き抜けて見える。地面の1つ上で止める
+      const y = Math.min(MAIN_GY - 1, oy + ry + Math.round(drift * 0.15 * dustLift(rx, ry)));
+      dot(ctxM, ox + rx - Math.round(drift * dustDrift(rx, ry)), y, col);
     }));
   }
   let ghostT = 0;
