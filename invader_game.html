@@ -4135,6 +4135,13 @@
   }
   function dustDrift(rx, ry){ return 0.4 + (dustHash(rx, ry) % 13) * 0.1; }        // 0.4〜1.6倍
   function dustLift(rx, ry){ return ((dustHash(rx, ry) >>> 8) % 3) - 1; }          // 上下に −1〜+1
+  //  体が散りはじめる時点（昇りの進み具合 0〜1）。魂の下端が体の上端を追い越したところ。
+  //   離れる前から崩れると、まだ中にいるのに体だけ消えていくように見える。
+  //   体の高さは段階ごとに違うので、そのつど計算する
+  function dustStartP(bodyTop){
+    const span = (MAIN_GY - GHOST_SPR.length) - GHOST_Y_TOP;     // 魂が昇る距離
+    return Math.max(0, Math.min(0.85, (MAIN_GY - bodyTop) / span));
+  }
   //  風にさらわれて消えていく体。残った点ほど左へ流れ、上下にもばらけて、やがて全部消える
   function stampDust(g, ox, oy, col, keep, drift){
     g.forEach((row,ry)=>row.forEach((v,rx)=>{
@@ -4167,8 +4174,10 @@
       const by = MAIN_GY - body.length;                      // 足元を地面に据える
       const t  = Math.max(0, ghostT - GHOST_STILL);
       const p  = Math.min(1, t / GHOST_RISE_T);              // 0→1
-      // 体は風にさらわれるように、左へ流れながら消えていく
-      stampDust(body, bx, by, DM, 1 - p, p * GHOST_DUST_X);
+      // 体は、魂が完全に離れてから、風にさらわれるように左へ流れて消えていく
+      const s0 = dustStartP(by);
+      const dp = (p <= s0) ? 0 : (p - s0) / (1 - s0);
+      stampDust(body, bx, by, DM, 1 - dp, dp * GHOST_DUST_X);
       if(t > 0){
         // 魂は足元を地面に置いた高さから昇りはじめる。
         //  体の上端から出すと、背の低い子では足元が地面より下になってしまう

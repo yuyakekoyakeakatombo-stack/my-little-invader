@@ -1315,6 +1315,26 @@ describe('おもいで', () => {
     ok(row / n < 0.25, `横に同じ値が並びすぎ（${(row/n*100).toFixed(0)}%）`);
     ok(col / n < 0.25, `縦に同じ値が並びすぎ（${(col/n*100).toFixed(0)}%）`);
   });
+  // 離れる前から崩れると、まだ中にいるのに体だけ消えていくように見える
+  it('体が散りはじめるのは、魂が完全に離れてから', () => {
+    const { api, clock } = load();
+    const gh = api.GHOST_SPR.length, from = api.MAIN_GY - gh, to = api.GHOST_Y_TOP;
+    for(const st of ['egg','mid','larva','adult','final']){
+      pet(api, clock, { dead:'starve', stage:st, lineage:'inv', form:'i2' });
+      const b = api.charSprites().sleep || api.charSprites().rest;
+      const by = api.MAIN_GY - b.length;
+      const s0 = api.dustStartP(by);
+      ok(s0 > 0, `${st}: 昇りはじめと同時に散っている（p=${s0}）`);
+      ok(s0 < 1, `${st}: 散る間が残っていない（p=${s0}）`);
+      // その時点で、魂の下端が体の上端を追い越していること
+      const gy = Math.round(from + (to - from) * s0);
+      ok(gy + gh <= by, `${st}: まだ重なっているのに散りはじめる（魂の下端 ${gy+gh} / 体の上端 ${by}）`);
+      // ひとつ手前ではまだ重なっている＝遅らせすぎてもいない
+      const prev = Math.max(0, s0 - 1/api.GHOST_RISE_T);
+      const gyPrev = Math.round(from + (to - from) * prev);
+      ok(gyPrev + gh >= by - 1, `${st}: 離れてから散りはじめるまでが遅すぎる`);
+    }
+  });
   // 上下のばらつきで、チリが地面の線を突き抜けて見えていた
   it('チリは地面より下へ飛ばない', () => {
     const { api, clock } = load();
@@ -1498,7 +1518,7 @@ describe('ファイル', () => {
     //  ALL RESET まで続くので、ここで昇り続けると おばけが画面から消えたままになる
     ok(/if\(pet\.memShown\)\{\s*\n[^\n]*ALL RESET まで続くので/.test(src),
        'おばけの描き分け（見たあとは漂う姿で止める）が無い');
-    ok(/stampDust\(body, bx, by, DM, 1 - p, p \* GHOST_DUST_X\);/.test(src),
+    ok(/stampDust\(body, bx, by, DM, 1 - dp, dp \* GHOST_DUST_X\);/.test(src),
        '体が風で流されて消える処理が無い');
     // 体の上端から出すと、背の低い段階では魂の足元が地面より下になる
     ok(/const from  = MAIN_GY - GHOST_SPR\.length;/.test(src),
@@ -1507,6 +1527,9 @@ describe('ファイル', () => {
     ok(/oy \+ ry \+ Math\.round\(drift \* [\d.]+ \* dustLift\(rx, ry\)\)\)/.test(src),
        '粒が上下にばらける処理が無い');
     ok(/Math\.min\(MAIN_GY - 1,/.test(src), 'チリが地面より下へ出ないようにしていない');
+    // 魂が離れるまでは体をそのまま保つ
+    ok(/const dp = \(p <= s0\) \? 0 : \(p - s0\) \/ \(1 - s0\);/.test(src),
+       '散りはじめを遅らせる処理が無い');
   });
   it('サービスワーカーのVERSIONが日付の形をしている', () => {
     const m = read('sw.js').match(/const VERSION = '([^']+)'/);

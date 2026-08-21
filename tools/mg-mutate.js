@@ -41,7 +41,7 @@ const MUTATIONS = [
 
   // ── 説明文の読みやすさ（DIM は背景とのコントラストが1.46:1しかない）──
   ['sw', '説明文を読めない色に戻す',
-   "txt('STARS SATELLITES',2,32,5,ON);", "txt('STARS SATELLITES',2,32,5,DIM);", 'caught'],
+   "txt('STARS SATELLITES',2,39,5,ON);", "txt('STARS SATELLITES',2,39,5,DIM);", 'caught'],
   ['ss', '説明文を読めない色に戻す',
    "txt('MANY HITS',14,45,5,ON);", "txt('MANY HITS',14,45,5,DIM);", 'caught'],
   ['ab', '説明文を読めない色に戻す',
