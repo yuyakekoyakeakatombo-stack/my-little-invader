@@ -1229,6 +1229,23 @@ describe('おもいで', () => {
     pet(api, clock, { form:'g2' }); eq(api.formLabel(), 'SLEEK');
     pet(api, clock, { form:'t3' }); eq(api.formLabel(), 'PRICKLY');
   });
+  // 帰還・旅立ち・侵攻は演出の終わりでおもいでが開く。死には演出が無いので、
+  //  おばけをしばらく見せたところが唯一の区切りになる（そこが抜けていた）
+  it('おもいでを開くのは一度だけ', () => {
+    const { api, clock, store } = load();
+    pet(api, clock, { dead:'starve', memShown:false });
+    api.endedShowMemory();
+    eq(api.pet.memShown, true, '開いた印がつくこと:');
+    // 2度目は何もしないはず。開けば必ず保存もするので、保存の跡で見分ける
+    store.delete('myvader_pet');
+    api.endedShowMemory();
+    ok(!store.has('myvader_pet'), '2度目は保存が走った＝また開いている');
+  });
+  it('おばけを見せてからおもいでを開くまでが、短すぎず長すぎない', () => {
+    const { api } = load();
+    const sec = api.GHOST_MEM_DELAY * 100 / 1000;   // tickMain は100msごと
+    ok(sec >= 2 && sec <= 8, `${sec}秒（おばけをひと目見る間があること）`);
+  });
   it('お別れの形が5種とも言葉になる', () => {
     const { api, clock } = load();
     const got = {};
@@ -1353,6 +1370,15 @@ describe('ファイル', () => {
     ok(/const topLeft\s*=\s*6\s*\+\s*left\[0\];/.test(src), 'topLeft の定義が無い');
     ok(/if\(dir==='down'\)\s+menuSel = \(r===0\) \? menuSel\+3 : topLeft;/.test(src),
        'アイコンから下へ降りる先が topLeft になっていない');
+  });
+  // 描画関数はテストから呼べないので、4つの別れが全部おもいでへ繋がっているかを
+  //  ソースで確かめる。死だけ演出が無く、ここが抜けていた
+  it('どの別れ方でも、おもいでを開く処理に繋がっている', () => {
+    const src = read('invader_game.html');
+    const n = (src.match(/endedShowMemory\(\)/g) || []).length;
+    ok(n >= 5, `endedShowMemory の呼び出しが ${n} か所（定義1＋帰還・旅立ち・侵攻・死 の4か所が要る）`);
+    ok(/if\(\+\+ghostT === GHOST_MEM_DELAY\) endedShowMemory\(\);/.test(src),
+       'おばけの画面からおもいでへ繋がっていない');
   });
   it('サービスワーカーのVERSIONが日付の形をしている', () => {
     const m = read('sw.js').match(/const VERSION = '([^']+)'/);

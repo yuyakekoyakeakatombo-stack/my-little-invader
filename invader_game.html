@@ -4107,6 +4107,11 @@
   }
 
   // ── おばけ画面（餓死・病死後）：漂うだけ。SETTINGSとリセットのみ操作可 ──
+  // おばけになってからの経過フレーム。死には別れの演出が無いので、
+  //  おばけをしばらく見せることが唯一の区切りになる。ここを過ぎたら
+  //  他の別れと同じように「おもいで」を開く（開くのは一度だけ→ memShown）
+  const GHOST_MEM_DELAY = 40;   // 100ms刻みなので約4秒。おばけがひと揺れするあいだ
+  let ghostT = 0;
   function drawGhost(BG, DM, NK){
     ctxM.fillStyle = BG; ctxM.fillRect(0,0,W*S,H*S);
     ctxM.font='7px "Press Start 2P"'; ctxM.textBaseline='top'; ctxM.fillStyle=NK;
@@ -4120,6 +4125,7 @@
     const bob = [0,-1,-2,-1][Math.floor(fM/8)%4];
     stamp(ctxM, GHOST_SPR, 22, 34+bob, DM);
     fM++;
+    if(++ghostT === GHOST_MEM_DELAY) endedShowMemory();
   }
 
   // ── エンディング共通：吸い上げのビームと、小さくなるキャラ ──
