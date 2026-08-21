@@ -22,7 +22,7 @@ const EXPORTS = `
   closeOneDay, checkReturn, checkInvade, returnSigns, invadeSigns, wrathful, isWild,
   gainB, bondCapToday, markTouch, bondDrop, dailyCareScore,
   doCare, careDisabled, advancePet, maybeEvolve,
-  hungerMin, feedGain, feedFill, HUNGER_MAX,
+  hungerMin, feedGain, feedFill, HUNGER_MAX, gaugeHunger, gaugeMood, raiseMood, MOOD_MIN,
   sleepConfig, isAsleep, birthPet, ARRIVE_AWAKE_MS, sleepKind, stayingUpLate, effectiveAsleep, owlShift,
   pickForm, pickLineage, pickVoice, voice, voiceIdx, pTrait,
   todayKey, petDay, daysBetweenKeys,

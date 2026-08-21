@@ -233,6 +233,39 @@ describe('お世話', () => {
 describe('おなか', () => {
   const feeds = (api) => { let n = 0; api.pet.hunger = 0;
     while(api.pet.hunger < api.HUNGER_MAX && n < 20){ api.feedFill(); n++; } return n; };
+  // 目盛りは「次の1が減るまでの進み具合」を引いて描いている。満腹にしても
+  //  その時計が動いたままだと、食べさせた直後なのに目盛りが欠けて見える
+  const lit = g => Math.round(Math.max(0, Math.min(5, g)) * 2);   // 画面の目盛り数（0〜10）
+
+  it('満腹まで食べさせたら、いつでも目盛りが満タンになる', () => {
+    for(const st of ['egg','mid','larva','adult','final']){
+      for(const f of [0, 0.3, 0.5, 0.9, 0.99]){
+        const { api, clock } = load();
+        pet(api, clock, { stage:st, lineage:'inv', hunger:0 });
+        api.pet.hungerAcc = api.hungerMin() * f;     // 前回の減りからの経過
+        feeds(api);
+        eq(lit(api.gaugeHunger()), 10, `${st} / 経過${Math.round(f*100)}%:`);
+      }
+    }
+  });
+  it('満腹でないうちは、経過ぶんだけ目盛りが欠ける（10段階で動く）', () => {
+    const { api, clock } = load();
+    pet(api, clock, { stage:'larva', lineage:'inv' });
+    const hm = api.hungerMin();
+    api.pet.hunger = 3; api.pet.hungerAcc = 0;
+    eq(lit(api.gaugeHunger()), 6, '減った直後:');
+    api.pet.hungerAcc = hm * 0.6;
+    eq(lit(api.gaugeHunger()), 5, '半分すぎたら1本ぶん減る:');
+  });
+  it('食べさせても満腹に届かない時は、時計を数え直さない', () => {
+    const { api, clock } = load();
+    pet(api, clock, { stage:'adult', lineage:'inv', hunger:0 });
+    const acc = api.hungerMin() * 0.8;
+    api.pet.hungerAcc = acc;
+    api.feedFill();                                   // 大人は1回では満腹にならない
+    ok(api.pet.hunger < api.HUNGER_MAX, '満腹にはなっていないこと');
+    eq(api.pet.hungerAcc, acc, '経過はそのまま:');
+  });
   it('小さい子ほど少ない回数で満腹になる', () => {
     const { api, clock } = load();
     pet(api, clock, { stage:'egg' });    const egg = feeds(api);
@@ -252,6 +285,39 @@ describe('おなか', () => {
     pet(api, clock, { stage:'egg', hunger:4 });
     api.feedFill();
     eq(api.pet.hunger, api.HUNGER_MAX);
+  });
+});
+
+// ══ きげん ══════════════════════════════════════════════
+//  おなかと同じ作りなので、同じ落とし穴がある
+describe('きげん', () => {
+  const lit = g => Math.round(Math.max(0, Math.min(5, g)) * 2);
+
+  it('きれいな部屋で上げきったら、目盛りが満タンになる', () => {
+    for(const f of [0, 0.5, 0.99]){
+      const { api, clock } = load();
+      pet(api, clock, { mood:0, W:0, health:'GOOD', plateAt:0, plateSpoiled:false });
+      api.pet.moodAcc = api.MOOD_MIN * f;
+      for(let i=0;i<6;i++) api.raiseMood();
+      eq(lit(api.gaugeMood()), 10, `経過${Math.round(f*100)}%:`);
+    }
+  });
+  it('汚れているあいだは、上げても満タンにならない', () => {
+    const { api, clock } = load();
+    pet(api, clock, { mood:0, W:2 });
+    api.pet.moodAcc = api.MOOD_MIN * 0.5;
+    for(let i=0;i<6;i++) api.raiseMood();
+    ok(lit(api.gaugeMood()) < 10, '満タンに見えてはいけない');
+    ok(api.pet.mood === 4, `上限まで上がっていること（実際 ${api.pet.mood}）`);
+  });
+  it('上限が下がっているあいだは、時計を数え直さない', () => {
+    const { api, clock } = load();
+    pet(api, clock, { mood:3, W:2 });
+    const acc = api.MOOD_MIN * 0.7;
+    api.pet.moodAcc = acc;
+    api.raiseMood();                        // 4まで上がるが、いちばん上ではない
+    eq(api.pet.mood, 4);
+    eq(api.pet.moodAcc, acc, '経過はそのまま:');
   });
 });
 

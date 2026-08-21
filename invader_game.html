@@ -877,7 +877,14 @@
   const HUNGER_MAX = 5;
   const FEED_GAIN  = { egg: 3, mid: 3, larva: 2, adult: 1, final: 1 };
   function feedGain(){ return FEED_GAIN[pet.stage] || 1; }
-  function feedFill(){ pet.hunger = Math.min(HUNGER_MAX, pet.hunger + feedGain()); }
+  function feedFill(){
+    pet.hunger = Math.min(HUNGER_MAX, pet.hunger + feedGain());
+    // 満腹になったら、次に1減るまでの時計を数え直す。
+    //  これを残すと「満腹まで食べさせたのに目盛りが満タンにならない」ことになる。
+    //  目盛りは hungerAcc の進み具合ぶんを引いて描いているので、直前の減りから
+    //  時間がたっているほど、食べさせた直後でも欠けて見えてしまっていた
+    if(pet.hunger >= HUNGER_MAX) pet.hungerAcc = 0;
+  }
   //  性格の幅。友だちと見せ合ったときに違いが分かる程度にしてある。
   //  遊び方が続くと pTrait は±1まで振り切れる（夜更かし常習で+0.93、きちんと寝かせて-1.0）ので、
   //  実際にほぼ全幅がかかる。0.15では1日0.4回しか差が出ず、まず気づけなかった。
@@ -984,8 +991,17 @@
   function dirtCount(){ return (pet.W||0) + (pet.plateSpoiled ? 1 : 0); }
   // きげんの上限。汚れを放置している／病気を治していない間はMAXにできない。
   //  ほめてもおやつをあげても満タンにはならず、「バーが満タン＝手入れが行き届いている」と読めるようにする。
-  function moodCap(){ return (dirtCount() > 0 || pet.health === 'SICK') ? 4 : 5; }
-  function raiseMood(){ if(pet.mood < moodCap()) pet.mood++; }
+  const MOOD_MAX = 5;
+  //  汚れや病気があるうちは、上げても1段ぶん届かない（そこが「まだ満たされていない」印になる）
+  function moodCap(){ return (dirtCount() > 0 || pet.health === 'SICK') ? MOOD_MAX - 1 : MOOD_MAX; }
+  function raiseMood(){
+    if(pet.mood < moodCap()){
+      pet.mood++;
+      // いちばん上まで上がった時だけ、次に1減るまでの時計を数え直す。
+      //  おなかと同じ理屈（→ feedFill）。上限が下がっている間は数え直さない
+      if(pet.mood >= MOOD_MAX) pet.moodAcc = 0;
+    }
+  }
   // ── ステータスのゲージ用の値（0〜5、小数あり）──
   //  おなかもきげんも内部値は0〜5の整数だが、目盛りは10本ある。そのままだと
   //  2本ずつしか動かず、5段階ぶんの見た目しか出せていなかった。
