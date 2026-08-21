@@ -1615,6 +1615,11 @@ describe('ファイル', () => {
     }
     eq(forms.size, 9, 'さいごの すがたは9とおりであるべき:');
     ok(src.includes('9とおり'), '説明書が9とおりと書いていない');
+    // 図のほうも数が合っているか。枝を1本消しても本文だけ9のまま、を防ぐ
+    const tree = src.slice(src.indexOf('<div class="tree">'), src.indexOf('</div>', src.indexOf('<div class="tree">')));
+    eq((tree.match(/class="n q"/g) || []).length, 9, '図の葉（？）の数:');
+    for(const n of names)
+      eq((tree.match(new RegExp(n, 'g')) || []).length, 1, `図に「${n}」が出る回数:`);
     // 条件そのものは伏せておく。名前が出ていたら、それは書きすぎ
     for(const bad of ['プランプ','スリーク','プリックリー'])
       ok(!src.includes(bad), `説明書が最終形態の名前（${bad}）まで明かしている`);
