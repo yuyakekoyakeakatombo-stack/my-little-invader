@@ -790,16 +790,17 @@
       // 本文は視認性優先で 5px → 7px。行間も広げて再レイアウト
       txtC('HOW TO PLAY',2,7,ON);
       hl(10,ON);
+      // 上の区切りまでが操作、下がルール。ワープも操作なので MOVE の下に並べる
       txt('MOVE',2,13,7,ON); arrowRow(22,13,['left','right','up','down'],ON);
-      hl(21,ON);
-      // 障害物は星だけでなく衛星やロケットも流れてくる。「星をよける」だけだと実物と食い違う
-      txt('DODGE ALL',2,24,7,ON);
-      txt('STARS SATELLITES',2,32,5,ON);
-      txt('ROCKETS',2,38,5,ON);
-      txt('UFO BOSS 30s',2,44,6,ON);
-      txt('5 MISS = OVER',2,50,6,ON);
       // 逃げ場が無くなったときの最後の手。回数が限られていることまで書く
-      txt('A : WARP',2,56,6,ON);  txt('3 TIMES',W-11,56,6,ON);
+      txt('A : WARP',2,21,7,ON);  txt('3 TIMES',W-14,22,5,ON);
+      hl(28,ON);
+      // 障害物は星だけでなく衛星やロケットも流れてくる。「星をよける」だけだと実物と食い違う
+      txt('DODGE ALL',2,31,7,ON);
+      txt('STARS SATELLITES',2,39,5,ON);
+      txt('ROCKETS',2,45,5,ON);
+      txt('UFO BOSS 30s',2,51,6,ON);
+      txt('5 MISS = OVER',2,57,6,ON);
       if(Math.floor(Date.now()/450)%2===0) txtC('B : BACK',62,5,ON);
       return;
     }
