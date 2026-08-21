@@ -111,6 +111,21 @@ td.k{ white-space:nowrap; font-weight:700; background:rgba(0,0,0,.045) }
 .chars.gitems figcaption{ font-size:10px; margin-top:6px }
 p.cap{ font-size:12px; color:#3c4a30; margin:14px 0 0; font-weight:700 }
 
+/* ── さいごの すがたの わかれかた（3つの タイプ × それぞれ 3つ）── */
+.branch{ background:var(--lcd); border:3px solid #6a6f5c; border-radius:5px; padding:18px 10px; margin:14px 0;
+         display:grid; grid-template-columns:repeat(3,1fr); gap:10px; text-align:center }
+.branch .t{ font-size:12.5px; font-weight:700; color:#1a2410; padding-bottom:9px;
+            border-bottom:2px solid #6a6f5c; margin-bottom:11px }
+.branch .q{ font-size:19px; color:#5b6b47; letter-spacing:.12em }
+/* この cap だけは図の下につく説明なので、中央ぞろえにして 次の段落から離す */
+.branch + .cap{ margin:0 0 20px; text-align:center }
+.nb{ white-space:nowrap }
+@media (max-width:359px){
+  .branch{ padding:16px 6px; gap:6px }
+  .branch .t{ font-size:11px }
+  .branch .q{ font-size:16px; letter-spacing:.06em }
+}
+
 /* ── 感情マーク ── */
 /* 8つあるので、2列（4段）か4列（2段）。どちらでも端数が出ず、最後の段が欠けない */
 .moods{ display:grid; grid-template-columns:repeat(2,1fr); gap:8px; margin:12px 0 18px }
@@ -452,10 +467,21 @@ STATUS<ruby>画面<rt>がめん</rt></ruby>（→ 7<ruby>章<rt>しょう</rt></
   <div class="mystery">？ ？ ？</div>
 </div>
 
-<p>ここから さきの すがたは、<b>あなたが どう そだてたかで かわります。</b>
-<ruby>大<rt>おお</rt></ruby>きく 3つの タイプに わかれ、そこから さらに <ruby>見<rt>み</rt></ruby>た<ruby>目<rt>め</rt></ruby>が かわっていきます。</p>
+<p>ここから さきの すがたは、<b>あなたが どう そだてたかで かわります。</b></p>
+<p>こどもから <ruby>先<rt>さき</rt></ruby>は、まず <b>グレイ・マーシャン・インベーダー</b>の
+3つの タイプの どれかに なります。きまると STATUS の「タイプ」に あらわれます。</p>
+<p>そして さいごに、おなじ タイプの なかで さらに 3つの すがたに わかれます。</p>
+
+<div class="branch">
+  <div><div class="t">グレイ</div><div class="q">？ ？ ？</div></div>
+  <div><div class="t">マーシャン</div><div class="q">？ ？ ？</div></div>
+  <div><div class="t">インベーダー</div><div class="q">？ ？ ？</div></div>
+</div>
+<p class="cap"><span class="nb">3つの タイプ</span> × <span class="nb">それぞれ 3つの すがた</span> ＝ <span class="nb">ぜんぶで 9とおり</span></p>
+
 <p>まいにちの おせわ、いっしょに あそんだ <ruby>時間<rt>じかん</rt></ruby>、ねむる <ruby>時間<rt>じかん</rt></ruby>——
-その<ruby>子<rt>こ</rt></ruby>と どう すごしたかで、すがたや せいかくが かわっていきます。</p>
+その<ruby>子<rt>こ</rt></ruby>と どう すごしたかで、すがたや せいかくが かわっていきます。
+<b>どうすれば どれに なるのかは、そだてながら たしかめてみてください。</b></p>
 
 <h3>そして、おわかれ</h3>
 <p>この<ruby>子<rt>こ</rt></ruby>との <ruby>時間<rt>じかん</rt></ruby>には、おわりが あります。

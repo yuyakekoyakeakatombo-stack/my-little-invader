@@ -1596,6 +1596,29 @@ describe('ファイル', () => {
         ok(ALLOWED.includes(m[1]), `${f} に検証用の window.${m[1]} が残っている`);
     }
   });
+  // 説明書は3つのタイプを名指しし、そこからさらに3つに分かれると書いている。
+  //  ゲーム側で名前や分岐の数が変わったのに説明書だけ古いまま、を防ぐ
+  it('説明書の3タイプが、ゲームの呼び名と合っている', () => {
+    const { api, clock } = load();
+    const src = read('manual.html');
+    const names = ['grey','tako','inv'].map(L => {
+      pet(api, clock, { stage:'adult', lineage:L });
+      return api.typeLabel();
+    });
+    eq(new Set(names).size, 3, '3つとも違う呼び名であるべき:');
+    for(const n of names) ok(src.includes(n), `説明書に「${n}」が無い`);
+    // さいごの分岐は各タイプ3つ。数字を書き換えたら、ここで気づけるようにしておく
+    const forms = new Set();
+    for(const L of ['grey','tako','inv']) for(const f of ['1','2','3']){
+      pet(api, clock, { stage:'final', lineage:L, form:(L==='grey'?'g':L==='tako'?'t':'i')+f });
+      forms.add(api.typeLabel() + '/' + api.formLabel());
+    }
+    eq(forms.size, 9, 'さいごの すがたは9とおりであるべき:');
+    ok(src.includes('9とおり'), '説明書が9とおりと書いていない');
+    // 条件そのものは伏せておく。名前が出ていたら、それは書きすぎ
+    for(const bad of ['プランプ','スリーク','プリックリー'])
+      ok(!src.includes(bad), `説明書が最終形態の名前（${bad}）まで明かしている`);
+  });
   it('ミニゲーム3本とも、得点は0未満にならない', () => {
     for(const f of ['spacewalk_game.html','shootingstar_game.html','abduction_game.html']){
       const src = read(f);

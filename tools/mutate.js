@@ -197,6 +197,14 @@ const MUTATIONS = [
   ['粒が上下にばらけない',
    "      const y = Math.min(MAIN_GY - 1, oy + ry + Math.round(drift * 0.15 * dustLift(rx, ry)));",
    "      const y = oy + ry;", 'caught'],
+  // ── 説明書 ──
+  ['タイプの呼び名を変える（説明書だけ古いまま残る）',
+   "      gray:'グレイ', martian:'マーシャン', invader:'インベーダー',",
+   "      gray:'グレイ', martian:'カセイジン', invader:'インベーダー',", 'caught'],
+  ['さいごの分岐を2つに減らす（説明書の「9とおり」と食い違う）',
+   "    return n === '1' ? T('plump') : n === '2' ? T('sleek') : n === '3' ? T('prickly') : '';",
+   "    return n === '1' ? T('plump') : n === '2' ? T('sleek') : n === '3' ? T('sleek') : '';", 'caught'],
+
   // ── ストーリー ──
   ['英語だけ段落を足す（日本語と切れ目がずれる）',
    "    'By this little invader.',", "    '',\n    'By this little invader.',", 'caught'],
