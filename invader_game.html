@@ -4111,11 +4111,22 @@
   //  おばけをしばらく見せることが唯一の区切りになる。ここを過ぎたら
   //  他の別れと同じように「おもいで」を開く（開くのは一度だけ→ memShown）
   //  ただ揺れているだけだと、待たずにMENUを押されてしまう。
-  //  おばけがゆっくり昇って消えていくところまでを見せて、そこで開く
-  const GHOST_MEM_DELAY = 40;   // 100ms刻みなので約4秒
-  const GHOST_RISE_FROM = 8;    // 昇りはじめるまでの間（このあいだは その場で揺れている）
-  const GHOST_RISE_SPD  = 0.7;  // 1フレームに昇るドット数
-  const GHOST_FADE_LAST = 12;   // 終わりぎわ、点滅して消えていく長さ
+  //  うずくまった体から魂が抜け出て、画面のまんなかまで昇るところまでを見せる。
+  //  体は魂が離れるにつれて薄れて消える（2色なので点を間引いて表す）
+  const GHOST_STILL  = 10;   // うずくまったまま動かない間（100ms刻みなので約1秒）
+  const GHOST_RISE_T = 30;   // 抜け出て、まんなかまで昇るのにかける時間（約3秒）
+  const GHOST_HOLD   = 8;    // 昇りきってから おもいで が開くまでの間
+  const GHOST_MEM_DELAY = GHOST_STILL + GHOST_RISE_T + GHOST_HOLD;
+  const GHOST_Y_TOP  = 30;   // 昇りきる高さ（プレイ領域 8〜61 のまんなか）
+  // 2色の画面で「薄れていく」を表す。消す点は位置で決めるので、毎フレームちらつかない
+  const DITHER4 = [[0,8,2,10],[12,4,14,6],[3,11,1,9],[15,7,13,5]];
+  //  keep=1 で全部残り、0 で全部消える。残す/消すは座標だけで決まる
+  function fadeKeeps(rx, ry, keep){ return DITHER4[ry & 3][rx & 3] / 16 < keep; }
+  function stampFade(g, ox, oy, col, keep){
+    g.forEach((row,ry)=>row.forEach((v,rx)=>{
+      if(v && fadeKeeps(rx, ry, keep)) dot(ctxM, ox+rx, oy+ry, col);
+    }));
+  }
   let ghostT = 0;
   function drawGhost(BG, DM, NK){
     ctxM.fillStyle = BG; ctxM.fillRect(0,0,W*S,H*S);
@@ -4128,14 +4139,23 @@
     for(let x=0;x<W;x+=3) dot(ctxM,x,MAIN_GY-1,DM);
     STARS_M.forEach(([x,y],i)=>dot(ctxM,x,y+10,(fM+i*9)%28<20?DM:BG));
     const bob = [0,-1,-2,-1][Math.floor(fM/8)%4];
+    const gx  = Math.round((W - GHOST_SPR[0].length) / 2);
     if(pet.memShown){
       // おもいでを見たあとの画面。ここは ALL RESET まで続くので、漂う姿で止める
-      stamp(ctxM, GHOST_SPR, 22, 34+bob, DM);
+      stamp(ctxM, GHOST_SPR, gx, GHOST_Y_TOP + bob, DM);
     } else {
-      // まだ見ていない＝いなくなった直後。昇っていく姿を見せてから、おもいでを開く
-      const rise  = Math.max(0, ghostT - GHOST_RISE_FROM) * GHOST_RISE_SPD;
-      const blink = ghostT > GHOST_MEM_DELAY - GHOST_FADE_LAST && fM % 4 >= 2;
-      if(!blink) stamp(ctxM, GHOST_SPR, 22, Math.round(34 + bob - rise), DM);
+      // いなくなった直後。うずくまった体から魂が抜けて、まんなかまで昇る
+      const sp = charSprites(), body = sp.sleep || sp.rest;
+      const bx = Math.round((W - body[0].length) / 2);
+      const by = MAIN_GY - body.length;                      // 足元を地面に据える
+      const t  = Math.max(0, ghostT - GHOST_STILL);
+      const p  = Math.min(1, t / GHOST_RISE_T);              // 0→1
+      stampFade(body, bx, by, DM, 1 - p);                    // 魂が離れるほど薄れて消える
+      if(t > 0){
+        const gy = Math.round(by + (GHOST_Y_TOP - by) * p);
+        const blink = (p >= 1) && (fM % 4 >= 2);             // 昇りきったら点滅して消える
+        if(!blink) stamp(ctxM, GHOST_SPR, gx, gy, DM);
+      }
       if(++ghostT === GHOST_MEM_DELAY) endedShowMemory();
     }
     fM++;

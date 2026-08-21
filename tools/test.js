@@ -1247,17 +1247,42 @@ describe('おもいで', () => {
     ok(sec >= 2 && sec <= 8, `${sec}秒（おばけをひと目見る間があること）`);
   });
   // ただ揺れているだけだと、待たずにMENUを押されてしまう。
-  //  昇って消えていく動きが「まだ続きがある」と伝える役をしている
-  it('おもいでを開くまでに、おばけが昇って消える動きが入る', () => {
+  //  うずくまった体から魂が抜けて昇る動きが「まだ続きがある」と伝える役をしている
+  it('うずくまる間・昇る間・開くまでの間が、順に並んでいる', () => {
     const { api } = load();
-    const D = api.GHOST_MEM_DELAY, F = api.GHOST_RISE_FROM,
-          S = api.GHOST_RISE_SPD, L = api.GHOST_FADE_LAST;
-    ok(F > 0 && F < D, `昇りはじめる間（${F}）が0か、開くより遅い`);
-    ok(S > 0, '昇る速さが0');
-    const top = 34 - (D - F) * S;                    // おばけの上端（描き始めは y=34）
-    ok(top > api.HEADER_Y, `昇りすぎてヘッダーに掛かる（上端 ${top} / 線 ${api.HEADER_Y}）`);
-    ok(top < 34 - 8, `ほとんど昇らない（上端 ${top}）`);
-    ok(L > 0 && L < D - F, `点滅の区間（${L}）が、昇っている間に収まっていない`);
+    const { GHOST_STILL:A, GHOST_RISE_T:B, GHOST_HOLD:C, GHOST_MEM_DELAY:D } = api;
+    ok(A > 0, 'うずくまったまま動かない間が要る');
+    ok(B > A, `昇る間（${B}）が、うずくまる間（${A}）より短い`);
+    ok(C > 0, '昇りきってから開くまでの間が要る');
+    eq(D, A + B + C, '合計が おもいでを開くまでの時間と合うこと:');
+    const sec = D * 100 / 1000;
+    ok(sec >= 3 && sec <= 8, `全体で${sec}秒（長すぎず短すぎず）`);
+  });
+  it('魂は画面のまんなかまで昇り、はみ出さない', () => {
+    const { api, clock } = load();
+    pet(api, clock, { dead:'starve', stage:'larva' });
+    const body = api.charSprites().sleep || api.charSprites().rest;
+    const from = api.MAIN_GY - body.length;          // 体の位置（足元は地面）
+    const to   = api.GHOST_Y_TOP;
+    ok(to > api.HEADER_Y, `昇りすぎてヘッダーに掛かる（${to} / 線 ${api.HEADER_Y}）`);
+    ok(to + api.GHOST_SPR.length < api.MAIN_GY, '地面より下へ行かないこと');
+    ok(from - to >= 12, `ほとんど昇らない（${from} → ${to}）`);
+    const mid = (api.HEADER_Y + api.MAIN_GY) / 2;
+    ok(Math.abs((to + api.GHOST_SPR.length/2) - mid) <= 4,
+       `まんなかから離れすぎ（中心 ${to + api.GHOST_SPR.length/2} / 画面のまんなか ${mid}）`);
+  });
+  it('体は魂が離れるにつれて薄れ、最後は消える', () => {
+    const { api } = load();
+    // 本体の判定をそのまま呼ぶ。ここで写しを作ると、本体を壊しても気づけない
+    const count = keep => { let n = 0;
+      for(let y=0;y<4;y++) for(let x=0;x<4;x++) if(api.fadeKeeps(x, y, keep)) n++;
+      return n; };
+    eq(count(1), 16, 'はじめは全部見えること:');
+    eq(count(0), 0,  '最後は残らないこと:');
+    ok(count(0.5) > 0 && count(0.5) < 16, '途中は半分ほど残ること');
+    ok(count(0.25) < count(0.75), '薄れるほど点が減ること');
+    // 同じ点は毎回おなじ扱い（ちらつかない）
+    eq(api.fadeKeeps(1, 2, 0.5), api.fadeKeeps(1, 2, 0.5), '判定がぶれないこと:');
   });
   it('お別れの形が5種とも言葉になる', () => {
     const { api, clock } = load();
@@ -1394,8 +1419,9 @@ describe('ファイル', () => {
        'おばけの画面からおもいでへ繋がっていない');
     // 昇る動きは「いなくなった直後」だけ。おもいでを見たあとの画面は
     //  ALL RESET まで続くので、ここで昇り続けると おばけが画面から消えたままになる
-    ok(/const bob = \[0,-1,-2,-1\]\[Math\.floor\(fM\/8\)%4\];\s*\n\s*if\(pet\.memShown\)\{/.test(src),
+    ok(/if\(pet\.memShown\)\{\s*\n[^\n]*ALL RESET まで続くので/.test(src),
        'おばけの描き分け（見たあとは漂う姿で止める）が無い');
+    ok(/stampFade\(body, bx, by, DM, 1 - p\);/.test(src), '体が薄れて消える処理が無い');
   });
   it('サービスワーカーのVERSIONが日付の形をしている', () => {
     const m = read('sw.js').match(/const VERSION = '([^']+)'/);
