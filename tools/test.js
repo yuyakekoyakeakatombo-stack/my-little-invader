@@ -1285,11 +1285,35 @@ describe('おもいで', () => {
     const { api } = load();
     ok(api.GHOST_DUST_X > 0, '流れる距離が0');
     const s = [];
-    for(let y=0;y<4;y++) for(let x=0;x<6;x++) s.push(api.dustDrift(x, y));
-    ok(new Set(s).size >= 3, `粒ごとの流れ方がそろいすぎ（${new Set(s).size}種）`);
+    for(let y=0;y<8;y++) for(let x=0;x<12;x++) s.push(api.dustDrift(x, y));
+    ok(new Set(s).size >= 6, `粒ごとの流れ方がそろいすぎ（${new Set(s).size}種）`);
     ok(Math.min(...s) > 0, '流れない粒があってはいけない');
     // 同じ粒はいつも同じ動き（ちらつかない）
     eq(api.dustDrift(3, 2), api.dustDrift(3, 2));
+    ok(api.dustLift(3, 2) === api.dustLift(3, 2), '上下のばらつきもぶれないこと');
+  });
+  // rx*7 + ry*13 を 6 で割っていたころ、7も13も余りが1で (rx+ry)%6 と同じになり、
+  //  同じ値が斜めに並んで「／／」の筋が見えていた
+  it('粒の飛び方が斜めにそろわない', () => {
+    const { api } = load();
+    // 斜めは2方向ある。「＼」だけ見ていると「／」の筋を見逃す
+    for(const [dx, dy, name] of [[1, 1, '＼'], [1, -1, '／']]){
+      let same = 0, total = 0;
+      for(let y=1;y<12;y++) for(let x=0;x<15;x++){
+        total++;
+        if(api.dustDrift(x, y) === api.dustDrift(x+dx, y+dy)) same++;
+      }
+      ok(same/total < 0.25, `${name} の向きに同じ値が並びすぎ（${(same/total*100).toFixed(0)}%）`);
+    }
+    // 横・縦にも筋が出ていないこと
+    let row = 0, col = 0, n = 0;
+    for(let y=0;y<12;y++) for(let x=0;x<15;x++){
+      n++;
+      if(api.dustDrift(x, y) === api.dustDrift(x+1, y)) row++;
+      if(y+1 < 12 && api.dustDrift(x, y) === api.dustDrift(x, y+1)) col++;
+    }
+    ok(row / n < 0.25, `横に同じ値が並びすぎ（${(row/n*100).toFixed(0)}%）`);
+    ok(col / n < 0.25, `縦に同じ値が並びすぎ（${(col/n*100).toFixed(0)}%）`);
   });
   it('魂は画面のまんなかまで昇り、はみ出さない', () => {
     const { api, clock } = load();
@@ -1459,6 +1483,9 @@ describe('ファイル', () => {
     // 体の上端から出すと、背の低い段階では魂の足元が地面より下になる
     ok(/const from  = MAIN_GY - GHOST_SPR\.length;/.test(src),
        '魂の出発点が「足元を地面に置いた高さ」になっていない');
+    // 左へ流すだけだと横一列のまま動くので、上下にもばらけさせる
+    ok(/oy \+ ry \+ Math\.round\(drift \* [\d.]+ \* dustLift\(rx, ry\)\), col\);/.test(src),
+       '粒が上下にばらける処理が無い');
   });
   it('サービスワーカーのVERSIONが日付の形をしている', () => {
     const m = read('sw.js').match(/const VERSION = '([^']+)'/);

@@ -4125,13 +4125,22 @@
   const DITHER4 = [[0,8,2,10],[12,4,14,6],[3,11,1,9],[15,7,13,5]];
   //  keep=1 で全部残り、0 で全部消える。残す/消すは座標だけで決まる
   function fadeKeeps(rx, ry, keep){ return DITHER4[ry & 3][rx & 3] / 16 < keep; }
-  //  粒ごとの流されやすさ（0.5〜1.5）。座標で決めるので、粒はいつも同じ動きをする
-  function dustDrift(rx, ry){ return 0.5 + ((rx*7 + ry*13) % 6) * 0.2; }
-  //  風にさらわれて消えていく体。残った点ほど左へ流れ、やがて全部消える
+  //  粒ごとの飛び方は座標から決める（そうすれば粒はいつも同じ動きをして、ちらつかない）。
+  //   ただし rx*a + ry*b を小さい数で割る形にすると、a と b の余りが同じときに
+  //   規則が残って斜めの筋が見える。混ぜてから取り出す
+  function dustHash(rx, ry){
+    let h = Math.imul(rx + 1, 73856093) ^ Math.imul(ry + 1, 19349663);
+    h ^= h >>> 13; h = Math.imul(h, 1274126177); h ^= h >>> 16;
+    return h >>> 0;
+  }
+  function dustDrift(rx, ry){ return 0.4 + (dustHash(rx, ry) % 13) * 0.1; }        // 0.4〜1.6倍
+  function dustLift(rx, ry){ return ((dustHash(rx, ry) >>> 8) % 3) - 1; }          // 上下に −1〜+1
+  //  風にさらわれて消えていく体。残った点ほど左へ流れ、上下にもばらけて、やがて全部消える
   function stampDust(g, ox, oy, col, keep, drift){
     g.forEach((row,ry)=>row.forEach((v,rx)=>{
       if(v && fadeKeeps(rx, ry, keep))
-        dot(ctxM, ox + rx - Math.round(drift * dustDrift(rx, ry)), oy + ry, col);
+        dot(ctxM, ox + rx - Math.round(drift * dustDrift(rx, ry)),
+                  oy + ry + Math.round(drift * 0.15 * dustLift(rx, ry)), col);
     }));
   }
   let ghostT = 0;
