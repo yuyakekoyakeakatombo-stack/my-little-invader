@@ -105,7 +105,6 @@ td.k{ white-space:nowrap; font-weight:700; background:rgba(0,0,0,.045) }
 .chars figure{ margin:0; text-align:center; min-width:74px }
 .chars figcaption{ font-size:11px; margin-top:9px; color:#3c4a30 }
 .chars .arrow{ font-size:15px; color:#5b6b47; padding-bottom:26px }
-.chars .mystery{ font-size:26px; color:#5b6b47; padding-bottom:20px; letter-spacing:.1em }
 .chars.gitems{ gap:4px 10px; margin:8px 0 16px; align-items:flex-end }
 .chars.gitems figure{ min-width:52px }
 .chars.gitems figcaption{ font-size:10px; margin-top:6px }
@@ -123,7 +122,9 @@ p.cap{ font-size:12px; color:#3c4a30; margin:14px 0 0; font-weight:700 }
 .tree > ul > li{ padding-top:0 }                      /* 根には上へ伸びる枝が無い */
 /* タイプごとの枝を離す。くっついていると、どの ？ が どのタイプの下か読めない */
 .tree > ul > li > ul > li{ padding-left:12px; padding-right:12px }
-.tree ul ul::before{ content:''; position:absolute; top:-16px; left:50%;   /* 親から降りる縦線 */
+/*  親から降りる縦線は ul 自身の padding-top を埋める（top:0 で padding の上端から）。
+    ここを外すと、線が親の箱の中に入りこんだり、箱と横線のあいだが切れたりする */
+.tree ul ul::before{ content:''; position:absolute; top:0; left:50%;
                      width:0; height:16px; border-left:2px solid #5b6b47 }
 .tree li::before, .tree li::after{ content:''; position:absolute; top:0;   /* 横線＋縦線 */
                                    width:50%; height:16px; border-top:2px solid #5b6b47 }
@@ -133,8 +134,12 @@ p.cap{ font-size:12px; color:#3c4a30; margin:14px 0 0; font-weight:700 }
 .tree li:first-child::before, .tree li:last-child::after{ border-top:0 }
 .tree li:last-child::before{ border-right:2px solid #5b6b47; border-radius:0 5px 0 0 }
 .tree li:first-child::after{ border-radius:5px 0 0 0 }
-.tree .n{ display:inline-block; font-size:12.5px; font-weight:700; color:var(--lcdon);
-          border:2px solid #5b6b47; border-radius:4px; padding:4px 8px; white-space:nowrap;
+/*  本文の行送り(2.5)のままだと箱が間延びし、箱の下に余白が残って線が届かなくなる。
+    行送りを詰め、vertical-align:top でベースライン分の空きも消す */
+.tree li{ line-height:1.4 }
+.tree .n{ display:inline-block; vertical-align:top;
+          font-size:12.5px; line-height:1.4; font-weight:700; color:var(--lcdon);
+          border:2px solid #5b6b47; border-radius:4px; padding:5px 8px; white-space:nowrap;
           background:rgba(255,255,255,.28) }
 .tree .q{ border-style:dashed; color:#5b6b47; font-size:14px; padding:4px 7px }
 /* この cap だけは図の下につく説明なので、中央ぞろえにして 次の段落から離す */
@@ -491,8 +496,6 @@ STATUS<ruby>画面<rt>がめん</rt></ruby>（→ 7<ruby>章<rt>しょう</rt></
   <figure><svg viewBox="0 0 9 7" width="54" height="42" shape-rendering="crispEdges" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="0" width="1" height="1" fill="#1a2410"/><rect x="5" y="0" width="1" height="1" fill="#1a2410"/><rect x="2" y="1" width="1" height="1" fill="#1a2410"/><rect x="3" y="1" width="1" height="1" fill="#1a2410"/><rect x="4" y="1" width="1" height="1" fill="#1a2410"/><rect x="5" y="1" width="1" height="1" fill="#1a2410"/><rect x="6" y="1" width="1" height="1" fill="#1a2410"/><rect x="1" y="2" width="1" height="1" fill="#1a2410"/><rect x="2" y="2" width="1" height="1" fill="#1a2410"/><rect x="3" y="2" width="1" height="1" fill="#1a2410"/><rect x="4" y="2" width="1" height="1" fill="#1a2410"/><rect x="5" y="2" width="1" height="1" fill="#1a2410"/><rect x="6" y="2" width="1" height="1" fill="#1a2410"/><rect x="7" y="2" width="1" height="1" fill="#1a2410"/><rect x="0" y="3" width="1" height="1" fill="#1a2410"/><rect x="1" y="3" width="1" height="1" fill="#1a2410"/><rect x="3" y="3" width="1" height="1" fill="#1a2410"/><rect x="4" y="3" width="1" height="1" fill="#1a2410"/><rect x="5" y="3" width="1" height="1" fill="#1a2410"/><rect x="7" y="3" width="1" height="1" fill="#1a2410"/><rect x="8" y="3" width="1" height="1" fill="#1a2410"/><rect x="0" y="4" width="1" height="1" fill="#1a2410"/><rect x="1" y="4" width="1" height="1" fill="#1a2410"/><rect x="2" y="4" width="1" height="1" fill="#1a2410"/><rect x="3" y="4" width="1" height="1" fill="#1a2410"/><rect x="4" y="4" width="1" height="1" fill="#1a2410"/><rect x="5" y="4" width="1" height="1" fill="#1a2410"/><rect x="6" y="4" width="1" height="1" fill="#1a2410"/><rect x="7" y="4" width="1" height="1" fill="#1a2410"/><rect x="8" y="4" width="1" height="1" fill="#1a2410"/><rect x="1" y="5" width="1" height="1" fill="#1a2410"/><rect x="2" y="5" width="1" height="1" fill="#1a2410"/><rect x="3" y="5" width="1" height="1" fill="#1a2410"/><rect x="4" y="5" width="1" height="1" fill="#1a2410"/><rect x="5" y="5" width="1" height="1" fill="#1a2410"/><rect x="6" y="5" width="1" height="1" fill="#1a2410"/><rect x="7" y="5" width="1" height="1" fill="#1a2410"/><rect x="2" y="6" width="1" height="1" fill="#1a2410"/><rect x="6" y="6" width="1" height="1" fill="#1a2410"/></svg><figcaption>あかちゃん</figcaption></figure>
   <div class="arrow">▶</div>
   <figure><svg viewBox="0 0 9 7" width="54" height="42" shape-rendering="crispEdges" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="0" width="1" height="1" fill="#1a2410"/><rect x="6" y="0" width="1" height="1" fill="#1a2410"/><rect x="1" y="1" width="1" height="1" fill="#1a2410"/><rect x="2" y="1" width="1" height="1" fill="#1a2410"/><rect x="3" y="1" width="1" height="1" fill="#1a2410"/><rect x="4" y="1" width="1" height="1" fill="#1a2410"/><rect x="5" y="1" width="1" height="1" fill="#1a2410"/><rect x="6" y="1" width="1" height="1" fill="#1a2410"/><rect x="7" y="1" width="1" height="1" fill="#1a2410"/><rect x="0" y="2" width="1" height="1" fill="#1a2410"/><rect x="1" y="2" width="1" height="1" fill="#1a2410"/><rect x="3" y="2" width="1" height="1" fill="#1a2410"/><rect x="4" y="2" width="1" height="1" fill="#1a2410"/><rect x="5" y="2" width="1" height="1" fill="#1a2410"/><rect x="7" y="2" width="1" height="1" fill="#1a2410"/><rect x="8" y="2" width="1" height="1" fill="#1a2410"/><rect x="0" y="3" width="1" height="1" fill="#1a2410"/><rect x="1" y="3" width="1" height="1" fill="#1a2410"/><rect x="2" y="3" width="1" height="1" fill="#1a2410"/><rect x="3" y="3" width="1" height="1" fill="#1a2410"/><rect x="4" y="3" width="1" height="1" fill="#1a2410"/><rect x="5" y="3" width="1" height="1" fill="#1a2410"/><rect x="6" y="3" width="1" height="1" fill="#1a2410"/><rect x="7" y="3" width="1" height="1" fill="#1a2410"/><rect x="8" y="3" width="1" height="1" fill="#1a2410"/><rect x="1" y="4" width="1" height="1" fill="#1a2410"/><rect x="2" y="4" width="1" height="1" fill="#1a2410"/><rect x="3" y="4" width="1" height="1" fill="#1a2410"/><rect x="4" y="4" width="1" height="1" fill="#1a2410"/><rect x="5" y="4" width="1" height="1" fill="#1a2410"/><rect x="6" y="4" width="1" height="1" fill="#1a2410"/><rect x="7" y="4" width="1" height="1" fill="#1a2410"/><rect x="2" y="5" width="1" height="1" fill="#1a2410"/><rect x="6" y="5" width="1" height="1" fill="#1a2410"/><rect x="1" y="6" width="1" height="1" fill="#1a2410"/><rect x="7" y="6" width="1" height="1" fill="#1a2410"/></svg><figcaption>こども</figcaption></figure>
-  <div class="arrow">▶</div>
-  <div class="mystery">？ ？ ？</div>
 </div>
 
 <p>ここから さきの すがたは、<b>あなたが どう そだてたかで かわります。</b></p>
