@@ -684,16 +684,38 @@ describe('にっきの字', () => {
     eq(left.map(i => name(list,i)), ['status','diary','settings'], '左の列（日記あり）:');
     eq(right.map(i => name(list,i)), ['story','manual'], '日記が増えても右は変わらない:');
   });
-  it('おもいでが出ても、左の列は4つまでに収まる', () => {
+  // おもいでは別れたあとにだけ出る。右の列のいちばん上（ストーリーの上）に入り、
+  //  ストーリーと説明書は1段ずつ下がる
+  it('おもいでは右の列のいちばん上に入り、ストーリーが1段下がる', () => {
     const { api, clock } = load({ storage:{ myvader_lang:'ja' } });
     pet(api, clock, { name:'T', gone:true, goneBy:'return' });
     api.clearDiary();
     api.addDiary(api.buildDiary({ fed:1, praised:1 }, 1));
     const { list, left, right } = api.menuCols();
-    eq(left.map(i => list[i][1]), ['memory','status','diary','settings']);
-    eq(right.length, 2);
-    // 画面は65ドット。4行でも下端が収まる行間になっていること
-    ok(left.length <= 4, `左の列が${left.length}行ある（4行までを前提に行間を決めている）`);
+    eq(right.map(i => list[i][1]), ['memory','story','manual'], '右の列:');
+    eq(left.map(i => list[i][1]), ['status','diary','settings'], '左の列は変わらない:');
+  });
+  // アイコンから下へ降りたときの着地点は左の列の先頭。おもいでが出ていると
+  //  一覧の先頭（＝6番）は右の列のいちばん上になるので、そこへ降りると不自然
+  it('おもいでが出ていても、左の列の先頭はステータスのまま', () => {
+    for(const over of [{}, { gone:true, goneBy:'return' }]){
+      const { api, clock } = load({ storage:{ myvader_lang:'ja' } });
+      pet(api, clock, Object.assign({ name:'T' }, over));
+      api.clearDiary();
+      const { list, left } = api.menuCols();
+      eq(list[left[0]][1], 'status', `${JSON.stringify(over)} の左の列の先頭:`);
+    }
+  });
+  it('どの状態でも、下段は3行までに収まる', () => {
+    for(const over of [{}, { gone:true, goneBy:'return' }, { dead:'starve' }]){
+      const { api, clock } = load({ storage:{ myvader_lang:'ja' } });
+      pet(api, clock, Object.assign({ name:'T' }, over));
+      api.clearDiary();
+      api.addDiary(api.buildDiary({ fed:1, praised:1 }, 1));
+      const { left, right } = api.menuCols();
+      const rows = Math.max(left.length, right.length);
+      ok(rows <= 3, `${JSON.stringify(over)} で ${rows}行になる（行間の想定は3行まで）`);
+    }
   });
   it('全部そろっても、項目はメニューから消えない', () => {
     const { api, clock } = load({ storage:{ myvader_lang:'ja' } });
@@ -1322,6 +1344,15 @@ describe('ファイル', () => {
     const m = src.match(/ctxO\.font = '(\d+)px "Press Start 2P"';\s*\n\s*ctxO\.fillStyle = blink/);
     ok(m, 'PRESS A の字の指定が見つからない');
     ok(Number(m[1]) >= 8, `PRESS A が小さい（${m[1]}px）`);
+  });
+  // 十字キーの処理は画面の操作の中にあり、テストから呼べない。
+  //  アイコンから下へ降りた着地点が「左の列の先頭」であることをソースで押さえる
+  //  （6番決め打ちだと、おもいでが出ているとき右の列のいちばん上に着く）
+  it('メニューでアイコンから降りる先が、左の列の先頭になっている', () => {
+    const src = read('invader_game.html');
+    ok(/const topLeft\s*=\s*6\s*\+\s*left\[0\];/.test(src), 'topLeft の定義が無い');
+    ok(/if\(dir==='down'\)\s+menuSel = \(r===0\) \? menuSel\+3 : topLeft;/.test(src),
+       'アイコンから下へ降りる先が topLeft になっていない');
   });
   it('サービスワーカーのVERSIONが日付の形をしている', () => {
     const m = read('sw.js').match(/const VERSION = '([^']+)'/);

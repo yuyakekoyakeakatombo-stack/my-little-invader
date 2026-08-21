@@ -4899,10 +4899,13 @@
     if(!diaryUnlocked()) return [...head, ...MENU_BASE];
     return [...head, MENU_BASE[0], ['DIARY','diary'], ...MENU_BASE.slice(1)];   // STATUS の次に DIARY を挟む
   }
-  // 下段の項目は2列に分ける。ストーリーと説明書は「読みもの」なので右の列へ。
-  //  左＝その子の状態を見るもの、右＝読みもの、という分け方。
+  // 下段の項目は2列に分ける。
+  //  左＝いま世話をしている子のこと（ステータス／にっき／せってい）
+  //  右＝読みもの（おもいで／ストーリー／せつめいしょ）
+  //  おもいでは別れたあとにだけ出る。menuList() の先頭にいるので、
+  //  ここに並べるとそのまま右の列のいちばん上（ストーリーの上）に入る
   //  返すのは menuList() の添字なので、選択位置（menuSel）の意味は変えなくてよい
-  const MENU_RIGHT = ['story', 'manual'];
+  const MENU_RIGHT = ['memory', 'story', 'manual'];
   function menuCols(){
     const list = menuList(), left = [], right = [];
     list.forEach((it, i) => (MENU_RIGHT.includes(it[1]) ? right : left).push(i));
@@ -5281,15 +5284,18 @@
         const dir = el.classList.contains('up')?'up' : el.classList.contains('down')?'down'
                   : el.classList.contains('left')?'left' : 'right';
         const { left, right } = menuCols();
-        const lastLeft = 6 + left[left.length-1];   // 左の列のいちばん下
+        //  アイコンとの行き来は左の列を入口にする。おもいでが出ている時、
+        //  6番（＝一覧の先頭）は右の列のいちばん上なので、そこへ降りると不自然になる
+        const topLeft  = 6 + left[0];
+        const lastLeft = 6 + left[left.length-1];
         if(menuSel < 6){
           const r = Math.floor(menuSel/3);
           // 左右は6アイコンを一列としてループ（くすり→ほめる、ゲーム→ごはん）
           if(dir==='left')  menuSel = (menuSel+5)%6;
           if(dir==='right') menuSel = (menuSel+1)%6;
-          // 上下もループ：上段から上で左の列のいちばん下へ、下段から下でサブ項目の先頭へ
+          // 上下もループ：上段から上で左の列のいちばん下へ、下段から下で左の列の先頭へ
           if(dir==='up')    menuSel = (r===1) ? menuSel-3 : lastLeft;
-          if(dir==='down')  menuSel = (r===0) ? menuSel+3 : 6;
+          if(dir==='down')  menuSel = (r===0) ? menuSel+3 : topLeft;
         } else {
           // サブ項目は2列。上下は同じ列の中を動き、左右で列を移る
           const cur = menuSel - 6;
