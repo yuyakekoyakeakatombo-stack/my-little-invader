@@ -47,6 +47,19 @@ const MUTATIONS = [
   ['ab', '説明文を読めない色に戻す',
    "txt('TAP TWICE TO DASH',2,19,5,ON);", "txt('TAP TWICE TO DASH',2,19,5,DIM);", 'caught'],
 
+  // ── 戻る操作の統一 ──
+  ['sw', 'ゲームオーバーでBが選択画面へ戻らない',
+   "else if(state===STATE.TITLE || state===STATE.GAMEOVER) exitToMenu(true);",
+   "else if(state===STATE.TITLE) exitToMenu(true);", 'caught'],
+  ['ss', 'ゲームオーバーでMENUが選択画面へ戻らない',
+   "exitToMenu(state===STATE.GAMEOVER); });", "exitToMenu(); });", 'caught'],
+  ['ab', 'ゲームオーバーでMENUが選択画面へ戻らない',
+   "exitToMenu(state===STATE.GAMEOVER);   //", "exitToMenu();   //", 'caught'],
+  ['sw', '案内を画面の下からはみ出す位置に置く',
+   "txtC('A : TITLE   B : BACK',61,5,ON);", "txtC('A : TITLE   B : BACK',64,5,ON);", 'caught'],
+  ['sw', '戻る案内にAを出してしまう',
+   "txtC('B : BACK',62,5,ON);", "txtC('A/B : BACK',62,5,ON);", 'caught'],
+
   // ── スペースウォーク ──
   ['sw', '自機が画面の左へはみ出す',
    "if(plyX<PLY_MIN_X) plyX=PLY_MIN_X;", "", 'caught'],

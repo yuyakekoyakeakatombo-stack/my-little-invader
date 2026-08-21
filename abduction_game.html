@@ -592,7 +592,7 @@
       // 体当たりは即終了ではなく減点。「当たっても平気」と誤解されないよう点数を出す
       txt('UFO HITS YOU',2,49,6,ON);  txt('-30',W-11,49,6,ON);
       txt('JUMP OVER IT',2,55,6,ON);
-      if(Math.floor(Date.now()/450)%2===0) txtC('A/B : BACK',61,5,ON);
+      if(Math.floor(Date.now()/450)%2===0) txtC('B : BACK',61,5,ON);
       return;
     }
     if(state===STATE.PLAY){
@@ -643,7 +643,7 @@
       txtC('OVER',32,8,ON);
       txtC('SCORE',44,7,ON);   // 薄くて読みにくかったので濃く・大きく
       txtC((''+Math.max(0,score)).padStart(4,'0'),53,8,ON);
-      if(Math.floor(Date.now()/450)%2===0) txtC('PRESS A',64,5,ON);
+      if(Math.floor(Date.now()/450)%2===0) txtC('A : TITLE   B : BACK',61,5,ON);
       return;
     }
   }
@@ -708,7 +708,8 @@
   function onBPress(){
     anim(document.getElementById('bb'));
     if(state===STATE.HELP) state=STATE.TITLE;
-    else if(state===STATE.TITLE) exitToMenu(true); // タイトルでBを押したら選択画面へ戻る
+    // タイトルでも、遊び終わったあとでも、Bは「ひとつ前＝ゲーム選択画面」へ戻る
+    else if(state===STATE.TITLE || state===STATE.GAMEOVER) exitToMenu(true);
   }
   press(document.getElementById('bb'), onBPress);
   // ミニゲームを閉じて、本体のゲーム選択画面へ戻る
@@ -723,7 +724,8 @@
   }
   press(document.getElementById('bmenu'), ()=>{
     const m=document.getElementById('bmenu'); m.style.transform='scale(.93)'; setTimeout(()=>m.style.transform='',100);
-    exitToMenu();   // iframe内なら親に通知して閉じる（ページ遷移しない）
+    // 遊び終わったあとは選択画面へ、遊んでいる最中は育成画面へ
+    exitToMenu(state===STATE.GAMEOVER);   // iframe内なら親に通知して閉じる（ページ遷移しない）
   });
 
   // キーボード対応

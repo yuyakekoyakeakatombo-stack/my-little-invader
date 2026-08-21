@@ -125,6 +125,42 @@ describe('読みやすさ', () => {
       });
     }
   });
+  // ボタンの案内は、アプリ全体でBを「ひとつ前に戻る」に統一する。
+  //  以前は A/B どちらでも戻れると書いてあり、Bの役割がぼやけていた
+  it('3本とも、戻る案内は「B : BACK」で、Aを戻る役として出していない', () => {
+    for(const g of GAMES){
+      const src = read(g);
+      ok(!/A\/B\s*:\s*BACK/.test(src), `${g}: 「A/B : BACK」が残っている`);
+      ok(/txtC\('B : BACK'/.test(src), `${g}: 「B : BACK」の案内が無い`);
+    }
+  });
+  it('3本とも、遊び終わった画面でBとMENUが選択画面へ戻る', () => {
+    for(const g of GAMES){
+      const src = read(g);
+      ok(/state===STATE\.TITLE \|\| state===STATE\.GAMEOVER\) exitToMenu\(true\)/.test(src),
+         `${g}: ゲームオーバーでBが選択画面へ戻らない`);
+      ok(/exitToMenu\(state===STATE\.GAMEOVER\)/.test(src),
+         `${g}: ゲームオーバーでMENUが選択画面へ戻らない`);
+    }
+  });
+  // 画面は65ドット(260px)。下のほうに置いた案内が、はみ出して切れていた
+  //  （ゲームオーバーの案内が y=64 で、下端に1pxかかっていた）
+  it('3本とも、文字が画面の下からはみ出していない', () => {
+    const H = 65, S = 4;
+    for(const g of GAMES){
+      read(g).split('\n').forEach((l, i) => {
+        // txt(s,x,y,size) / txtR(s,x,y,size) と txtC(s,y,size) / txtCM(s,y,size)
+        for(const m of l.matchAll(/\btxt(C|CM|R)?\('[^']*',\s*([-\d.]+)\s*,\s*([-\d.]+)\s*(?:,\s*([-\d.]+))?/g)){
+          const kind = m[1] || '';
+          const y  = Number(kind === 'C' || kind === 'CM' ? m[2] : m[3]);
+          const sz = Number(kind === 'C' || kind === 'CM' ? m[3] : m[4]);
+          if(!Number.isFinite(y) || !Number.isFinite(sz)) continue;
+          const bottom = kind === 'CM' ? y*S + sz/2 : y*S + sz;   // CM は中央そろえ
+          ok(bottom <= H*S, `${g}:${i+1} 文字が画面の下からはみ出す（下端 ${bottom}px / 画面 ${H*S}px）\n      ${l.trim()}`);
+        }
+      });
+    }
+  });
   it('DIMと背景のコントラストは、文字に使えるほど無い（前提の確認）', () => {
     const lin = c => { c/=255; return c<=0.03928 ? c/12.92 : Math.pow((c+0.055)/1.055, 2.4); };
     const L = h => { const n = p => lin(parseInt(h.slice(p, p+2), 16));
