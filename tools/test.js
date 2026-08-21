@@ -1258,6 +1258,39 @@ describe('おもいで', () => {
     const sec = D * 100 / 1000;
     ok(sec >= 3 && sec <= 8, `全体で${sec}秒（長すぎず短すぎず）`);
   });
+  // 体の上端から出すと、背の低い子では魂の足元が地面より下になる
+  it('魂は足元が地面より下から出ない（どの段階でも）', () => {
+    const { api, clock } = load();
+    const from = api.MAIN_GY - api.GHOST_SPR.length;     // 足元を地面に置いた高さ
+    eq(from + api.GHOST_SPR.length, api.MAIN_GY, '足元が地面にそろうこと:');
+    // 体の上端から出していたころは、背の低い段階で地面より下に足が出ていた
+    let below = 0;
+    for(const st of ['egg','mid','larva','adult','final']){
+      pet(api, clock, { dead:'starve', stage:st, lineage:'inv', form:'i2' });
+      const body = api.charSprites().sleep || api.charSprites().rest;
+      if(api.MAIN_GY - body.length + api.GHOST_SPR.length > api.MAIN_GY) below++;
+    }
+    ok(below > 0, '体の上端から出すと沈む段階が無い（この直しが要る理由が消えている）');
+  });
+  it('魂は左右にゆれながら昇る', () => {
+    const { api } = load();
+    ok(api.GHOST_SWAY_X > 0, 'ゆれ幅が0');
+    ok(api.GHOST_SWAY_X <= 4, `ゆれ幅が大きすぎる（${api.GHOST_SWAY_X}）`);
+    ok(api.GHOST_SWAY_T >= 2, 'ゆれが速すぎる（ちらついて見える）');
+    // 昇るあいだに何度か往復すること
+    const cycles = api.GHOST_RISE_T / (2 * Math.PI * api.GHOST_SWAY_T);
+    ok(cycles >= 0.8 && cycles <= 4, `ゆれの回数が極端（${cycles.toFixed(1)}往復）`);
+  });
+  it('体は風にさらわれて左へ流れ、粒ごとに流れ方が違う', () => {
+    const { api } = load();
+    ok(api.GHOST_DUST_X > 0, '流れる距離が0');
+    const s = [];
+    for(let y=0;y<4;y++) for(let x=0;x<6;x++) s.push(api.dustDrift(x, y));
+    ok(new Set(s).size >= 3, `粒ごとの流れ方がそろいすぎ（${new Set(s).size}種）`);
+    ok(Math.min(...s) > 0, '流れない粒があってはいけない');
+    // 同じ粒はいつも同じ動き（ちらつかない）
+    eq(api.dustDrift(3, 2), api.dustDrift(3, 2));
+  });
   it('魂は画面のまんなかまで昇り、はみ出さない', () => {
     const { api, clock } = load();
     pet(api, clock, { dead:'starve', stage:'larva' });
@@ -1421,7 +1454,11 @@ describe('ファイル', () => {
     //  ALL RESET まで続くので、ここで昇り続けると おばけが画面から消えたままになる
     ok(/if\(pet\.memShown\)\{\s*\n[^\n]*ALL RESET まで続くので/.test(src),
        'おばけの描き分け（見たあとは漂う姿で止める）が無い');
-    ok(/stampFade\(body, bx, by, DM, 1 - p\);/.test(src), '体が薄れて消える処理が無い');
+    ok(/stampDust\(body, bx, by, DM, 1 - p, p \* GHOST_DUST_X\);/.test(src),
+       '体が風で流されて消える処理が無い');
+    // 体の上端から出すと、背の低い段階では魂の足元が地面より下になる
+    ok(/const from  = MAIN_GY - GHOST_SPR\.length;/.test(src),
+       '魂の出発点が「足元を地面に置いた高さ」になっていない');
   });
   it('サービスワーカーのVERSIONが日付の形をしている', () => {
     const m = read('sw.js').match(/const VERSION = '([^']+)'/);

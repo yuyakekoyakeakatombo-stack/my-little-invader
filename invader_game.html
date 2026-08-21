@@ -4118,13 +4118,20 @@
   const GHOST_HOLD   = 8;    // 昇りきってから おもいで が開くまでの間
   const GHOST_MEM_DELAY = GHOST_STILL + GHOST_RISE_T + GHOST_HOLD;
   const GHOST_Y_TOP  = 30;   // 昇りきる高さ（プレイ領域 8〜61 のまんなか）
+  const GHOST_SWAY_X = 2;    // 昇りながら左右に振れる幅（ドット）
+  const GHOST_SWAY_T = 4;    // 振れの周期（大きいほどゆっくり）
+  const GHOST_DUST_X = 12;   // 体が風で左へ流される距離（ドット）
   // 2色の画面で「薄れていく」を表す。消す点は位置で決めるので、毎フレームちらつかない
   const DITHER4 = [[0,8,2,10],[12,4,14,6],[3,11,1,9],[15,7,13,5]];
   //  keep=1 で全部残り、0 で全部消える。残す/消すは座標だけで決まる
   function fadeKeeps(rx, ry, keep){ return DITHER4[ry & 3][rx & 3] / 16 < keep; }
-  function stampFade(g, ox, oy, col, keep){
+  //  粒ごとの流されやすさ（0.5〜1.5）。座標で決めるので、粒はいつも同じ動きをする
+  function dustDrift(rx, ry){ return 0.5 + ((rx*7 + ry*13) % 6) * 0.2; }
+  //  風にさらわれて消えていく体。残った点ほど左へ流れ、やがて全部消える
+  function stampDust(g, ox, oy, col, keep, drift){
     g.forEach((row,ry)=>row.forEach((v,rx)=>{
-      if(v && fadeKeeps(rx, ry, keep)) dot(ctxM, ox+rx, oy+ry, col);
+      if(v && fadeKeeps(rx, ry, keep))
+        dot(ctxM, ox + rx - Math.round(drift * dustDrift(rx, ry)), oy + ry, col);
     }));
   }
   let ghostT = 0;
@@ -4150,11 +4157,16 @@
       const by = MAIN_GY - body.length;                      // 足元を地面に据える
       const t  = Math.max(0, ghostT - GHOST_STILL);
       const p  = Math.min(1, t / GHOST_RISE_T);              // 0→1
-      stampFade(body, bx, by, DM, 1 - p);                    // 魂が離れるほど薄れて消える
+      // 体は風にさらわれるように、左へ流れながら消えていく
+      stampDust(body, bx, by, DM, 1 - p, p * GHOST_DUST_X);
       if(t > 0){
-        const gy = Math.round(by + (GHOST_Y_TOP - by) * p);
+        // 魂は足元を地面に置いた高さから昇りはじめる。
+        //  体の上端から出すと、背の低い子では足元が地面より下になってしまう
+        const from  = MAIN_GY - GHOST_SPR.length;
+        const gy    = Math.round(from + (GHOST_Y_TOP - from) * p);
+        const sway  = Math.round(Math.sin(t / GHOST_SWAY_T) * GHOST_SWAY_X);
         const blink = (p >= 1) && (fM % 4 >= 2);             // 昇りきったら点滅して消える
-        if(!blink) stamp(ctxM, GHOST_SPR, gx, gy, DM);
+        if(!blink) stamp(ctxM, GHOST_SPR, gx + sway, gy, DM);
       }
       if(++ghostT === GHOST_MEM_DELAY) endedShowMemory();
     }
