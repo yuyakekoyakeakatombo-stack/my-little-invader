@@ -39,6 +39,14 @@ const MUTATIONS = [
   ['sw', '遊んでいる途中で結果を保存してしまう',
    "  function update(){", "  function update(){ reportScore();", 'caught'],
 
+  // ── 説明文の読みやすさ（DIM は背景とのコントラストが1.46:1しかない）──
+  ['sw', '説明文を読めない色に戻す',
+   "txt('STARS SATELLITES',2,32,5,ON);", "txt('STARS SATELLITES',2,32,5,DIM);", 'caught'],
+  ['ss', '説明文を読めない色に戻す',
+   "txt('MANY HITS',14,45,5,ON);", "txt('MANY HITS',14,45,5,DIM);", 'caught'],
+  ['ab', '説明文を読めない色に戻す',
+   "txt('TAP TWICE TO DASH',2,19,5,ON);", "txt('TAP TWICE TO DASH',2,19,5,DIM);", 'caught'],
+
   // ── スペースウォーク ──
   ['sw', '自機が画面の左へはみ出す',
    "if(plyX<PLY_MIN_X) plyX=PLY_MIN_X;", "", 'caught'],

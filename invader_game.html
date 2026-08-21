@@ -608,7 +608,7 @@
       if(titleWait > 19){
         if(!openingReady) openingReady = true;
         const blink = Math.floor(titleWait / 9) % 2 === 0;
-        ctxO.font = '6px "Press Start 2P"';
+        ctxO.font = '8px "Press Start 2P"';
         ctxO.fillStyle = blink ? ON : DIM;
         ctxO.fillText('PRESS  A', cx, 35*S);
       }
@@ -1790,7 +1790,10 @@
   // 来たその日から日記を書く。書いたものは死んでも帰還しても読み返せる。
   //  名前をつける前（まだ来ていない）は書かない
   function diaryWriting(){ return !!pet.name && !!pet.stage; }
-  function diaryUnlocked(){ return diaryWriting() || diaryLog.length > 0; }
+  // メニューに「にっき」が並ぶのは、最初の1件が書かれてから。
+  //  来たその日から書ける状態にはなっているが、空の日記帳を先に見せると
+  //  「何も書いていない」画面を開かせることになるので、中身ができてから出す
+  function diaryUnlocked(){ return diaryLog.length > 0; }
 
   // ════════════════════════════════════════
   // にっきの「字」──よその星から来たばかりの子は、地球の言葉をまだ書けない。

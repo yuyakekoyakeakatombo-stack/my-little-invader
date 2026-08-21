@@ -582,7 +582,7 @@
       star(24,10); for(let i=2;i<=8;i++){ if(i>5&&i%2===0)continue; d(26-i,12-i,DIM); }
       txtC('SHOOTING',23,7,ON);
       txtC('STAR',30,7,ON);
-      txtC('SHOOT THE STARS',41,5,DIM);
+      txtC('SHOOT THE STARS',41,5,ON);
       // メニュー
       // 選択中を網掛けの帯で示す（本編のMENUと同じ表現）。
       //  以前は未選択を薄色にしていたため、HOW TO PLAY がキャッチコピーと同じ見た目になり、
@@ -609,7 +609,7 @@
       txt('MISSED',2,32,6,ON);    txt('-10',W-11,32,6,ON);
       txt('GET HIT',2,38,6,ON);   txt('-15',W-11,38,6,ON);
       // 隕石は何発も当てないと壊せない。落とすといちばん重い減点なので、そこまで書く
-      txt('METEOR',2,44,6,ON);    txt('MANY HITS',14,45,5,DIM);  txt('+60',W-11,44,6,ON);
+      txt('METEOR',2,44,6,ON);    txt('MANY HITS',14,45,5,ON);  txt('+60',W-11,44,6,ON);
       txt('DROPPED',2,50,6,ON);   txt('-30',W-11,50,6,ON);
       // きらきら星は「当たったらミス」ではない。取りに行く物だと分かるよう明記する
       txt('CATCH SPARKLE',2,56,6,ON); txt('2 SHOTS',W-14,56,6,ON);
@@ -673,7 +673,7 @@
       txtC('OVER',32,8,ON);
       txtC('SCORE',44,7,ON);   // 薄くて読みにくかったので濃く・大きく
       txtC((''+Math.max(0,score)).padStart(4,'0'),53,8,ON);
-      if(Math.floor(Date.now()/450)%2===0) txtC('PRESS A',64,5,DIM);
+      if(Math.floor(Date.now()/450)%2===0) txtC('PRESS A',64,5,ON);
       return;
     }
   }

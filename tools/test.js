@@ -654,13 +654,31 @@ describe('にっきの字', () => {
     pet(api, clock, { stage:'egg', name:'T' });
     ok(api.diaryWriting(), 'うまれたてでも書くこと');
     eq(api.diaryLevel(), api.LV_NEW);
-    ok(api.menuList().some(m => m[1] === 'diary'), 'メニューに にっき が並ぶこと');
   });
   it('名前をつける前は書かない', () => {
     const { api, clock } = load();
     pet(api, clock, { stage:'egg', name:'' });
     ok(!api.diaryWriting());
-    ok(!api.menuList().some(m => m[1] === 'diary'), 'まだ来ていないので並ばないこと');
+  });
+  // 中身が無いうちに開かせると「まだ なにも かいていない」だけの画面になる
+  it('メニューの「にっき」は、1件目が書かれてから並ぶ', () => {
+    const { api, clock } = load();
+    pet(api, clock, { stage:'egg', name:'T' });
+    api.clearDiary();
+    ok(!api.menuList().some(m => m[1] === 'diary'), 'まだ何も書いていないので並ばないこと');
+    api.addDiary(api.buildDiary({ fed:1, praised:1 }, 1));
+    ok(api.diaryLog.length > 0, '1件書かれたこと');
+    ok(api.menuList().some(m => m[1] === 'diary'), '書かれたら並ぶこと');
+  });
+  it('帰ったあと・死んだあとも、書いた日記は読み返せる', () => {
+    const { api, clock } = load();
+    pet(api, clock, { stage:'final', lineage:'inv', name:'T' });
+    api.clearDiary();
+    api.addDiary(api.buildDiary({ fed:1, praised:1 }, 1));
+    api.pet.gone = true; api.pet.goneBy = 'return';
+    ok(api.menuList().some(m => m[1] === 'diary'), '帰ったあとも並ぶこと');
+    api.pet.gone = false; api.pet.dead = 'starve';
+    ok(api.menuList().some(m => m[1] === 'diary'), '死んだあとも並ぶこと');
   });
   it('到着した日の夜に、その日ぶんが1件書かれる', () => {
     const { api, clock } = load();
@@ -1263,6 +1281,14 @@ describe('ファイル', () => {
     const src = read('invader_game.html');
     ok(/\[SAVE_KEY,\s*SAVE_BAK,\s*SAVE_BAD\]\.forEach\(k\s*=>\s*localStorage\.removeItem\(k\)\)/.test(src),
        'ALL RESET が3つの鍵をまとめて消していない');
+  });
+  // オープニングの描画はテストから読めないので、字の大きさをソースで押さえる。
+  //  小さすぎて「押していい」ことが伝わらなかった
+  it('タイトルの PRESS A が、読める大きさで描かれている', () => {
+    const src = read('invader_game.html');
+    const m = src.match(/ctxO\.font = '(\d+)px "Press Start 2P"';\s*\n\s*ctxO\.fillStyle = blink/);
+    ok(m, 'PRESS A の字の指定が見つからない');
+    ok(Number(m[1]) >= 8, `PRESS A が小さい（${m[1]}px）`);
   });
   it('サービスワーカーのVERSIONが日付の形をしている', () => {
     const m = read('sw.js').match(/const VERSION = '([^']+)'/);

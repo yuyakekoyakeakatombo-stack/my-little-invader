@@ -105,6 +105,37 @@ describe('ミニゲーム共通', () => {
   });
 });
 
+// ══ 読みやすさ ════════════════════════════════════════════
+//  DIM(#8aaa6a) は背景 OFF(#b8c890) に対してコントラストが 1.46:1 しかない。
+//  絵（スピード線・破線の地面・使い切ったワープ残数）には使ってよいが、
+//  読ませる文字に使うと、特に5〜6pxではほとんど見えない
+describe('読みやすさ', () => {
+  const fs = require('fs'), path = require('path');
+  const read = g => fs.readFileSync(path.join(__dirname, '..', require('./mg-harness').FILES[g]), 'utf8');
+  // 「使い切ったワープ残数を薄く出す」だけは、状態を表す絵なので許す
+  const ALLOWED = [/txt\('W'\+warpLeft, 36, 59, 7, warpLeft>0 \? ON : DIM\)/];
+
+  it('3本とも、読ませる文字にDIMを使っていない', () => {
+    for(const g of GAMES){
+      const lines = read(g).split('\n');
+      lines.forEach((l, i) => {
+        if(!/\btxt[CRM]*\([^)]*\bDIM\s*\)/.test(l)) return;
+        if(ALLOWED.some(re => re.test(l))) return;
+        throw new Error(`${g}:${i+1} 読めない色の文字が残っている → ${l.trim()}`);
+      });
+    }
+  });
+  it('DIMと背景のコントラストは、文字に使えるほど無い（前提の確認）', () => {
+    const lin = c => { c/=255; return c<=0.03928 ? c/12.92 : Math.pow((c+0.055)/1.055, 2.4); };
+    const L = h => { const n = p => lin(parseInt(h.slice(p, p+2), 16));
+      return 0.2126*n(1) + 0.7152*n(3) + 0.0722*n(5); };
+    const ratio = (a,b) => { const x=L(a), y=L(b), hi=Math.max(x,y), lo=Math.min(x,y);
+      return (hi+0.05)/(lo+0.05); };
+    ok(ratio('#8aaa6a', '#b8c890') < 3, 'DIMは文字に使えない前提であること');
+    ok(ratio('#1a2410', '#b8c890') >= 4.5, 'ONは文字として読める色であること');
+  });
+});
+
 // ══ スペースウォーク ══════════════════════════════════════════
 describe('スペースウォーク', () => {
   const g = 'spacewalk';
