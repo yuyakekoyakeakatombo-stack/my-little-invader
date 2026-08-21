@@ -35,6 +35,7 @@ const EXPORTS = `
   get arriveT(){ return arriveT; }, set arriveT(v){ arriveT = v; },
   addM, addP, addA, addD, M_ADJ, P_ADJ, A_ADJ,
   DIARY_LINES, DIARY_MUSINGS, DIARY_CLOSE, DIARY_PRIORITY,
+  STORY_JA, STORY_EN, STORY_TITLE,
   get diaryLog(){ return diaryLog; },
   buildDiary, diaryBody, addDiary, clearDiary,
   diaryWriting, diaryLevel, diaryStyle, writeRatio, entryLevel, diaryWords, diaryMarks, diaryRows, diaryBaseDot, diaryFontSize,

@@ -197,6 +197,14 @@ const MUTATIONS = [
   ['粒が上下にばらけない',
    "      const y = Math.min(MAIN_GY - 1, oy + ry + Math.round(drift * 0.15 * dustLift(rx, ry)));",
    "      const y = oy + ry;", 'caught'],
+  // ── ストーリー ──
+  ['英語だけ段落を足す（日本語と切れ目がずれる）',
+   "    'By this little invader.',", "    '',\n    'By this little invader.',", 'caught'],
+  ['日本語に漢字が混ざる（この機械は漢字を出さない）',
+   "    'この、ちいさな インベーダーに。',", "    'この、小さな インベーダーに。',", 'caught'],
+  ['書き出しから雨が消える（到着の演出と辻褄が合わなくなる）',
+   "    'あめの おおい としだった。", "    'かぜの つよい としだった。", 'caught'],
+
   // ── 到着の演出 ──
   ['雨が降らない（うすぐらいだけの画面から始まる）',
    "  const ARR_RAIN_N = 14;", "  const ARR_RAIN_N = 0;", 'caught'],

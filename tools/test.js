@@ -522,6 +522,52 @@ describe('到着', () => {
   });
 });
 
+// ══ ストーリー ════════════════════════════════════════════
+//   原稿（MY LITTLE INVADER_text.rtf）を書き写したもの。
+//   片方の言語だけ直して、もう片方が置いていかれるのを防ぐ
+describe('ストーリー', () => {
+  const blocks = a => {                       // 空行で区切られたかたまりに分ける
+    const out = [[]];
+    a.forEach(l => l ? out[out.length-1].push(l) : out.push([]));
+    return out.filter(b => b.length);
+  };
+  it('日本語と英語で、段落の切れ目がそろっている', () => {
+    const { api } = load();
+    eq(blocks(api.STORY_EN).length, blocks(api.STORY_JA).length, 'かたまりの数:');
+  });
+  it('日本語はすべて かな（この機械は漢字を出さない）', () => {
+    const { api } = load();
+    const kanji = [...new Set(api.STORY_JA.join('').match(/[一-鿿]/g) || [])];
+    eq(kanji.length, 0, `漢字が混ざっている（${kanji.join('')}）:`);
+  });
+  it('どちらの言語も、空の段落で始まったり終わったりしない', () => {
+    const { api } = load();
+    for(const [name, arr] of [['ja', api.STORY_JA], ['en', api.STORY_EN]]){
+      ok(arr.length > 0, `${name}: 本文が無い`);
+      ok(arr[0], `${name}: 先頭が空行`);
+      ok(arr[arr.length-1], `${name}: 末尾が空行`);
+      ok(!arr.some((l,i) => !l && !arr[i+1]), `${name}: 空行が続いている`);
+    }
+  });
+  it('話の入口と結びが、どちらの言語にもある', () => {
+    const { api } = load();
+    ok(/あめ/.test(api.STORY_JA[0]), 'ja: 雨から始まっていない');
+    ok(/rain/i.test(api.STORY_EN[0]), 'en: 雨から始まっていない');
+    ok(/インベーダー/.test(api.STORY_JA[api.STORY_JA.length-1]), 'ja: インベーダーで結んでいない');
+    ok(/invader/i.test(api.STORY_EN[api.STORY_EN.length-1]), 'en: インベーダーで結んでいない');
+  });
+  // 到着の演出は、この書き出し（雨 → 音のない雷 → ぴたりと止む）を絵にしたもの。
+  //  文章から雨が消えたら、演出のほうも直さないと辻褄が合わなくなる
+  it('書き出しが、到着の演出と合っている', () => {
+    const { api } = load();
+    const head = api.STORY_JA.slice(0, 4).join('');
+    ok(/あめ/.test(head), '書き出しに雨が無い');
+    ok(/かみなり/.test(head), '書き出しに雷が無い');
+    ok(/やんだ/.test(head), '雨がやむ場面が無い');
+    ok(api.ARR_RAIN_N > 0, '演出のほうに雨が降っていない');
+  });
+});
+
 // ══ エンディングの棲み分け ════════════════════════════════
 describe('エンディング', () => {
   it('無関心な放置は帰還（E3）になる', () => {
