@@ -257,6 +257,29 @@ describe('おなか', () => {
     api.pet.hungerAcc = hm * 0.6;
     eq(lit(api.gaugeHunger()), 5, '半分すぎたら1本ぶん減る:');
   });
+  // おやつは満腹でも食べる。ここで時計を数え直すと、おやつを配り続けるだけで
+  //  永久に空腹にならなくなる（実際にそうなっていた）
+  it('もともと満腹なら、おやつを与えても時計を数え直さない', () => {
+    const { api, clock } = load();
+    clock.setTime(14, 0);
+    pet(api, clock, { stage:'larva', lineage:'inv', hunger:api.HUNGER_MAX, mood:4, plateAt:0 });
+    const acc = api.hungerMin() * 0.9;
+    for(let i=0;i<3;i++){
+      api.pet.hungerAcc = acc; api.pet.plateAt = 0;
+      api.doCare('SNACK');
+      ok(api.pet.hungerAcc >= acc - 1, `${i+1}回目で時計が巻き戻った（${Math.round(api.pet.hungerAcc)}）`);
+    }
+  });
+  it('空腹からおやつで満腹になった時は、ちゃんと数え直す', () => {
+    const { api, clock } = load();
+    clock.setTime(14, 0);
+    pet(api, clock, { stage:'egg', hunger:3, mood:4, plateAt:0 });
+    api.pet.hungerAcc = api.hungerMin() * 0.9;
+    api.doCare('SNACK');                       // うまれたては一食で3回復＝満腹になる
+    eq(api.pet.hunger, api.HUNGER_MAX, '満腹になること:');
+    eq(api.pet.hungerAcc, 0, '数え直すこと:');
+    eq(lit(api.gaugeHunger()), 10, '目盛りが満タンになること:');
+  });
   it('食べさせても満腹に届かない時は、時計を数え直さない', () => {
     const { api, clock } = load();
     pet(api, clock, { stage:'adult', lineage:'inv', hunger:0 });
