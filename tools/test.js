@@ -1246,6 +1246,19 @@ describe('おもいで', () => {
     const sec = api.GHOST_MEM_DELAY * 100 / 1000;   // tickMain は100msごと
     ok(sec >= 2 && sec <= 8, `${sec}秒（おばけをひと目見る間があること）`);
   });
+  // ただ揺れているだけだと、待たずにMENUを押されてしまう。
+  //  昇って消えていく動きが「まだ続きがある」と伝える役をしている
+  it('おもいでを開くまでに、おばけが昇って消える動きが入る', () => {
+    const { api } = load();
+    const D = api.GHOST_MEM_DELAY, F = api.GHOST_RISE_FROM,
+          S = api.GHOST_RISE_SPD, L = api.GHOST_FADE_LAST;
+    ok(F > 0 && F < D, `昇りはじめる間（${F}）が0か、開くより遅い`);
+    ok(S > 0, '昇る速さが0');
+    const top = 34 - (D - F) * S;                    // おばけの上端（描き始めは y=34）
+    ok(top > api.HEADER_Y, `昇りすぎてヘッダーに掛かる（上端 ${top} / 線 ${api.HEADER_Y}）`);
+    ok(top < 34 - 8, `ほとんど昇らない（上端 ${top}）`);
+    ok(L > 0 && L < D - F, `点滅の区間（${L}）が、昇っている間に収まっていない`);
+  });
   it('お別れの形が5種とも言葉になる', () => {
     const { api, clock } = load();
     const got = {};
@@ -1379,6 +1392,10 @@ describe('ファイル', () => {
     ok(n >= 5, `endedShowMemory の呼び出しが ${n} か所（定義1＋帰還・旅立ち・侵攻・死 の4か所が要る）`);
     ok(/if\(\+\+ghostT === GHOST_MEM_DELAY\) endedShowMemory\(\);/.test(src),
        'おばけの画面からおもいでへ繋がっていない');
+    // 昇る動きは「いなくなった直後」だけ。おもいでを見たあとの画面は
+    //  ALL RESET まで続くので、ここで昇り続けると おばけが画面から消えたままになる
+    ok(/const bob = \[0,-1,-2,-1\]\[Math\.floor\(fM\/8\)%4\];\s*\n\s*if\(pet\.memShown\)\{/.test(src),
+       'おばけの描き分け（見たあとは漂う姿で止める）が無い');
   });
   it('サービスワーカーのVERSIONが日付の形をしている', () => {
     const m = read('sw.js').match(/const VERSION = '([^']+)'/);

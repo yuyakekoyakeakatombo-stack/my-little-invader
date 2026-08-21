@@ -4110,7 +4110,12 @@
   // おばけになってからの経過フレーム。死には別れの演出が無いので、
   //  おばけをしばらく見せることが唯一の区切りになる。ここを過ぎたら
   //  他の別れと同じように「おもいで」を開く（開くのは一度だけ→ memShown）
-  const GHOST_MEM_DELAY = 40;   // 100ms刻みなので約4秒。おばけがひと揺れするあいだ
+  //  ただ揺れているだけだと、待たずにMENUを押されてしまう。
+  //  おばけがゆっくり昇って消えていくところまでを見せて、そこで開く
+  const GHOST_MEM_DELAY = 40;   // 100ms刻みなので約4秒
+  const GHOST_RISE_FROM = 8;    // 昇りはじめるまでの間（このあいだは その場で揺れている）
+  const GHOST_RISE_SPD  = 0.7;  // 1フレームに昇るドット数
+  const GHOST_FADE_LAST = 12;   // 終わりぎわ、点滅して消えていく長さ
   let ghostT = 0;
   function drawGhost(BG, DM, NK){
     ctxM.fillStyle = BG; ctxM.fillRect(0,0,W*S,H*S);
@@ -4123,9 +4128,17 @@
     for(let x=0;x<W;x+=3) dot(ctxM,x,MAIN_GY-1,DM);
     STARS_M.forEach(([x,y],i)=>dot(ctxM,x,y+10,(fM+i*9)%28<20?DM:BG));
     const bob = [0,-1,-2,-1][Math.floor(fM/8)%4];
-    stamp(ctxM, GHOST_SPR, 22, 34+bob, DM);
+    if(pet.memShown){
+      // おもいでを見たあとの画面。ここは ALL RESET まで続くので、漂う姿で止める
+      stamp(ctxM, GHOST_SPR, 22, 34+bob, DM);
+    } else {
+      // まだ見ていない＝いなくなった直後。昇っていく姿を見せてから、おもいでを開く
+      const rise  = Math.max(0, ghostT - GHOST_RISE_FROM) * GHOST_RISE_SPD;
+      const blink = ghostT > GHOST_MEM_DELAY - GHOST_FADE_LAST && fM % 4 >= 2;
+      if(!blink) stamp(ctxM, GHOST_SPR, 22, Math.round(34 + bob - rise), DM);
+      if(++ghostT === GHOST_MEM_DELAY) endedShowMemory();
+    }
     fM++;
-    if(++ghostT === GHOST_MEM_DELAY) endedShowMemory();
   }
 
   // ── エンディング共通：吸い上げのビームと、小さくなるキャラ ──
