@@ -4456,13 +4456,19 @@
   const ARR_APEX = -18;                         // 円錐の頂点。ヘッダーのさらに上に置き、頂点側をしっかり隠す
   const ARR_MAX_HALF = 13;                      // 地面際の半幅（照射角の広さ）
   const ARR_CX = Math.floor(W/2);               // 中央
-  // ①周囲が暗くなる ②ビーム下降 ③キャラ降下 ④着地の間 ⑤ビーム上昇 ⑥明るさが戻る
-  //   ①と⑥はフェードせず一瞬で切り替わるので、間（ま）として短く取るだけ
-  const ARR_PH = [6, 16, 26, 10, 18, 6];
+  // ストーリーの書き出しに合わせた順番。
+  //   「いちにちじゅう ふりつづいていた あめは、とつぜん ひかった おとの ない
+  //     かみなりの あと、ぴたりと やんだ」
+  //   ①雨の降る暗い画面 ②ビームが伸びてくる（＝音のない稲光）③雨がやむ間
+  //   ④赤ちゃんが降りてくる ⑤着地の間 ⑥ビーム上昇 ⑦明るさが戻る
+  //   ⑥⑦はフェードせず一瞬で切り替わるので、間（ま）として短く取るだけ
+  const ARR_PH = [18, 16, 10, 26, 10, 18, 6];
+  const ARR_RAIN_PH = 2;                        // このフェーズに入った時点で雨がやむ
   const ARR_TOTAL = ARR_PH.reduce((a,b)=>a+b,0);
   let arriveT = -1;                             // -1=演出なし。0以上で再生中
   function startArrival(){
     arriveT = 0;
+    resetArrivalRain();
     // 育成画面のキャンバスには、直前まで tickMain が描いていた「たまごが居る通常画面」が
     // 残っている。表示を切り替えた瞬間にそれが一瞬見えてしまうので、
     // ここで演出の1コマ目（暗転）を描いてから見せる。
@@ -4485,13 +4491,60 @@
   //   頂点はヘッダーの奥に隠れるため、見えるのは幅を持った切り口から始まる。
   //   暗転したフィールドを地の明るさで切り抜くので、光の柱として浮かび上がる。
   //   progress=0..1 で下端が伸縮する。
+  //   その高さでの半幅を返す。まだ光が届いていない高さは -1（＝ビームの外）
+  function arrivalBeamHalf(y, progress){
+    const botY = MAIN_GY-1;
+    if(progress <= 0 || y < ARR_BEAM_TOP) return -1;
+    if(y > Math.round(ARR_BEAM_TOP + (botY-ARR_BEAM_TOP)*progress)) return -1;
+    return Math.round(((y-ARR_APEX)/(botY-ARR_APEX)) * ARR_MAX_HALF);
+  }
   function drawArrivalBeam(progress, BG){
-    const botY = MAIN_GY-1, maxHalf = ARR_MAX_HALF;
-    const end = Math.round(ARR_BEAM_TOP + (botY-ARR_BEAM_TOP)*progress);
-    for(let y=ARR_BEAM_TOP; y<=end; y++){
-      const half = Math.round(((y-ARR_APEX)/(botY-ARR_APEX)) * maxHalf);
+    for(let y=ARR_BEAM_TOP; y<=MAIN_GY-1; y++){
+      const half = arrivalBeamHalf(y, progress);
+      if(half < 0) continue;
       for(let dx=-half; dx<=half; dx++) dot(ctxM, ARR_CX+dx, y, BG);
     }
+  }
+  // ── 到着演出の雨 ──
+  //   天気の雨とは別に持つ。あちらは その日の空模様で降るものなので、
+  //   「やませる」操作をここでするわけにいかない。
+  //   画面が暗く塗られているので、粒は地の明るさ(BG)で描く。
+  //   ビームの中だけは逆に暗く(DM)描く。どちらでも粒が背景に沈まない
+  const ARR_RAIN_N = 14;
+  const arrRain = [];
+  function resetArrivalRain(){
+    arrRain.length = 0;
+    for(let i=0;i<ARR_RAIN_N;i++) arrRain.push({
+      x: Math.random()*W|0,
+      y: ARR_BEAM_TOP + Math.random()*(MAIN_GY-1-ARR_BEAM_TOP),
+      speed: 1 + Math.random()*1.5,
+    });
+  }
+  resetArrivalRain();
+  //   shown で「まだ降っている粒の数」を渡す。これを 0 まで落とすと雨がやむ。
+  //   落ちきるのを待つと5秒近くかかり、赤ちゃんが降りてくる裏で降り残ってしまう。
+  //   ストーリーどおり「ぴたりと」やませたいので、粒そのものを引いていく
+  const ARR_RAIN_STOP = 4;                               // 何コマかけてやませるか
+  function updateArrivalRain(BG, DM, beamP, shown){
+    arrRain.forEach((d,i)=>{
+      if(i >= shown) return;
+      const y0 = Math.round(d.y);
+      for(let k=0;k<3;k++){                              // 縦3ドットの線
+        const y = y0 + k;
+        if(y < ARR_BEAM_TOP || y > MAIN_GY-1) continue;
+        const half = arrivalBeamHalf(y, beamP);
+        dot(ctxM, d.x, y, (half >= 0 && Math.abs(d.x-ARR_CX) <= half) ? DM : BG);
+      }
+      d.y += d.speed;
+      if(d.y >= MAIN_GY-1){ d.y = ARR_BEAM_TOP; d.x = Math.random()*W|0; }
+    });
+  }
+  //   フェーズごとの「まだ降っている粒の数」
+  function arrivalRainShown(ph, t){
+    if(ph < ARR_RAIN_PH) return ARR_RAIN_N;
+    if(ph > ARR_RAIN_PH) return 0;
+    const f = t * ARR_PH[ARR_RAIN_PH];                   // このフェーズに入って何コマ目か
+    return Math.max(0, Math.round(ARR_RAIN_N * (1 - f/ARR_RAIN_STOP)));
   }
   // ── 背景一式（下地・名前/日数・区切り線・天体・天気・地面）──
   //    通常の育成画面と到着演出の両方で使う。
@@ -4571,31 +4624,41 @@
     const landY = MAIN_GY - gh;                 // 着地位置（足元が地面に接する）
     const {ph,t} = arrivalPhase();
 
-    if(ph===0){                                  // ①周囲が暗くなる（一瞬で暗転し、そのまま少し置く）
+    // 雨のあいだは、ビームより後に粒を描く（ビームの中では色を反転させるため）
+    const beamP = (ph===0) ? 0 : (ph===1) ? easeOut(t) : (ph<=4) ? 1 : 1-easeOut(t);
+    const shown = arrivalRainShown(ph, t);
+
+    if(ph===0){                                  // ①雨の降る暗い画面（ここから始まる）
       drawArrivalDark(DM);
+      updateArrivalRain(BG, DM, 0, shown);
       drawArrivalGround(DM);
-    } else if(ph===1){                           // ②暗転した中をビームが下りてくる
+    } else if(ph===1){                           // ②音のない稲光のように、ビームが伸びてくる
       drawArrivalDark(DM);
-      drawArrivalBeam(easeOut(t), BG);
+      drawArrivalBeam(beamP, BG);
+      updateArrivalRain(BG, DM, beamP, shown);
       drawArrivalGround(DM);
-    } else if(ph===2){                           // ③ビームの中をたまごが降りてくる
+    } else if(ph===2){                           // ③雨が ぴたりと やむ
+      drawArrivalDark(DM);
+      drawArrivalBeam(1, BG);
+      updateArrivalRain(BG, DM, 1, shown);
+      drawArrivalGround(DM);
+    } else if(ph===3){                           // ④ビームの中を赤ちゃんが降りてくる
       drawArrivalDark(DM);
       drawArrivalBeam(1, BG);
       drawArrivalGround(DM);
       const y = Math.round(ARR_BEAM_TOP + (landY-ARR_BEAM_TOP)*easeOut(t));
       stamp(ctxM, spr, charX, y, NK);
-    } else if(ph===3){                           // ④着地して少し止まる
+    } else if(ph===4){                           // ⑤着地して少し止まる
       drawArrivalDark(DM);
       drawArrivalBeam(1, BG);
       drawArrivalGround(DM);
       stamp(ctxM, spr, charX, landY, NK);
-    } else if(ph===4){                           // ⑤ビームが上がって消える
+    } else if(ph===5){                           // ⑥ビームが上がって消える
       drawArrivalDark(DM);
-      const p = 1-easeOut(t);
-      if(p>0) drawArrivalBeam(p, BG);
+      if(beamP>0) drawArrivalBeam(beamP, BG);
       drawArrivalGround(DM);
       stamp(ctxM, spr, charX, landY, NK);
-    } else {                                     // ⑥明るさが戻る（暗転を解くだけ）
+    } else {                                     // ⑦明るさが戻る（暗転を解くだけ）
       drawArrivalGround(DM);
       stamp(ctxM, spr, charX, landY, NK);
     }

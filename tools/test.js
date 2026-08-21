@@ -435,6 +435,91 @@ describe('到着', () => {
     ok(api.pet.eggTargetEP > 0, '進化までの目標が決まること');
     eq(api.petDay(), 1, '1日目から始まること:');
   });
+
+  // ── 到着の演出（ストーリーの書き出しに合わせた順番）──
+  //   雨 →（音のない稲光＝）ビーム → ぴたりとやむ → 赤ちゃんが降りてくる
+  //   コマごとのフェーズと雨の粒数を、演出を頭から流して調べる
+  const arrivalTape = (api) => {
+    const tape = [];
+    for(let t=0; t<api.ARR_TOTAL; t++){
+      api.arriveT = t;
+      const { ph, t: tt } = api.arrivalPhase();
+      tape.push({ t, ph, rain: api.arrivalRainShown(ph, tt) });
+    }
+    api.arriveT = -1;
+    return tape;
+  };
+  it('雨がやむのは、ビームが伸びきったあと', () => {
+    const { api } = load();
+    const tape = arrivalTape(api);
+    const beamDone = tape.findIndex(f => f.ph >= 2);            // ②が終わった最初のコマ
+    const rainEnds = tape.findIndex(f => f.rain === 0);
+    ok(beamDone > 0, 'ビームが伸びるフェーズが無い');
+    ok(rainEnds > beamDone, `ビームが伸びきる前に雨がやんでいる（雨=${rainEnds} / ビーム=${beamDone}）`);
+  });
+  it('赤ちゃんが降りてくる前に、雨は完全にやんでいる', () => {
+    const { api } = load();
+    const tape = arrivalTape(api);
+    const babyStarts = tape.findIndex(f => f.ph >= 3);
+    ok(babyStarts > 0, '赤ちゃんが降りるフェーズが無い');
+    const wet = tape.filter(f => f.t >= babyStarts && f.rain > 0);
+    eq(wet.length, 0, `降下中に降り残っている（${wet.length}コマ）:`);
+  });
+  it('雨は最初から降っていて、しばらく続く', () => {
+    const { api } = load();
+    const tape = arrivalTape(api);
+    eq(tape[0].rain, api.ARR_RAIN_N, '1コマ目から満量で降っていること:');
+    const frames = tape.filter(f => f.rain > 0).length;
+    ok(frames >= 25, `雨が読み取れるほど続かない（${frames}コマ＝${(frames/10).toFixed(1)}秒）`);
+  });
+  it('やむのは「ぴたりと」で、だらだら降り残さない', () => {
+    const { api } = load();
+    const tape = arrivalTape(api);
+    const first = tape.findIndex(f => f.rain < api.ARR_RAIN_N);
+    const last  = tape.findIndex(f => f.rain === 0);
+    const span  = last - first;
+    ok(span > 1, '1コマで消えると、止んだというより描き落としに見える');
+    ok(span <= 8, `やむまでが長い（${span}コマ＝${(span/10).toFixed(1)}秒）`);
+  });
+  it('ビームは上から下へ伸び、途中は下端だけが動く', () => {
+    const { api } = load();
+    const top = api.ARR_BEAM_TOP, bot = api.MAIN_GY - 1;
+    eq(api.arrivalBeamHalf(top, 0), -1, '進み0では光が無いこと:');
+    ok(api.arrivalBeamHalf(top, 0.5) >= 0, '伸びる途中、上端には光が届いていること');
+    eq(api.arrivalBeamHalf(bot, 0.5), -1, '半分しか伸びていないのに地面まで届いている:');
+    ok(api.arrivalBeamHalf(bot, 1) >= 0, '伸びきっても地面に届いていない');
+    // 下ほど広がる円錐であること
+    let prev = -1;
+    for(let y=top; y<=bot; y++){
+      const h = api.arrivalBeamHalf(y, 1);
+      ok(h >= prev, `y=${y} で幅が狭まっている（${prev}→${h}）`);
+      prev = h;
+    }
+    ok(prev <= Math.floor(54/2), `地面際でも画面幅に収まること（半幅${prev}）`);
+  });
+  it('雨の粒はビームの外にも中にもかかる（どちらの色も使う）', () => {
+    const { api } = load();
+    api.resetArrivalRain();
+    ok(api.arrRain.length === api.ARR_RAIN_N, '粒の数が合わない');
+    // 粒は画面の幅いっぱいに湧く。中央のビームに掛かる位置も含まれること
+    const half = api.arrivalBeamHalf(api.MAIN_GY - 1, 1);
+    let inside = 0, outside = 0;
+    for(let n=0; n<200; n++){
+      api.resetArrivalRain();
+      api.arrRain.forEach(d => (Math.abs(d.x - api.ARR_CX) <= half ? inside++ : outside++));
+    }
+    ok(inside > 0 && outside > 0, `片側にしか湧かない（中=${inside} 外=${outside}）`);
+    api.arrRain.forEach(d => {
+      ok(d.y >= api.ARR_BEAM_TOP && d.y < api.MAIN_GY, `粒が画面の外(y=${d.y})`);
+      ok(d.speed > 0, '止まったままの粒がある');
+    });
+  });
+  it('演出の長さが、待たされすぎない範囲に収まっている', () => {
+    const { api } = load();
+    const sec = api.ARR_TOTAL / 10;                              // tickMain は100msごと
+    ok(sec >= 6, `短すぎて雨の場面が伝わらない（${sec}秒）`);
+    ok(sec <= 13, `名前をつけるまでが長い（${sec}秒）`);
+  });
 });
 
 // ══ エンディングの棲み分け ════════════════════════════════
@@ -1488,6 +1573,24 @@ describe('ファイル', () => {
     const src = read('invader_game.html');
     ok(/\[SAVE_KEY,\s*SAVE_BAK,\s*SAVE_BAD\]\.forEach\(k\s*=>\s*localStorage\.removeItem\(k\)\)/.test(src),
        'ALL RESET が3つの鍵をまとめて消していない');
+  });
+  // 到着の描画もテストから呼べない。粒の色分けはビームの位置を見て決めるので、
+  //  ビームより先に雨を描くと、光の中の粒が上書きされて消えてしまう
+  it('到着演出で、雨がビームより後に描かれている', () => {
+    const src = read('invader_game.html');
+    const body = src.slice(src.indexOf('function drawArrival(BG, DM, NK)'));
+    for(const head of ['} else if(ph===1){', '} else if(ph===2){']){
+      const at = body.indexOf(head);
+      ok(at > 0, `${head} の分岐が無い`);
+      const seg = body.slice(at, body.indexOf('} else if(ph===', at + 5));
+      const beam = seg.indexOf('drawArrivalBeam');
+      const rain = seg.indexOf('updateArrivalRain');
+      ok(beam >= 0 && rain >= 0, `${head}: ビームか雨の描画が無い`);
+      ok(beam < rain, `${head}: 雨をビームより先に描いている（光の中の粒が消える）`);
+    }
+    // 粒はビームの中と外で色を入れ替える。暗い画面に暗い粒だと沈んで見えない
+    ok(/\(half >= 0 && Math\.abs\(d\.x-ARR_CX\) <= half\) \? DM : BG/.test(src),
+       '雨の色分け（外は明るく、光の中は暗く）が無い');
   });
   // オープニングの描画はテストから読めないので、字の大きさをソースで押さえる。
   //  小さすぎて「押していい」ことが伝わらなかった
