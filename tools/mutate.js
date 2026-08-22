@@ -197,6 +197,14 @@ const MUTATIONS = [
   ['粒が上下にばらけない',
    "      const y = Math.min(MAIN_GY - 1, oy + ry + Math.round(drift * 0.15 * dustLift(rx, ry)));",
    "      const y = oy + ry;", 'caught'],
+  // ── ベストスコアの表示 ──
+  ['選択画面に点数を出さない',
+   "      ctxN.fillText('BEST ' + bv, (W*S)/2, 60*S);", "", 'caught'],
+  ['いつも1つ目のゲームの点数を出す（カーソルに追随しない）',
+   "      const bk = ['sw','ss','ab'][playSel];", "      const bk = 'sw';", 'caught'],
+  ['未プレイでも 0点 と出す（遊んで0点だったのと区別がつかない）',
+   "      const played = Number.isFinite(bp[bk]) && bp[bk] > 0;", "      const played = true;", 'caught'],
+
   // ── ボタンの字の位置 ──
   ['A・B の字がボタンの中心からずれる（位置合わせを外す）',
    "    transform: translate(0.061em, 0.0625em);", "", 'caught'],

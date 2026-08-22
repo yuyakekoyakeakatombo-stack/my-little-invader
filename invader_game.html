@@ -5355,6 +5355,18 @@
         ctxN.textBaseline='top';
       });
 
+      // ── いちばん良かった点数（選んでいるゲームのぶん）──
+      //  数字は言語に関わらず英字なので、ゲーム名と同じピクセル字体で揃える。
+      //  一度も遊んでいないゲームは 0点と区別して「---」にする（0点も取りうるため）
+      for(let x=1;x<W-1;x++) dot(ctxN,x,58,DIM);
+      const bk = ['sw','ss','ab'][playSel];
+      const bp = pet.plays || {}, bb = pet.best || {};
+      const played = Number.isFinite(bp[bk]) && bp[bk] > 0;
+      const bv = played ? String(Math.max(0, Math.round(bb[bk] || 0))) : '---';
+      ctxN.font='7px "Press Start 2P"'; ctxN.fillStyle=ON;
+      ctxN.textAlign='center'; ctxN.textBaseline='top';
+      ctxN.fillText('BEST ' + bv, (W*S)/2, 60*S);
+
     } else {
       // ── メインメニュー：お世話アイコングリッド(2段×3列) ＋ サブ項目 ──
       // menuSel: 0..5=アイコン, 6..8=STATUS/STORY/SETTINGS

@@ -1698,6 +1698,20 @@ describe('ファイル', () => {
     ok(/\[SAVE_KEY,\s*SAVE_BAK,\s*SAVE_BAD\]\.forEach\(k\s*=>\s*localStorage\.removeItem\(k\)\)/.test(src),
        'ALL RESET が3つの鍵をまとめて消していない');
   });
+  // ミニゲーム選択画面の描画はテストから呼べないので、
+  //  いちばん良かった点数の出しかたをソースで押さえる
+  it('ミニゲーム選択画面に、いちばん良かった点数が出る', () => {
+    const src = read('invader_game.html');
+    const at = src.indexOf('// ── PLAY サブ画面（ミニゲーム選択）──');
+    ok(at > 0, 'ミニゲーム選択画面が見つからない');
+    const seg = src.slice(at, src.indexOf('} else {', at));
+    ok(/ctxN\.fillText\('BEST ' \+ bv/.test(seg), '点数を描いていない');
+    // 選んでいるゲームのぶんを出す（3つのうちどれか固定になっていないこと）
+    ok(/\['sw','ss','ab'\]\[playSel\]/.test(seg), 'カーソルの位置と結びついていない');
+    // 0点も取りうるので、一度も遊んでいない状態と区別する
+    ok(/bp\[bk\] > 0/.test(seg) && /'---'/.test(seg),
+       '未プレイと 0点 を区別していない');
+  });
   // ボタンの字は、字面が送りの左寄り・行の上寄りに乗る（Press Start 2P）。
   //  flex の中央ぞろえが合わせるのは「送り幅」と「行の箱」なので、そのままだと
   //  字そのものが左上へずれる。ブラウザが要る計測はテストから出来ないので、
