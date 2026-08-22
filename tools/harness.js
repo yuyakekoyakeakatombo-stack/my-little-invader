@@ -37,7 +37,8 @@ const EXPORTS = `
   get arriveT(){ return arriveT; }, set arriveT(v){ arriveT = v; },
   addM, addP, addA, addD, M_ADJ, P_ADJ, A_ADJ,
   DIARY_LINES, DIARY_MUSINGS, DIARY_CLOSE, DIARY_PRIORITY,
-  STORY_JA, STORY_EN, STORY_TITLE,
+  STORY_JA, STORY_EN, STORY_TITLE, STORY_TOP, STORY_BOT, STORY_PARA, STORY_PAD,
+  buildStory, get lang(){ return lang; }, set lang(v){ lang = v; storyPages = null; },
   get diaryLog(){ return diaryLog; },
   buildDiary, diaryBody, addDiary, clearDiary,
   diaryWriting, diaryLevel, diaryStyle, writeRatio, entryLevel, diaryWords, diaryMarks, diaryRows, diaryBaseDot, diaryFontSize,
@@ -72,7 +73,17 @@ function makeSandbox(opts){
   };
   const ctx = new Proxy({}, {
     get(t, p){
-      if(p === 'measureText') return () => ({ width: 0 });
+      // 実物の字幅は測れないので、字送りで近似する。Press Start 2P は
+      //  正方形なので1文字＝文字の大きさ。日本語のフォントは全角が1文字ぶん、
+      //  半角がその半分。ページ割りが均されているかを測るのに使う
+      if(p === 'measureText') return (s) => {
+        const m = /(\d+(?:\.\d+)?)px/.exec(t.font || '');
+        const size = m ? parseFloat(m[1]) : 10;
+        const mono = /Press Start/.test(t.font || '');
+        let w = 0;
+        for(const ch of String(s)) w += size * (mono || ch.charCodeAt(0) >= 0x100 ? 1 : 0.5);
+        return { width: w };
+      };
       if(p === 'getImageData') return () => ({ data: new Uint8ClampedArray(4) });
       if(p === 'canvas') return { width: 216, height: 260 };
       return typeof t[p] === 'undefined' ? (()=>{}) : t[p];

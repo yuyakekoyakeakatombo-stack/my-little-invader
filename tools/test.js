@@ -664,6 +664,35 @@ describe('ストーリー', () => {
   });
   // 到着の演出は、この書き出し（雨 → 音のない雷 → ぴたりと止む）を絵にしたもの。
   //  文章から雨が消えたら、演出のほうも直さないと辻褄が合わなくなる
+  // 上限まで詰めこむと、前のページが天井まで埋まって「改行が少なく詰まって見える」、
+  //  そのしわ寄せで最後のページだけが すかすかになる。あまりを全ページに散らす
+  const layout = lg => {
+    const { api } = load({ storage: { myvader_lang: lg } });
+    api.lang = lg;
+    const { pages, LH } = api.buildStory();
+    const avail = api.STORY_BOT - api.STORY_TOP;
+    return { LH, pages, gaps: pages.map(pg => avail - pg.reduce((a, r) => a + r.pad + LH, 0)) };
+  };
+  it('ページごとの あまりが、そろっている', () => {
+    for(const lg of ['ja', 'en']){
+      const { LH, gaps } = layout(lg);
+      const spread = Math.max(...gaps) - Math.min(...gaps);
+      ok(spread <= LH * 2.5, `${lg}: ページごとの あまりが ばらついている（${spread}px＝${(spread/LH).toFixed(1)}行ぶん）`);
+      ok(Math.min(...gaps) >= 0, `${lg}: 枠から はみ出している`);
+    }
+  });
+  it('最後のページだけが すかすかにならない', () => {
+    for(const lg of ['ja', 'en']){
+      const { pages } = layout(lg);
+      const most = Math.max(...pages.map(p => p.length));
+      const last = pages[pages.length-1].length;
+      ok(last >= most - 2, `${lg}: 最後のページが ${last}行 しかない（いちばん多いページは ${most}行）`);
+    }
+  });
+  it('段落のあいだに 空きがある', () => {
+    const { api } = load();
+    ok(api.STORY_PARA >= 6, `段落の空きが ${api.STORY_PARA}px しかなく、かなの本文が壁のように見える`);
+  });
   it('書き出しが、到着の演出と合っている', () => {
     const { api } = load();
     const head = api.STORY_JA.slice(0, 4).join('');

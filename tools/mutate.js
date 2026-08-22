@@ -479,6 +479,14 @@ const MUTATIONS = [
   // 各分岐が個別に就寝判定を持つので、冒頭のガードだけ外しても挙動は変わらない
   ['doCare 冒頭の無効ガードだけ外す',
    '    if(careDisabled(act)) return;\n', '    \n', 'equivalent'],
+  ['ページ割りを均さず、上限まで詰めこむ（最後のページだけ すかすかになる）',
+   "const pages = layout(lo).length <= n ? layout(lo) : layout(avail);",
+   "const pages = layout(avail);", 'caught'],
+  ['段落のあいだの空きを詰める（かなの本文が壁のように見える）',
+   "const STORY_PARA = 8;", "const STORY_PARA = 0;", 'caught'],
+  ['日記の結びを、また「ぶじにおわった」に戻す',
+   "{ ja:['ゆうひが しずむのを','ずっと みていた'],  en:['I WATCHED THE SUN','GO DOWN'] },",
+   "{ ja:['きょうも ぶじに','おわった'],  en:['ANOTHER DAY','ENDED SAFELY'] },", 'live'],
 ];
 
 const orig = fs.readFileSync(GAME, 'utf8');
