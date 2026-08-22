@@ -389,8 +389,8 @@
       mgave:'WHAT YOU GAVE', mbest:'BEST SCORES', mlast:'HOW THEY GREW',
       mcare:'CARE', mdisc:'MANNERS', mtemper:'NATURE',
       tlively:'LIVELY', tcalm:'CALM', tmid:'EVEN',
-      endReturn:'THEY CAME FOR THEM', endDepart:'THEY SET OFF',
-      endInvade:'THEY CALLED THEIR KIND', endStarve:'THEY WASTED AWAY', endSick:'ILLNESS TOOK THEM',
+      endReturn:'THEY CAME FOR THEM\nBACK TO THEIR STAR', endDepart:'THEY WENT SOMEWHERE',
+      endInvade:'THEY CALLED A FLEET\nAND CAME FOR EARTH', endStarve:'THEY WASTED AWAY', endSick:'THEY WASTED AWAY',
     },
     ja: {
       feed:'ごはん', clean:'そうじ', med:'くすり', pet:'ほめる', scold:'しかる', game:'ゲーム',
@@ -414,8 +414,8 @@
       mgave:'してあげたこと', mbest:'ベストスコア', mlast:'そだちかた',
       mcare:'ケア', mdisc:'しつけ', mtemper:'せいかく',
       tlively:'やんちゃ', tcalm:'おっとり', tmid:'ふつう',
-      endReturn:'むかえが きた', endDepart:'たびだった',
-      endInvade:'なかまを よんだ', endStarve:'ちからつきた', endSick:'びょうきで たおれた',
+      endReturn:'おむかえが きた\nほしへ かえった', endDepart:'どこかへ いってしまった',
+      endInvade:'たいぐんを よんで\nちきゅうに せめてきた', endStarve:'ちからつきた', endSick:'ちからつきた',
     },
   };
   // 位置情報の用途説明。LCDの幅に収まるよう改行済み（行数は言語で違う）
@@ -6067,7 +6067,8 @@
   // ════════════════════════════════════════
   const ctxR = initCanvas('lcd-r');
   const MEM_PAGES = 4;
-  const MEM_CHAR_BOT = 29;   // 1ページ目に置く姿の、足元の高さ（下辺をここにそろえる）
+  const MEM_CHAR_BOT = 28;   // 1ページ目に置く姿の、足元の高さ（下辺をここにそろえる）
+  const MEM_END_Y = 50, MEM_END_LH = 5;   // 別れかたの1行目の高さと行送り（2行になるものがある）
   let memPage = 0, memFrom = 'menu', fR = 0;
   // 体型の呼び名。形態IDの末尾で決まる（1=ふっくら / 2=すらり / 3=とげとげ）
   function formLabel(){
@@ -6135,21 +6136,25 @@
       const body = (()=>{ const sp = charSprites(); return sp.rest || sp.a; })();
       if(body) stamp(ctxR, body, Math.round((W - body[0].length)/2), MEM_CHAR_BOT - body.length, NK);
       ctxR.font = nameFont(9, pet.name || '????'); ctxR.fillStyle = NK;
-      ctxR.fillText(pet.name || '????', (W*S)/2, 31*S);
+      ctxR.fillText(pet.name || '????', (W*S)/2, 30*S);
       //  名前のすぐ下は どんな子だったか。日数はそのあと
       const f = formLabel();
       if(f){
         ctxR.font = uiFont(7); ctxR.fillStyle = NK;
-        ctxR.fillText(typeLabel() + (lang==='ja' ? '・' : ' ') + f, (W*S)/2, 39*S);
+        ctxR.fillText(typeLabel() + (lang==='ja' ? '・' : ' ') + f, (W*S)/2, 37*S);
       } else {
         ctxR.font = uiFont(6); ctxR.fillStyle = NK;
-        ctxR.fillText(stageLabel(), (W*S)/2, 40*S);
+        ctxR.fillText(stageLabel(), (W*S)/2, 38*S);
       }
       //  数を先に読ませる（にほんご「25 にち いっしょにいた」／英語「25 DAYS TOGETHER」）
       ctxR.font = uiFont(6); ctxR.fillStyle = NK;
-      ctxR.fillText(petDay() + ' ' + T('mdays'), (W*S)/2, 46*S);
+      ctxR.fillText(petDay() + ' ' + T('mdays'), (W*S)/2, 44*S);
       const e = endLabel();
-      if(e){ ctxR.font = uiFont(6); ctxR.fillStyle = NK; ctxR.fillText(e, (W*S)/2, 52*S); }
+      if(e){
+        ctxR.font = uiFont(6); ctxR.fillStyle = NK;
+        //  お迎え・侵攻は2行。1行目の高さをそろえ、下へ伸ばす
+        e.split('\n').forEach((line, i) => ctxR.fillText(line, (W*S)/2, (MEM_END_Y + i*MEM_END_LH)*S));
+      }
 
     } else if(memPage === 1){
       // 2ページ目：してあげたこと。数だけを出し、多い少ないの評価はしない
@@ -6189,7 +6194,7 @@
     ctxR.font = uiFont(6); ctxR.fillStyle = NK; ctxR.textAlign = 'center';
     if(memPage > 0)             ctxR.fillText('<', 4*S, 7*S);
     if(memPage < MEM_PAGES-1)   ctxR.fillText('>', (W-4)*S, 7*S);
-    ctxR.fillText((memPage+1) + ' / ' + MEM_PAGES, (W*S)/2, 57*S);
+    ctxR.fillText((memPage+1) + ' / ' + MEM_PAGES, (W*S)/2, 59*S);
     fR++;
   }
   setInterval(tickMemory, 100);

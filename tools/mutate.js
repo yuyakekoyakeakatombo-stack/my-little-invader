@@ -220,8 +220,17 @@ const MUTATIONS = [
    "    if((pet.mood||0) >= MOOD_MAX) return pet.mood||0;", 'caught'],
 
   ['おもいでの日数を、数が後ろの並びに戻す',
-   "      ctxR.fillText(petDay() + ' ' + T('mdays'), (W*S)/2, 46*S);",
-   "      ctxR.fillText(T('mdays') + '  ' + petDay(), (W*S)/2, 46*S);", 'caught'],
+   "      ctxR.fillText(petDay() + ' ' + T('mdays'), (W*S)/2, 44*S);",
+   "      ctxR.fillText(T('mdays') + '  ' + petDay(), (W*S)/2, 44*S);", 'caught'],
+
+  ['別れかたの2行目を描かない（お迎え・侵攻が言いさしで切れる）',
+   "        e.split('\\n').forEach((line, i) => ctxR.fillText(line, (W*S)/2, (MEM_END_Y + i*MEM_END_LH)*S));",
+   "        ctxR.fillText(e.split('\\n')[0], (W*S)/2, MEM_END_Y*S);", 'caught'],
+  ['餓死と病死で ちがう言葉に戻す',
+   "endStarve:'ちからつきた', endSick:'ちからつきた',",
+   "endStarve:'ちからつきた', endSick:'びょうきで たおれた',", 'caught'],
+  ['別れかたの2行目がページ数に掛かる',
+   "  const MEM_END_Y = 50, MEM_END_LH = 5;", "  const MEM_END_Y = 54, MEM_END_LH = 5;", 'caught'],
 
   // ── おもいでの姿 ──
   ['おもいでの1ページ目に姿を出さない',
@@ -231,7 +240,7 @@ const MUTATIONS = [
    "      if(body) stamp(ctxR, body, Math.round((W - body[0].length)/2), MEM_CHAR_BOT - body.length, NK);",
    "      if(body) stamp(ctxR, body, Math.round((W - body[0].length)/2), 16, NK);", 'caught'],
   ['姿の足元を下げすぎて名前に掛ける',
-   "  const MEM_CHAR_BOT = 29;", "  const MEM_CHAR_BOT = 33;", 'caught'],
+   "  const MEM_CHAR_BOT = 28;", "  const MEM_CHAR_BOT = 33;", 'caught'],
 
   // ── 文字の読みやすさ ──
   ['おもいでの見出しを薄い色に戻す（読めない）',

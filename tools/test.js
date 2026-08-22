@@ -1627,7 +1627,11 @@ describe('おもいで', () => {
       pet(api, clock, o); got[k] = api.endLabel();
       ok(got[k], k + ' の言葉が無い');
     }
-    eq(new Set(Object.values(got)).size, 5, '5種とも違う言葉であるべき:');
+    // 餓死と病死は同じ言葉（どちらも「ちからつきた」）。連れて行かれる3種は互いに違う
+    eq(got['餓死'], got['病死'], '亡くなった子の言葉:');
+    const away = [got['帰還'], got['旅立ち'], got['侵攻']];
+    eq(new Set(away).size, 3, '連れて行かれる3種は違う言葉であるべき:');
+    ok(!away.includes(got['餓死']), '亡くなった子と同じ言葉になっている');
     pet(api, clock, {});                       // まだ続いている子
     eq(api.endLabel(), '', '別れていなければ空:');
   });
@@ -1821,11 +1825,35 @@ describe('ファイル', () => {
     ok(/petDay\(\) \+ ' ' \+ T\('mdays'\)/.test(seg), '日数が数から始まっていない');
     const y = t => { const m = seg.match(new RegExp(t + '[^;]*?(\\d+)\\*S\\);')); return m ? +m[1] : -1; };
     const name = y("fillText\\(pet\\.name"), form = y("typeLabel\\(\\)"), days = y("petDay\\(\\) \\+ ' '");
-    const end  = y("fillText\\(e,");
+    const end  = (()=>{ const m = seg.match(/MEM_END_Y \+ i\*MEM_END_LH/); if(!m) return -1;
+      const c = src.match(/const MEM_END_Y = (\d+)/); return c ? +c[1] : -1; })();
     ok(name > 0 && form > 0 && days > 0 && end > 0, `位置が読めない（名前${name} タイプ${form} 日数${days} 別れ${end}）`);
     ok(name < form, `名前(${name})より上にタイプ(${form})がある`);
     ok(form < days, `タイプ(${form})より上に日数(${days})がある＝入れ替わっている`);
     ok(days < end,  `日数(${days})より上に別れ(${end})がある`);
+  });
+  // お迎えと侵攻は2行になる。2行目がページ数に掛からないこと、
+  //  1行目の位置が日数より下にあることを、数の上で押さえる
+  it('別れかたの2行目が、ページ数に掛からない', () => {
+    const { api, clock } = load();
+    const src = read('invader_game.html');
+    const g = re => { const m = src.match(re); return m ? +m[1] : -1; };
+    const y0 = g(/const MEM_END_Y = (\d+)/), lh = g(/MEM_END_Y = \d+, MEM_END_LH = (\d+)/);
+    const page = g(/MEM_PAGES, \(W\*S\)\/2, (\d+)\*S\);/);
+    ok(y0 > 0 && lh > 0 && page > 0, `位置が読めない（1行目${y0} 行送り${lh} ページ数${page}）`);
+    // いちばん行数の多い別れかたで確かめる
+    let max = 1;
+    for(const o of [{dead:'starve'}, {dead:'sick'}, {gone:true, goneBy:'return'},
+                    {gone:true, goneBy:'depart'}, {gone:true, goneBy:'invade'}]){
+      pet(api, clock, Object.assign({ stage:'final', lineage:'inv', form:'i3' }, o));
+      const n = api.endLabel().split('\n').length;
+      ok(n >= 1 && n <= 2, `行数が想定外（${n}行）`);
+      max = Math.max(max, n);
+    }
+    eq(max, 2, '2行になる別れかたがあること:');
+    // 最終行の下端（6px≒1.5ドット）が、ページ数の上に収まること
+    const last = y0 + (max-1)*lh;
+    ok(last + 2 <= page, `2行目(${last})がページ数(${page})に掛かる`);
   });
   // 描画はテストから呼べないので、姿を置く一行をソースで押さえる
   it('おもいでの1ページ目に、姿を足元ぞろえで置いている', () => {
