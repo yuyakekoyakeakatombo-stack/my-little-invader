@@ -1921,6 +1921,22 @@ describe('ファイル', () => {
     ok(body.indexOf("scene !== 'main'") < body.indexOf('departEnding = true'),
        '門番が、演出を始める判定より後ろにある');
   });
+  // 家出の「・・・」は、退屈のときと同じ位置に出す。置き方が2か所にあると
+  //  片方だけ直して食い違うので、1つの関数にまとめてある
+  it('気もちのマークの置き場所が、育成画面と家出で共通になっている', () => {
+    const src = read('invader_game.html');
+    ok(/function stampEmo\(ctx, spr, charX, charTop, gw, col\)\{/.test(src),
+       'マークの置き場所をまとめた関数が無い');
+    // 育成画面の emo() は、その関数に委ねているだけ
+    ok(/function emo\(spr\)\{ stampEmo\(ctxM, spr, charX, charY \+ yOff - airOff, gw, NK\); \}/.test(src),
+       '育成画面が独自に位置を決めている');
+    // 家出も同じ関数を通す
+    ok(/stampEmo\(ctxM, ICO_DOTS, x0, y, cw, NK\);/.test(src),
+       '家出が独自に位置を決めている');
+    // キャラの左に置く決まりが1か所だけであること
+    const lines = src.split('\n').filter(l => l.includes('charX - EMO_GAP - w'));
+    eq(lines.length, 1, 'マークの位置を決めている行:');   // 三項の中に2回出るので、行で数える
+  });
   // 演出中に押せてしまうと、別れの場面でメニューが開いたりする。
   //  音や凹みだけ返るのも「効いているのに何も起きない」ように見えるので、
   //  playClick より手前で止める

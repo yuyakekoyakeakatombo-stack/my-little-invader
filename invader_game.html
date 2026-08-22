@@ -3479,6 +3479,17 @@
     [1,1,1,1],
     [0,1,1,0],
   ];
+  // 気もちのマークの置き場所。ふだんはキャラの左上、左に余白が無いときは右へ回す。
+  //  マークごとに幅が違う（…は8ドット、！は2ドット）ので、右端をそろえて隙間を一定にする。
+  //  育成画面と家出の演出で同じ位置に出したいので、ここに1つだけ置く
+  const EMO_GAP = 2;              // キャラとの隙間（ドット）
+  const EMO_UP  = 3;              // キャラの上端からどれだけ上に置くか
+  function stampEmo(ctx, spr, charX, charTop, gw, col){
+    const w = spr[0].length;
+    let x = (charX - EMO_GAP - w >= 1) ? (charX - EMO_GAP - w) : (charX + gw + EMO_GAP);
+    x = Math.max(1, Math.min(W - w, x));                      // 画面内にクランプ
+    stamp(ctx, spr, x, charTop - EMO_UP, col);
+  }
   const GHOST_SPR=[               // おばけ 9×8（DIMで描画）
     [0,0,1,1,1,1,1,0,0],
     [0,1,1,1,1,1,1,1,0],
@@ -4358,8 +4369,7 @@
     const x0 = centerX(cw), y = MAIN_GY - ch;
     if(ufoT < RUN_STILL){                                 // 立ちつくして「・・・」
       stamp(ctxM, sp.rest, x0, y, NK);
-      if(ufoT % (RUN_ON + RUN_OFF) < RUN_ON)
-        stamp(ctxM, ICO_DOTS, x0 + Math.floor((cw - ICO_DOTS[0].length)/2), y - 3, NK);
+      if(ufoT % (RUN_ON + RUN_OFF) < RUN_ON) stampEmo(ctxM, ICO_DOTS, x0, y, cw, NK);
     } else {                                              // 左へ歩いて出ていく
       const t = ufoT - RUN_STILL;
       const x = Math.round(x0 - t * RUN_SPEED);
@@ -5007,15 +5017,7 @@
     // 感情アイコン位置：通常はキャラ左上。左に余白が無い（左端）ときはキャラの右側へ回してキャラとの接触を避ける
     // アイコンごとに幅が違う（Zzz・…は8ドット、！は2ドット）ので、
     // 固定オフセットではなくスプライト幅から右端を揃えて一定の隙間を確保する
-    const EMO_GAP = 2;                                        // キャラとの隙間（ドット）
-    const iconY = charY + yOff - airOff - 3;
-    function emo(spr){
-      const w = spr[0].length;
-      // 通常はキャラの左。左に余白が足りない（画面左端）ときは右側へ回す
-      let x = (charX - EMO_GAP - w >= 1) ? (charX - EMO_GAP - w) : (charX + gw + EMO_GAP);
-      x = Math.max(1, Math.min(W - w, x));                    // 画面内にクランプ
-      stamp(ctxM, spr, x, iconY, NK);
-    }
+    function emo(spr){ stampEmo(ctxM, spr, charX, charY + yOff - airOff, gw, NK); }
     // 演出アイコンを出すか（quiet時は出さず、下の状態アイコン＝Zzzなどに任せる）
     const showReact = reactT > 0 && !reactQuiet;
     if (reactT > 0) {

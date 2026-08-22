@@ -247,6 +247,13 @@ const MUTATIONS = [
    "        || (pet.dead && !pet.memShown)    // 魂が抜けていくあいだ（見たあとの漂う姿は操作できる）",
    "        || pet.dead", 'caught'],
 
+  ['家出の「・・・」をキャラの真上に戻す（退屈のときと位置が食い違う）',
+   "      if(ufoT % (RUN_ON + RUN_OFF) < RUN_ON) stampEmo(ctxM, ICO_DOTS, x0, y, cw, NK);",
+   "      if(ufoT % (RUN_ON + RUN_OFF) < RUN_ON) stamp(ctxM, ICO_DOTS, x0 + 2, y - 3, NK);", 'caught'],
+  ['育成画面のマークだけ別の置き方にする',
+   "    function emo(spr){ stampEmo(ctxM, spr, charX, charY + yOff - airOff, gw, NK); }",
+   "    function emo(spr){ stamp(ctxM, spr, charX, charY - 3, NK); }", 'caught'],
+
   // ── 家出エンディング ──
   ['家出で「・・・」の回数を変える', "  const RUN_ON = 9, RUN_OFF = 7, RUN_TIMES = 3;",
    "  const RUN_ON = 9, RUN_OFF = 7, RUN_TIMES = 5;", 'caught'],
