@@ -72,7 +72,8 @@ function makeSandbox({ storage, Date: D }){
   };
   const timers = [];      // setInterval は動かさない。update() は手で回す
   const sandbox = {
-    console, Math, JSON, Object, Array, String, Number, Boolean, Set, Map,
+    // Math はサンドボックスごとに持たせる（差し替えがグローバルへ漏れないように）
+    console, Math: Object.create(Math), JSON, Object, Array, String, Number, Boolean, Set, Map,
     isNaN, isFinite, parseInt, parseFloat, Promise, Error, RegExp, Uint8ClampedArray,
     Date: D,
     setInterval: (fn, ms) => { timers.push({ fn, ms, kind:'interval' }); return timers.length; },

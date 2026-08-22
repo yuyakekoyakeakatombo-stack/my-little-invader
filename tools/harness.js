@@ -112,7 +112,9 @@ function makeSandbox(opts){
     clearInterval(){}, setTimeout: (fn) => { timers.push({fn, ms:0}); return timers.length; },
     clearTimeout(){}, requestAnimationFrame(){}, cancelAnimationFrame(){},
     fetch: () => Promise.reject(new Error('offline')),
-    Math, JSON, Date: opts.Date || Date, Set, Map, Object, Array, String, Number,
+    // Math はサンドボックスごとに持たせる。グローバルをそのまま渡すと、
+    //  テストが Math.random を差し替えたとき その後の全テストに漏れる
+    Math: Object.create(Math), JSON, Date: opts.Date || Date, Set, Map, Object, Array, String, Number,
     Boolean, Error, Promise, isNaN, isFinite, parseInt, parseFloat, Uint8ClampedArray,
   };
   sandbox.globalThis = sandbox;

@@ -1018,11 +1018,19 @@
   //  おなかもきげんも内部値は0〜5の整数だが、目盛りは10本ある。そのままだと
   //  2本ずつしか動かず、5段階ぶんの見た目しか出せていなかった。
   //  次の1が減るまでの進み具合（hungerAcc / moodAcc）を引いて、1本きざみで動かす
+  // 目盛りは「いまの段階」から「次に1減るまでの進み具合」を引いて描く。滑らかに減って見える。
+  //  ただし いちばん上の段だけは引かない。引くと、食べさせた直後から欠けはじめ、
+  //  10本そろうのが その段の最初の1/4だけになり、満タンをほとんど見られなくなる。
+  //  上限にいるあいだは満タンのまま保ち、1段下がったところから目減りを見せる
   function gaugeHunger(){
+    if((pet.hunger||0) >= HUNGER_MAX) return HUNGER_MAX;
     const hm = hungerMin();
     return Math.max(0, (pet.hunger||0) - (hm > 0 ? Math.min(1, (pet.hungerAcc||0) / hm) : 0));
   }
+  //  きげんの上限は、汚れや病気があるあいだ 1段下がる（moodCap）。
+  //  その場合は「その子にとっての満タン」で保つ
   function gaugeMood(){
+    if((pet.mood||0) >= moodCap()) return pet.mood||0;
     return Math.max(0, (pet.mood||0) - Math.min(1, (pet.moodAcc||0) / MOOD_MIN));
   }
   function clampMood(){ if(pet.mood > moodCap()) pet.mood = moodCap(); }   // 汚れ・病気が発生した瞬間に上限まで下げる

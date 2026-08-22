@@ -197,6 +197,15 @@ const MUTATIONS = [
   ['粒が上下にばらけない',
    "      const y = Math.min(MAIN_GY - 1, oy + ry + Math.round(drift * 0.15 * dustLift(rx, ry)));",
    "      const y = oy + ry;", 'caught'],
+  // ── メーターの見え方 ──
+  ['満腹のあいだも目減りを描く（食べた直後から欠けて見える）',
+   "    if((pet.hunger||0) >= HUNGER_MAX) return HUNGER_MAX;", "", 'caught'],
+  ['きげんも上限で保たない',
+   "    if((pet.mood||0) >= moodCap()) return pet.mood||0;", "", 'caught'],
+  ['きげんを上限ではなく満点で判定する（汚れているとき保たれない）',
+   "    if((pet.mood||0) >= moodCap()) return pet.mood||0;",
+   "    if((pet.mood||0) >= MOOD_MAX) return pet.mood||0;", 'caught'],
+
   // ── ベストスコアの表示 ──
   ['選択画面に点数を出さない',
    "      ctxN.fillText('BEST ' + bv, (W*S)/2, 60*S);", "", 'caught'],
