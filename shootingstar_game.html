@@ -251,12 +251,36 @@
   const STAR_W=5, STAR_H=5;
 
   // ── 音 ──
-  let ac=null;
+  //  iOSは 電話・アラーム・ほかのアプリの音・画面ロック・裏まわりのたびに
+  //  AudioContext を止める。このとき state は 'suspended' ではなく
+  //  WebKit独自の 'interrupted' になることがあり、そこからは resume() が
+  //  効かないまま戻らないことがある。suspended だけ見ていると、
+  //  一度これに当たった時点で ずっと無音になるので、戻らないものは作り直す
+  let ac=null, acBornAt=0;
+  const AC_RETRY=1000;   // 作り直しの間隔(ms)。割り込みが続くあいだ作り続けないための歯止め
+  function newAudio(){
+    try{ const c=new (window.AudioContext||window.webkitAudioContext)(); acBornAt=Date.now(); return c; }
+    catch(e){ return null; }
+  }
+  function ensureAudio(){
+    if(!ac) ac=newAudio();
+    if(!ac) return;
+    if(ac.state==='running') return;
+    if(ac.state==='suspended'){ ac.resume().catch(function(){}); return; }
+    if(Date.now()-acBornAt < AC_RETRY) return;
+    const old=ac;
+    ac=newAudio();
+    try{ old.close(); }catch(e){}
+    if(ac && ac.state==='suspended') ac.resume().catch(function(){});
+  }
+  function reviveAudio(){ if(ac) ensureAudio(); }
+  // ミニゲームを閉じるとき、開いていた口は閉じておく（iOSは同時に持てる数に限りがある）
+  window.addEventListener('pagehide', function(){ if(ac){ try{ ac.close(); }catch(e){} ac=null; } });
   function beep(freq,dur,type){
     try{
       if(localStorage.getItem('myvader_sound')==='off') return;   // 本体のSOUND設定を尊重
-      if(!ac) ac=new (window.AudioContext||window.webkitAudioContext)();
-      if(ac.state==='suspended'){ ac.resume().catch(function(){}); }   // iOSの割り込み後の無音化対策
+      ensureAudio();
+      if(!ac) return;
       const o=ac.createOscillator(), g=ac.createGain();
       o.connect(g); g.connect(ac.destination);
       o.type=type||'square'; o.frequency.setValueAtTime(freq,ac.currentTime);
@@ -266,9 +290,10 @@
     }catch(e){}
   }
   ['touchend','pointerdown','click'].forEach(function(ev){
-    document.addEventListener(ev, function(){ if(ac && ac.state==='suspended') ac.resume().catch(function(){}); }, {passive:true});
+    document.addEventListener(ev, reviveAudio, {passive:true});
   });
-  document.addEventListener('visibilitychange', function(){ if(!document.hidden && ac && ac.state==='suspended') ac.resume().catch(function(){}); });
+  document.addEventListener('visibilitychange', function(){ if(!document.hidden) reviveAudio(); });
+  window.addEventListener('pageshow', reviveAudio);
 
   // ── 状態 ──
   const STATE={TITLE:0,PLAY:2,GAMEOVER:4,HELP:5};

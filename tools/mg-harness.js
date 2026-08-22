@@ -94,6 +94,8 @@ function makeSandbox({ storage, Date: D }){
       resume: () => Promise.resolve(), close: () => Promise.resolve(),
     }; },
     performance: { now: () => D.now() },
+    // window.addEventListener（pagehide / pageshow で音の口を開け閉めする）
+    addEventListener(){}, removeEventListener(){},
   };
   sandbox.window = sandbox;
   sandbox.globalThis = sandbox;

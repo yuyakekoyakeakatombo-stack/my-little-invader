@@ -487,6 +487,16 @@ const MUTATIONS = [
   ['日記の結びを、また「ぶじにおわった」に戻す',
    "{ ja:['ゆうひが しずむのを','ずっと みていた'],  en:['I WATCHED THE SUN','GO DOWN'] },",
    "{ ja:['きょうも ぶじに','おわった'],  en:['ANOTHER DAY','ENDED SAFELY'] },", 'live'],
+  ['iOSの割り込み(interrupted)を見のがす（電話のあと ずっと無音になる）',
+   "    if(ac.state === 'suspended'){ ac.resume().catch(()=>{}); return; }\n    // interrupted / closed。resume() をひととおり試しつつ、作り直す\n    if(Date.now() - acBornAt < AC_RETRY) return;",
+   "    if(ac.state === 'suspended'){ ac.resume().catch(()=>{}); return; }\n    return;\n    if(Date.now() - acBornAt < AC_RETRY) return;", 'caught'],
+  ['作り直しても古い口を閉じない（iOSは同時に持てる数に限りがある）',
+   "    try{ old.close(); }catch(e){}", "", 'caught'],
+  ['割り込み中に口を作り続ける（歯止めを外す）',
+   "    if(Date.now() - acBornAt < AC_RETRY) return;", "", 'caught'],
+  ['SOUND=OFF でも口を開けてしまう',
+   "    if(!soundOn) return;   // SOUND=OFFならミュート\n    ensureAudio();",
+   "    ensureAudio();\n    if(!soundOn) return;", 'caught'],
 ];
 
 const orig = fs.readFileSync(GAME, 'utf8');

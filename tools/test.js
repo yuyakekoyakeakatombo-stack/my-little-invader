@@ -2094,10 +2094,77 @@ describe('ファイル', () => {
     ok(/const dp = \(p <= s0\) \? 0 : \(p - s0\) \/ \(1 - s0\);/.test(src),
        '散りはじめを遅らせる処理が無い');
   });
+  // iOSの割り込みからの立ち直りは、本体だけでなく3本のミニゲームにも要る
+  it('ミニゲームも、音の割り込みから立ち直るようにしてある', () => {
+    for(const f of ['spacewalk_game.html','shootingstar_game.html','abduction_game.html']){
+      const src = read(f);
+      ok(/ensureAudio\(\)/.test(src), `${f}: 割り込みからの立ち直りが無い`);
+      ok(/interrupted/.test(src), `${f}: interrupted に触れていない`);
+      ok(!/if\(!ac\) ac=new \(window\.AudioContext/.test(src), `${f}: 口をその場で作る古い書き方が残っている`);
+      ok(/pagehide/.test(src), `${f}: 閉じるときに口を閉じていない`);
+    }
+  });
   it('サービスワーカーのVERSIONが日付の形をしている', () => {
     const m = read('sw.js').match(/const VERSION = '([^']+)'/);
     ok(m, 'VERSION が見つからない');
     ok(/^\d{4}-\d{2}-\d{2}-\d{2}$/.test(m[1]), `VERSION の形が違う: ${m[1]}`);
+  });
+});
+
+// ══ 音 ════════════════════════════════════════════════════
+//   iOSは 電話・アラーム・ほかのアプリの音・画面ロックのたびに音を止める。
+//   このとき WebKit は state を 'suspended' ではなく 'interrupted' にすることがあり、
+//   そこからは resume() が効かないまま戻らない。suspended だけ面倒を見ていると、
+//   一度これに当たった時点で、アプリを閉じるまで ずっと無音になる
+describe('音', () => {
+  const first = () => {
+    const { api, clock, audioLog } = load();
+    api.playClick(1200);
+    return { api, clock, audioLog, ac: audioLog[0] };
+  };
+  it('ふつうに鳴らすと、口はひとつだけ', () => {
+    const { audioLog } = first();
+    eq(audioLog.length, 1, '作られた口の数:');
+    eq(audioLog[0].played, 1, '鳴らした回数:');
+  });
+  it('割り込み（interrupted）に当たっても、鳴るところまで戻る', () => {
+    const { api, clock, audioLog, ac } = first();
+    ac.state = 'interrupted';
+    clock.advance(api.AC_RETRY + 1);
+    api.playClick(1200);
+    ok(audioLog.length === 2, `作り直していない（口の数 ${audioLog.length}）`);
+    eq(audioLog[1].state, 'running', '新しい口の状態:');
+    eq(audioLog[1].played, 1, '新しい口で鳴らした回数:');
+  });
+  it('作り直したら、古い口は閉じる', () => {
+    const { api, clock, audioLog, ac } = first();
+    ac.state = 'interrupted';
+    clock.advance(api.AC_RETRY + 1);
+    api.playClick(1200);
+    eq(ac.closed, 1, '古い口を閉じた回数:');
+  });
+  it('割り込みが続くあいだ、口を作り続けない', () => {
+    const { api, clock, audioLog, ac } = first();
+    ac.state = 'interrupted';
+    clock.advance(api.AC_RETRY + 1);
+    api.playClick(1200);                       // ここで2つめができる
+    audioLog[1].state = 'interrupted';         // 新しいほうも割り込まれたまま
+    for(let i=0;i<20;i++) api.playClick(1200); // 立て続けに鳴らそうとする
+    eq(audioLog.length, 2, '短いあいだに作られた口の数:');
+  });
+  it('止まっているだけ（suspended）なら、作り直さずに起こす', () => {
+    const { api, clock, audioLog, ac } = first();
+    ac.state = 'suspended';
+    clock.advance(api.AC_RETRY + 1);
+    api.playClick(1200);
+    eq(audioLog.length, 1, '作られた口の数:');
+    ok(ac.resumed > 0, 'resume していない');
+    eq(ac.state, 'running', '起きたあとの状態:');
+  });
+  it('SOUND=OFF なら、口を作らない', () => {
+    const { api, audioLog } = load({ storage: { myvader_sound: 'off' } });
+    api.playClick(1200);
+    eq(audioLog.length, 0, '作られた口の数:');
   });
 });
 

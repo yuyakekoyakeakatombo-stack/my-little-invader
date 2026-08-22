@@ -43,6 +43,7 @@ const EXPORTS = `
   buildDiary, diaryBody, addDiary, clearDiary,
   diaryWriting, diaryLevel, diaryStyle, writeRatio, entryLevel, diaryWords, diaryMarks, diaryRows, diaryBaseDot, diaryFontSize,
   DIARY_PICT, DIARY_RUNE, RUNE_KEYS, KANA_LETTER, runeOf, TAG_PICT, LV_NEW, LV_BABY, LV_CHILD, LV_ADULT, LV_DOT,
+  ensureAudio, playClick, AC_RETRY, get ac(){ return ac; }, setSound, get soundOn(){ return soundOn; },
   SICK_P, SICK_DIRT_MIN, BOND_CAP, RET_ESTR_DAYS, RET_GRACE_DAYS,
   STUCK_DAYS, ALLROUND, B_PAMPER, PAMPER_DAYS, PAMPER_SNACKS, INV_M_MIN, INV_B_MAX, INV_P_MIN, INV_DAYS, WRATH_HOLD,
 };
@@ -100,6 +101,7 @@ function makeSandbox(opts){
   }, { get(t,p){ return p in t ? t[p] : undefined; }, set(t,p,v){ t[p]=v; return true; } });
 
   const timers = [];
+  const audioLog = [];       // 作られた AudioContext の並び
   const document = {
     getElementById: () => el(), querySelector: () => el(), querySelectorAll: () => [],
     createElement: () => el(), addEventListener(){}, removeEventListener(){},
@@ -112,10 +114,19 @@ function makeSandbox(opts){
     screen: { width: 400, height: 800 },
     location: { href: '', origin: 'http://localhost', reload(){} },
     navigator: { userAgent: 'node', standalone: false },
-    AudioContext: function(){ return { state:'running', currentTime:0, destination:{},
-      createOscillator: () => ({ connect(){}, start(){}, stop(){}, frequency:{ setValueAtTime(){}, exponentialRampToValueAtTime(){} }, type:'' }),
-      createGain: () => ({ connect(){}, gain:{ setValueAtTime(){}, exponentialRampToValueAtTime(){} } }),
-      resume: () => Promise.resolve() }; },
+    // 作られた口をぜんぶ控えておく。iOSの割り込み（interrupted）から
+    //  ちゃんと立ち直るかを、テストから確かめられるようにするため
+    AudioContext: function(){
+      const c = { state:'running', currentTime:0, destination:{}, resumed:0, closed:0,
+        createOscillator: () => { c.played++; return { connect(){}, start(){}, stop(){},
+          frequency:{ setValueAtTime(){}, exponentialRampToValueAtTime(){} }, type:'' }; },
+        createGain: () => ({ connect(){}, gain:{ setValueAtTime(){}, exponentialRampToValueAtTime(){} } }),
+        resume(){ c.resumed++; if(c.state === 'suspended') c.state = 'running'; return Promise.resolve(); },
+        close(){ c.closed++; c.state = 'closed'; return Promise.resolve(); } };
+      c.played = 0;
+      audioLog.push(c);
+      return c;
+    },
     devicePixelRatio: 1,
   };
   const sandbox = {
@@ -133,7 +144,7 @@ function makeSandbox(opts){
   sandbox.globalThis = sandbox;
   sandbox.self = sandbox;
   Object.assign(win, { localStorage, document });
-  return { sandbox, store, timers };
+  return { sandbox, store, timers, audioLog };
 }
 
 // ── 止められる時計 ─────────────────────────────────────────
@@ -158,12 +169,12 @@ function makeClock(startMs){
 function load(opts = {}){
   const start = opts.at != null ? opts.at : new Date(2026, 5, 15, 12, 0, 0).getTime();
   const clock = makeClock(start);
-  const { sandbox, store, timers } = makeSandbox({ storage: opts.storage, Date: clock.Date });
+  const { sandbox, store, timers, audioLog } = makeSandbox({ storage: opts.storage, Date: clock.Date });
   vm.createContext(sandbox);
   vm.runInContext(mainScript(), sandbox, { filename: 'invader_game.html' });
   const api = sandbox.__api;
   if(!api) throw new Error('内部の取り出しに失敗');
-  return { api, clock, store, timers, sandbox };
+  return { api, clock, store, timers, sandbox, audioLog };
 }
 
 module.exports = { load, mainScript };
