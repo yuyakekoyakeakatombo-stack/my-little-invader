@@ -1921,6 +1921,26 @@ describe('ファイル', () => {
     ok(body.indexOf("scene !== 'main'") < body.indexOf('departEnding = true'),
        '門番が、演出を始める判定より後ろにある');
   });
+  // 時刻で色を変えてよいのは、空を映す画面だけ。読みものの画面が夜に沈むと、
+  //  固定色で描いている行（memRow など）とのつり合いも崩れる
+  it('時刻で色が変わるのは、空を映す画面だけ', () => {
+    const src = read('invader_game.html');
+    const users = [];
+    for(const m of src.matchAll(/getColors\(\)/g)){
+      // その呼び出しが、どの関数の中にあるかを手前から探す
+      const head = src.lastIndexOf('function ', m.index);
+      const name = src.slice(head).match(/function (\w+)/)[1];
+      if(!users.includes(name)) users.push(name);
+    }
+    users.sort();
+    eq(users.join(' '), 'getColors startArrival tickMain',
+       '時刻で色を変えている場所:');   // 育成画面と到着演出だけ
+    // おもいでは、メニュー・にっきと同じ固定色
+    const at = src.indexOf('function tickMemory()');
+    const body = src.slice(at, src.indexOf('setInterval(tickMemory', at));
+    ok(/const BG = OFF, DM = DIM, NK = ON;/.test(body), 'おもいでが固定色になっていない');
+    ok(!body.includes('getColors'), 'おもいでが時刻で色を変えている');
+  });
   // 家出の「・・・」は、退屈のときと同じ位置に出す。置き方が2か所にあると
   //  片方だけ直して食い違うので、1つの関数にまとめてある
   it('気もちのマークの置き場所が、育成画面と家出で共通になっている', () => {

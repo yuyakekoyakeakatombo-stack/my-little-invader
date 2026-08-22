@@ -6156,7 +6156,11 @@
   }
   function tickMemory(){
     if(scene !== 'memory') return;
-    const col = getColors(), BG = col.bg, DM = col.dim, NK = col.on;
+    // 読みものの画面（メニュー・にっき）と同じく、時刻では色を変えない。
+    //  空を映す画面ではないので、夜に開くと暗くなるのは筋が通らない。
+    //  行を組む memRow / memGauge / memBestRow はもともと固定色で描いていて、
+    //  地の色だけが夜に沈み、字とのつり合いも崩れていた
+    const BG = OFF, DM = DIM, NK = ON;
     ctxR.fillStyle = BG; ctxR.fillRect(0,0,W*S,H*S);
     ctxR.textBaseline = 'top';
     // 見出し

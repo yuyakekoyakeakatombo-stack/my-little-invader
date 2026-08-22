@@ -254,6 +254,10 @@ const MUTATIONS = [
    "    function emo(spr){ stampEmo(ctxM, spr, charX, charY + yOff - airOff, gw, NK); }",
    "    function emo(spr){ stamp(ctxM, spr, charX, charY - 3, NK); }", 'caught'],
 
+  ['おもいでが夜に暗くなる（読みものの画面なのに空の色を使う）',
+   "    const BG = OFF, DM = DIM, NK = ON;",
+   "    const col = getColors(), BG = col.bg, DM = col.dim, NK = col.on;", 'caught'],
+
   // ── 家出エンディング ──
   ['家出で「・・・」の回数を変える', "  const RUN_ON = 9, RUN_OFF = 7, RUN_TIMES = 3;",
    "  const RUN_ON = 9, RUN_OFF = 7, RUN_TIMES = 5;", 'caught'],
