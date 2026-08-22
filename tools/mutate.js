@@ -232,6 +232,12 @@ const MUTATIONS = [
   ['別れかたの2行目がページ数に掛かる',
    "  const MEM_END_Y = 50, MEM_END_LH = 5;", "  const MEM_END_Y = 54, MEM_END_LH = 5;", 'caught'],
 
+  ['育成画面を見ていなくても演出が進む（裏で終わって おもいでだけ開く）',
+   "    if(scene !== 'main' || miniFrame || manualFrame) return;", "", 'caught'],
+  ['門番を時間の進行より手前に置く（画面しだいで時間が止まる）',
+   "    advancePet();   // リアルタイム進行（1分単位で処理）",
+   "    if(scene !== 'main') return;\n    advancePet();", 'caught'],
+
   // ── 演出中の操作 ──
   ['演出中でも MENU が開く', "getElementById('mmenu'),()=>{ if(cutscenePlaying()) return; playClick();",
    "getElementById('mmenu'),()=>{ playClick();", 'caught'],

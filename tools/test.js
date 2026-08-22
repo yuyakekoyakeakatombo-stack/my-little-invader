@@ -1902,6 +1902,25 @@ describe('ファイル', () => {
     ok(/PLAY_ITEMS\.forEach\(\(label,i\)=> memBestRow\(label, bestText\(i\), 27 \+ i\*8\)\);/.test(src),
        'おもいでに3本ぶんが並んでいない');
   });
+  // tickMain は表示中の画面に関係なく回るので、そのままだと メニューや日記、
+  //  ミニゲームを開いている裏でエンディングが始まって終わり、見ないうちに
+  //  おもいでだけが開いてしまう（亡くなった子はオープニングを経由するので、
+  //  タイトルを見ているあいだに魂が抜けきっていた）
+  it('育成画面を見ていないあいだは、演出が進まない', () => {
+    const src = read('invader_game.html');
+    const at = src.indexOf('function tickMain()');
+    ok(at > 0, 'tickMain が見つからない');
+    const head = src.slice(at, src.indexOf('const col = getColors();', at));
+    ok(/if\(scene !== 'main' \|\| miniFrame \|\| manualFrame\) return;/.test(head),
+       '育成画面かどうかの門番が無い');
+    // 時間の進行より後ろ＝待たせても遅れが出ないこと
+    ok(head.indexOf('advancePet()') < head.indexOf("scene !== 'main'"),
+       '門番が時間の進行より手前にある（開いている画面しだいで時間が止まる）');
+    // 門番は、演出を始める判定より手前にあること
+    const body = src.slice(at, src.indexOf('\n  }', at));
+    ok(body.indexOf("scene !== 'main'") < body.indexOf('departEnding = true'),
+       '門番が、演出を始める判定より後ろにある');
+  });
   // 演出中に押せてしまうと、別れの場面でメニューが開いたりする。
   //  音や凹みだけ返るのも「効いているのに何も起きない」ように見えるので、
   //  playClick より手前で止める

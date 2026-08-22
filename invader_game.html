@@ -4743,6 +4743,11 @@
   function tickMain(){
     advancePet();   // リアルタイム進行（1分単位で処理）
     if(!debugMode) timeOfDay = getTimeOfDay();   // 実時刻に追従（DEBUG中はサイクル優先）
+    // 育成画面を見ていないあいだは、描くのも演出を始めるのもしない。
+    //  ここを止めないと、メニューや日記、ミニゲームを開いている裏でエンディングが
+    //  始まって終わってしまい、見ないうちに おもいでだけが開く。
+    //  時間の進行（advancePet）は上で済ませてあるので、待たせても遅れは出ない
+    if(scene !== 'main' || miniFrame || manualFrame) return;
     const col = getColors();
     const BG  = col.bg, DM = col.dim, NK = col.on;
     if(pet.departFlag && !departEnding && !pet.dead){ departEnding = true; departT = 0; }  // 旅立ちの日
