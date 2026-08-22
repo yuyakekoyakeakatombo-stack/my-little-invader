@@ -158,7 +158,12 @@
     cursor:pointer; flex-shrink:0; transition:transform 0.06s, filter 0.06s;
   }
   .btn-lbl { font-family:'Press Start 2P',monospace; font-size:9px; color:rgba(255,255,255,0.3); user-select:none;
-    text-shadow: 0 1px 1px rgba(255,255,255,0.1), 0 -1px 0 rgba(0,0,0,0.5); }
+    text-shadow: 0 1px 1px rgba(255,255,255,0.1), 0 -1px 0 rgba(0,0,0,0.5);
+    /* Press Start 2P は 字面が送りの左寄り・行の上寄りに乗る。flex の中央ぞろえが
+       合わせるのは「送り幅」と「行の箱」なので、字そのものは左上へずれる。
+       実測（塗りのピクセルを走査）した ずれ幅ぶんを戻して、字をボタンの中心に置く */
+    transform: translate(0.061em, 0.0625em);
+  }
   .lbl-b   { color:rgba(255,255,255,0.3); }
   .lbl-a   { color:rgba(255,255,255,0.3); }
 
@@ -173,7 +178,12 @@
     cursor:pointer; transition:transform 0.06s, filter 0.06s;
   }
   .menu-btn-lbl { font-family:'Press Start 2P',monospace; font-size:7px; color:rgba(255,255,255,0.3); user-select:none; letter-spacing:0.08em;
-    text-shadow: 0 1px 1px rgba(255,255,255,0.1), 0 -1px 0 rgba(0,0,0,0.5); }
+    text-shadow: 0 1px 1px rgba(255,255,255,0.1), 0 -1px 0 rgba(0,0,0,0.5);
+    /* Press Start 2P は 字面が送りの左寄り・行の上寄りに乗る。flex の中央ぞろえが
+       合わせるのは「送り幅」と「行の箱」なので、字そのものは左上へずれる。
+       実測（塗りのピクセルを走査）した ずれ幅ぶんを戻して、字をボタンの中心に置く */
+    transform: translate(0.103em, 0.0625em);   /* 横は 字間が最後の字のうしろにも入るぶんを含む */
+  }
 
   /* ── 実機モード（ホーム画面から起動 or 実機Safari）：モックのiPhone外装を消してゲーム機本体だけ表示 ── */
   body.device { background:var(--body-bg, #e8e3d8); }

@@ -197,6 +197,13 @@ const MUTATIONS = [
   ['粒が上下にばらけない',
    "      const y = Math.min(MAIN_GY - 1, oy + ry + Math.round(drift * 0.15 * dustLift(rx, ry)));",
    "      const y = oy + ry;", 'caught'],
+  // ── ボタンの字の位置 ──
+  ['A・B の字がボタンの中心からずれる（位置合わせを外す）',
+   "    transform: translate(0.061em, 0.0625em);", "", 'caught'],
+  ['MENU の字がずれる（字間ぶんの補正まで戻す）',
+   "    transform: translate(0.103em, 0.0625em);   /* 横は 字間が最後の字のうしろにも入るぶんを含む */",
+   "    transform: translate(0.061em, 0.0625em);", 'caught'],
+
   // ── ミニゲームの逃げ道 ──
   ['ミニゲームが立ち上がらなくても閉じない（画面を覆ったまま固まる）',
    "    miniGuard = setTimeout(()=>{ if(miniFrame === f && !miniAlive(f)) closeMiniGame(true); }, MINI_GUARD_MS);",

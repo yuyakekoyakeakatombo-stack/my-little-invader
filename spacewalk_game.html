@@ -62,12 +62,16 @@
     box-shadow:0 4px 4px var(--shadow-hard,rgba(0,0,0,0.32)),0 6px 12px var(--shadow-soft,rgba(0,0,0,0.22)),inset 0 1px 2px rgba(255,255,255,0.13),inset 0 -2px 4px rgba(0,0,0,0.45);
     display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;transition:transform 0.06s,filter 0.06s}
   .btn-lbl{font-family:'Press Start 2P',monospace;font-size:9px;color:rgba(255,255,255,0.3);user-select:none;
-    text-shadow:0 1px 1px rgba(255,255,255,0.1),0 -1px 0 rgba(0,0,0,0.5)}
+    text-shadow:0 1px 1px rgba(255,255,255,0.1),0 -1px 0 rgba(0,0,0,0.5);
+    transform:translate(0.061em,0.0625em);   /* 字面が送りの左寄り・行の上寄りに乗るぶんを戻す */
+  }
   .menu-btn{width:60px;height:18px;border-radius:9px;background:linear-gradient(180deg,#333 0%,#1e1e1e 100%);border:none;
     box-shadow:0 3px 3px var(--shadow-hard,rgba(0,0,0,0.32)),0 5px 10px var(--shadow-soft,rgba(0,0,0,0.22)),inset 0 1px 0 rgba(255,255,255,0.1),inset 0 -1px 2px rgba(0,0,0,0.35);
     display:flex;align-items:center;justify-content:center;cursor:pointer;transition:transform 0.06s,filter 0.06s}
   .menu-btn-lbl{font-family:'Press Start 2P',monospace;font-size:7px;color:rgba(255,255,255,0.3);user-select:none;letter-spacing:0.08em;
-    text-shadow:0 1px 1px rgba(255,255,255,0.1),0 -1px 0 rgba(0,0,0,0.5)}
+    text-shadow:0 1px 1px rgba(255,255,255,0.1),0 -1px 0 rgba(0,0,0,0.5);
+    transform:translate(0.103em,0.0625em);   /* 字面のずれ＋字間が最後の字のうしろにも入るぶんを戻す */
+  }
 
   /* ── 実機モード（ホーム画面から起動 or 実機Safari）：モックのiPhone外装を消してゲーム機本体だけ表示 ── */
   body.device { background:var(--body-bg, #e8e3d8); }

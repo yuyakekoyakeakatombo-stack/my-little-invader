@@ -1698,6 +1698,19 @@ describe('ファイル', () => {
     ok(/\[SAVE_KEY,\s*SAVE_BAK,\s*SAVE_BAD\]\.forEach\(k\s*=>\s*localStorage\.removeItem\(k\)\)/.test(src),
        'ALL RESET が3つの鍵をまとめて消していない');
   });
+  // ボタンの字は、字面が送りの左寄り・行の上寄りに乗る（Press Start 2P）。
+  //  flex の中央ぞろえが合わせるのは「送り幅」と「行の箱」なので、そのままだと
+  //  字そのものが左上へずれる。ブラウザが要る計測はテストから出来ないので、
+  //  実測して入れた補正が4ファイルすべてに残っているかを押さえる
+  it('A・B・MENU の字が、ボタンの中心に寄せてある', () => {
+    for(const f of ['invader_game.html','spacewalk_game.html','shootingstar_game.html','abduction_game.html']){
+      const src = read(f).replace(/\s+/g, '');
+      ok(src.includes('transform:translate(0.061em,0.0625em)'),
+         `${f}: A・B の字の位置合わせが無い`);
+      ok(src.includes('transform:translate(0.103em,0.0625em)'),
+         `${f}: MENU の字の位置合わせが無い（字間ぶんを含む 0.103em）`);
+    }
+  });
   // ミニゲームの iframe は画面全体を覆い、閉じる手立ては中からの postMessage しかない。
   //  中で立ち上がりに失敗すると、閉じられず 進行も止まったまま（inMiniGame）になる。
   //  ブラウザが要るのでテストからは動かせないため、逃げ道の有無をソースで押さえる
