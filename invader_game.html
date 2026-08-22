@@ -409,7 +409,7 @@
       memory:'おもいで',
       // 体型の呼び名。系統名（グレイ／マーシャン／インベーダー）と同じくカタカナで揃えてある
       plump:'プランプ', sleek:'スリーク', prickly:'プリックリー',
-      mdays:'いっしょにいた ひ', mfeed:'ごはん', msnack:'おやつ', mclean:'そうじ',
+      mdays:'にち いっしょにいた', mfeed:'ごはん', msnack:'おやつ', mclean:'そうじ',
       mpraise:'ほめた', mplay:'あそんだ', mmed:'くすり', msick:'びょうき',
       mgave:'してあげたこと', mbest:'ベストスコア', mlast:'そだちかた',
       mcare:'ケア', mdisc:'しつけ', mtemper:'せいかく',
@@ -6136,16 +6136,18 @@
       if(body) stamp(ctxR, body, Math.round((W - body[0].length)/2), MEM_CHAR_BOT - body.length, NK);
       ctxR.font = nameFont(9, pet.name || '????'); ctxR.fillStyle = NK;
       ctxR.fillText(pet.name || '????', (W*S)/2, 31*S);
-      ctxR.font = uiFont(6); ctxR.fillStyle = NK;
-      ctxR.fillText(T('mdays') + '  ' + petDay(), (W*S)/2, 39*S);
+      //  名前のすぐ下は どんな子だったか。日数はそのあと
       const f = formLabel();
       if(f){
-        ctxR.font = uiFont(7);
-        ctxR.fillText(typeLabel() + (lang==='ja' ? '・' : ' ') + f, (W*S)/2, 45*S);
+        ctxR.font = uiFont(7); ctxR.fillStyle = NK;
+        ctxR.fillText(typeLabel() + (lang==='ja' ? '・' : ' ') + f, (W*S)/2, 39*S);
       } else {
         ctxR.font = uiFont(6); ctxR.fillStyle = NK;
-        ctxR.fillText(stageLabel(), (W*S)/2, 46*S);
+        ctxR.fillText(stageLabel(), (W*S)/2, 40*S);
       }
+      //  数を先に読ませる（にほんご「25 にち いっしょにいた」／英語「25 DAYS TOGETHER」）
+      ctxR.font = uiFont(6); ctxR.fillStyle = NK;
+      ctxR.fillText(petDay() + ' ' + T('mdays'), (W*S)/2, 46*S);
       const e = endLabel();
       if(e){ ctxR.font = uiFont(6); ctxR.fillStyle = NK; ctxR.fillText(e, (W*S)/2, 52*S); }
 

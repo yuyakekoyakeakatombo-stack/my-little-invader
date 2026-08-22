@@ -219,6 +219,10 @@ const MUTATIONS = [
    "    if((pet.mood||0) >= moodCap()) return pet.mood||0;",
    "    if((pet.mood||0) >= MOOD_MAX) return pet.mood||0;", 'caught'],
 
+  ['おもいでの日数を、数が後ろの並びに戻す',
+   "      ctxR.fillText(petDay() + ' ' + T('mdays'), (W*S)/2, 46*S);",
+   "      ctxR.fillText(T('mdays') + '  ' + petDay(), (W*S)/2, 46*S);", 'caught'],
+
   // ── おもいでの姿 ──
   ['おもいでの1ページ目に姿を出さない',
    "      if(body) stamp(ctxR, body, Math.round((W - body[0].length)/2), MEM_CHAR_BOT - body.length, NK);",

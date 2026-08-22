@@ -1812,6 +1812,21 @@ describe('ファイル', () => {
     ok(m, 'MEM_PAGES が見つからない');
     eq(Number(m[1]), branches + 1, 'ページ数:');
   });
+  // 日数は数から読ませる（にほんご「25 にち いっしょにいた」／英語「25 DAYS TOGETHER」）。
+  //  タイプ・形態はその上に置く（名前のすぐ下が「どんな子だったか」になるように）
+  it('おもいで1ページ目の並びが、姿→名前→タイプ→日数→別れ になっている', () => {
+    const src = read('invader_game.html');
+    const at = src.indexOf('// 1ページ目：だれと、どれだけ');
+    const seg = src.slice(at, src.indexOf('} else if(memPage === 1)', at));
+    ok(/petDay\(\) \+ ' ' \+ T\('mdays'\)/.test(seg), '日数が数から始まっていない');
+    const y = t => { const m = seg.match(new RegExp(t + '[^;]*?(\\d+)\\*S\\);')); return m ? +m[1] : -1; };
+    const name = y("fillText\\(pet\\.name"), form = y("typeLabel\\(\\)"), days = y("petDay\\(\\) \\+ ' '");
+    const end  = y("fillText\\(e,");
+    ok(name > 0 && form > 0 && days > 0 && end > 0, `位置が読めない（名前${name} タイプ${form} 日数${days} 別れ${end}）`);
+    ok(name < form, `名前(${name})より上にタイプ(${form})がある`);
+    ok(form < days, `タイプ(${form})より上に日数(${days})がある＝入れ替わっている`);
+    ok(days < end,  `日数(${days})より上に別れ(${end})がある`);
+  });
   // 描画はテストから呼べないので、姿を置く一行をソースで押さえる
   it('おもいでの1ページ目に、姿を足元ぞろえで置いている', () => {
     const src = read('invader_game.html');
