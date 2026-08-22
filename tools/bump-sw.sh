@@ -18,4 +18,10 @@ NEW="$TODAY-$N"
 
 # BSD/GNU どちらの sed でも動くように一時ファイル経由で書く
 sed "s/^const VERSION = '.*';/const VERSION = '$NEW';/" "$SW" > "$SW.tmp" && mv "$SW.tmp" "$SW"
-echo "sw.js: VERSION $CUR -> $NEW"
+
+# ゲームの SETTINGS に出す版も同じものにする。ずれると、
+#  テスターの画面に出ている版と 中身が食い違う
+GAME=invader_game.html
+sed "s/^  const APP_VERSION = '.*';/  const APP_VERSION = '$NEW';/" "$GAME" > "$GAME.tmp" && mv "$GAME.tmp" "$GAME"
+
+echo "VERSION $CUR -> $NEW (sw.js / $GAME)"

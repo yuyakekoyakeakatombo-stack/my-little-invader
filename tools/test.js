@@ -1755,6 +1755,23 @@ describe('ファイル', () => {
         ok(ALLOWED.includes(m[1]), `${f} に検証用の window.${m[1]} が残っている`);
     }
   });
+  // ツリーの図は iPhone の画面で左右が切れていた。原因は2つ。
+  //  ・詰める指定の区切りが 379px で、390〜414px（iPhone 12〜16 のふつうの幅）が
+  //    どの段にも入らず、大きいままの箱が枠から あふれていた
+  //  ・あふれたとき justify-content:center だと、はみ出したぶんが左右に半分ずつ出る。
+  //    左に出たぶんは横に送っても出てこないので、読めないまま切れる
+  it('説明書のツリーが、iPhoneの幅で切れない', () => {
+    const src = read('manual.html');
+    // あふれても左そろえで横に送れる形にしてある
+    const root = src.match(/\.tree > ul\{[^}]*\}/);
+    ok(root, '.tree > ul の指定が見つからない');
+    ok(/width:\s*max-content/.test(root[0]), '.tree > ul に width:max-content が無い（左右が切れる）');
+    ok(/min-width:\s*100%/.test(root[0]), '.tree > ul に min-width:100% が無い（収まるとき中央に来ない）');
+    // 大きいままの箱に要るはば(459px)＋枠の余白ぶんまで、詰める指定が届いている
+    const bps = [...src.matchAll(/@media \(max-width:(\d+)px\)\{\s*\n\s*\.tree/g)].map(m => +m[1]);
+    ok(bps.length >= 1, 'ツリーを詰める指定が見つからない');
+    ok(Math.max(...bps) >= 460, `ツリーを詰める区切りが ${Math.max(...bps)}px しかない（iPhone の 390〜440px で あふれる）`);
+  });
   // 説明書は3つのタイプを名指しし、そこからさらに3つに分かれると書いている。
   //  ゲーム側で名前や分岐の数が変わったのに説明書だけ古いまま、を防ぐ
   it('説明書の3タイプが、ゲームの呼び名と合っている', () => {
@@ -2104,10 +2121,67 @@ describe('ファイル', () => {
       ok(/pagehide/.test(src), `${f}: 閉じるときに口を閉じていない`);
     }
   });
+  // 画面に出す版と、キャッシュを切り替える版がずれると、
+  //  テスターの画面に出ている版と 中身が食い違う
+  it('画面に出す版と sw.js の版がそろっている', () => {
+    const { api } = load();
+    const m = read('sw.js').match(/const VERSION = '([^']+)'/);
+    ok(m, 'sw.js に VERSION が無い');
+    eq(api.APP_VERSION, m[1], '画面の版 と sw.js の版:');
+  });
+  it('版を上げる道具が、両方いっしょに書き換える', () => {
+    const sh = read('tools/bump-sw.sh');
+    ok(/APP_VERSION/.test(sh), 'bump-sw.sh が invader_game.html の APP_VERSION を書き換えていない');
+  });
   it('サービスワーカーのVERSIONが日付の形をしている', () => {
     const m = read('sw.js').match(/const VERSION = '([^']+)'/);
     ok(m, 'VERSION が見つからない');
     ok(/^\d{4}-\d{2}-\d{2}-\d{2}$/.test(m[1]), `VERSION の形が違う: ${m[1]}`);
+  });
+});
+
+// ══ バージョンと著作権 ════════════════════════════════════
+describe('バージョンと著作権', () => {
+  it('SETTINGS に バージョンの項目がある', () => {
+    const { api } = load();
+    ok(api.SETTINGS_KEYS.includes('version'), 'バージョンの項目が無い');
+    eq(api.SETTINGS_KEYS[api.SETTINGS_KEYS.length-1], 'reset', 'いちばん下の項目:');   // 消す操作は最後のまま
+  });
+  it('項目がぜんぶ画面に収まる', () => {
+    const { api } = load();
+    // 行間は本体から読む。ここに数を書き写すと、本体だけ変わっても気づけない
+    const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'invader_game.html'), 'utf8');
+    const m = src.match(/const ITEM_H = (\d+);/);
+    ok(m, 'SETTINGS の行間（ITEM_H）が見つからない');
+    const TOP = 19, ITEM_H = +m[1], HL_H = 7, H = 65;
+    const bottom = TOP + (api.SETTINGS_KEYS.length - 1) * ITEM_H + HL_H;
+    ok(bottom <= H, `いちばん下の項目が画面から はみ出す（行間 ${ITEM_H} / 下端 ${bottom} / 画面 ${H}）`);
+  });
+  it('著作権に名義が入っている', () => {
+    const { api } = load();
+    ok(/\d{4}/.test(api.APP_COPY), `年が無い: ${api.APP_COPY}`);
+    ok(api.APP_COPY.replace(/\(C\)|\d|[\s.]/g, '').length > 0, `名義が無い: ${api.APP_COPY}`);
+  });
+  // Press Start 2P に © は無く、書くと1文字だけ別の字体に落ちて形が浮く
+  it('© ではなく (C) で書いてある', () => {
+    const { api } = load();
+    ok(!/©/.test(api.APP_COPY), `© が混ざっている: ${api.APP_COPY}`);
+    ok(/\(C\)/.test(api.APP_COPY), `(C) が無い: ${api.APP_COPY}`);
+  });
+  it('バージョン画面の行が、画面幅に収まる', () => {
+    const { api, sandbox } = load();
+    const S = 4, W = 54;
+    const c = sandbox.document.createElement('canvas').getContext('2d');
+    const wide = (font, t) => { c.font = font; return c.measureText(t).width / S; };
+    const rows = [
+      ['6px "Press Start 2P"', 'MY LITTLE INVADER'],
+      ['6px "Press Start 2P"', 'VER ' + api.APP_VERSION],
+      ['5px "Press Start 2P"', api.APP_COPY],
+    ];
+    rows.forEach(([f, t]) => {
+      const w = wide(f, t);
+      ok(w <= W - 2, `画面から はみ出す：「${t}」 ${w.toFixed(1)}ドット（画面は ${W}）`);
+    });
   });
 });
 

@@ -117,7 +117,12 @@ p.cap{ font-size:12px; color:#3c4a30; margin:14px 0 0; font-weight:700 }
        padding:18px 8px 20px; margin:14px 0; overflow-x:auto }
 .tree ul{ display:flex; justify-content:center; position:relative;
           list-style:none; margin:0; padding:16px 0 0 }
-.tree > ul{ padding-top:0 }
+/*  横に はみ出したときの受け。justify-content:center のままだと、
+    はみ出したぶんが左右に半分ずつ出て、どちらの端も切れて読めなくなる
+    （左に出たぶんは横に送っても出てこない）。中身のはばそのもの＋
+    「最低でも枠いっぱい」にしておくと、収まるときは まんなか、
+    はみ出すときは左そろえで横に送れる形になる */
+.tree > ul{ padding-top:0; width:max-content; min-width:100%; margin-inline:auto }
 .tree li{ position:relative; padding:16px 4px 0; text-align:center }
 .tree > ul > li{ padding-top:0 }                      /* 根には上へ伸びる枝が無い */
 /* タイプごとの枝を離す。くっついていると、どの ？ が どのタイプの下か読めない */
@@ -151,15 +156,18 @@ p.cap{ font-size:12px; color:#3c4a30; margin:14px 0 0; font-weight:700 }
 /* この cap だけは図の下につく説明なので、中央ぞろえにして 次の段落から離す */
 .tree + .cap{ margin:0 0 20px; text-align:center }
 .nb{ white-space:nowrap }
-/* 狭い画面では詰める。ただし タイプごとの間だけは最後まで残す（群の切れ目が読めなくなるため） */
-@media (max-width:379px){
+/*  狭い画面では詰める。ただし タイプごとの間だけは最後まで残す（群の切れ目が読めなくなるため）。
+    区切りは、大きいままの箱に要る はば（枠の内側で459px）から決めてある。
+    379px で切っていたころは、390〜414px（iPhone 12〜16 のふつうの幅）が
+    どの段にも入らず、あふれた箱の左右が切れていた */
+@media (max-width:499px){
   .tree{ padding:16px 2px 18px }
   .tree li{ padding-left:2px; padding-right:2px }
   .tree > ul > li > ul > li{ padding-left:9px; padding-right:9px }
   .tree .n{ font-size:11px; padding:3px 5px }
   .tree .q{ font-size:12px; padding:3px 4px }
 }
-@media (max-width:344px){
+@media (max-width:380px){
   .tree > ul > li > ul > li{ padding-left:6px; padding-right:6px }
   .tree .n{ font-size:10.5px; padding:3px 4px }
   .tree .q{ font-size:11px; padding:2px 3px }
@@ -572,7 +580,7 @@ STATUS<ruby>画面<rt>がめん</rt></ruby>（→ 7<ruby>章<rt>しょう</rt></
   ※この<ruby>説明書<rt>せつめいしょ</rt></ruby>はテスト<ruby>版<rt>ばん</rt></ruby>のものです。<ruby>画面<rt>がめん</rt></ruby>や<ruby>内容<rt>ないよう</rt></ruby>は<ruby>変更<rt>へんこう</rt></ruby>になる<ruby>場合<rt>ばあい</rt></ruby>があります。<br>
   お<ruby>気<rt>き</rt></ruby>づきの<ruby>点<rt>てん</rt></ruby>や<ruby>不具合<rt>ふぐあい</rt></ruby>がありましたら、お<ruby>手数<rt>てすう</rt></ruby>ですがお<ruby>知<rt>し</rt></ruby>らせください。<br><br>
   MY LITTLE INVADER<br>
-  <span style="font-size:11px">© 2026</span>
+  <span style="font-size:11px">© 2026 Studio M.D.Q.</span>
 </footer>
 </div>
 <script src="register-sw.js"></script>

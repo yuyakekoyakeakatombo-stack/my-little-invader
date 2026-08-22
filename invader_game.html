@@ -373,6 +373,7 @@
       status:'STATUS', story:'STORY', settings:'SETTINGS', play:'PLAY', diary:'DIARY', manual:'MANUAL',
       MEMORY:'MEMORIES',
       sound:'SOUND', bodycolor:'BODY COLOR', weather:'WEATHER', language:'LANGUAGE', debug:'DEBUG', reset:'ALL RESET',
+      version:'VERSION',
       where:'HERE',
       on:'ON', off:'OFF', sure:'SURE?', yesno:'A:YES  B:NO',
       locok:'A:OK  B:CANCEL',
@@ -398,6 +399,7 @@
       status:'ステータス', story:'ストーリー', settings:'せってい', play:'あそぶ', diary:'にっき', manual:'せつめいしょ',
       MEMORY:'おもいで',
       sound:'サウンド', bodycolor:'カラー', weather:'てんき', language:'げんご', debug:'デバッグ', reset:'リセット',
+      version:'バージョン',
       where:'げんざいち',
       on:'オン', off:'オフ', sure:'ほんとうに？', yesno:'A:はい B:いいえ',
       locok:'A:OK  B:キャンセル',
@@ -5196,7 +5198,13 @@
   let confirmReset = false;   // ALL RESETの確認ダイアログ表示中
   let locPrime = false;       // LOCATION ON前に用途（天気のみ）を説明する画面を表示中
   // 項目はキーで管理（表示ラベルは言語辞書、値は各キーで分岐）
-  const SETTINGS_KEYS = ['language','weather','sound','bodycolor','reset'];
+  //  版の番号は sw.js の VERSION と同じもの。tools/bump-sw.sh が両方いっしょに
+  //  書き換える（ずれると、テスターの端末に出ている版が分からなくなる）
+  const APP_VERSION = '2026-08-23-02';
+  //  (C) は Press Start 2P に © が無く、別の字体に落ちて1文字だけ形が浮くため
+  const APP_COPY = '(C) 2026 Studio M.D.Q.';
+  const SETTINGS_KEYS = ['language','weather','sound','bodycolor','version','reset'];
+  let inAbout = false;        // バージョンの中身（題・版・著作権）を出している
   let inWeather = false, wSel = 0, wScroll = 0;      // 天気の選択リスト（オフ／げんざいち／都市）
   // 選択肢をひとつのリストにまとめる。左右キーに頼らせず、Aを押せば全部の選択肢が見える
   function weatherOptions(){
@@ -5277,6 +5285,20 @@
         fN++;
         return;
       }
+      if(inAbout){
+        // ── バージョン（題・版・著作権）──
+        //  題も版も著作権も英数字なので、言語にかかわらずピクセル字体で描く。
+        //  ここだけ かな字体に切り替わると、字の太さが変わって浮いて見える
+        ctxN.fillStyle=OFF; ctxN.fillRect(0, 9*S, W*S, 6*S);   // 親が描いた見出しを消す
+        ctxN.font=uiFont(7); ctxN.fillStyle=ON; ctxN.textAlign='center'; ctxN.textBaseline='top';
+        ctxN.fillText(T('version'),(W*S)/2,11*S);
+        ctxN.font='6px "Press Start 2P"';
+        ctxN.fillText('MY LITTLE INVADER',(W*S)/2, 27*S);
+        ctxN.fillText('VER ' + APP_VERSION,(W*S)/2, 37*S);
+        ctxN.font='5px "Press Start 2P"';
+        ctxN.fillText(APP_COPY,(W*S)/2, 54*S);
+        return;
+      }
       if(inWeather){
         // ── 天気の取り方を選ぶ（オフ／げんざいち／都市をひとつのリストに）──
         const opts = weatherOptions();
@@ -5304,8 +5326,8 @@
         if(wScroll + VIEW < opts.length) ctxN.fillText('v',(W*S)/2, 60*S);
         return;
       }
-      // 項目を1画面に収める（y=19起点・間隔8。画面高65内）
-      const ITEM_H = 8;
+      // 項目を1画面に収める（y=19起点。6項目なので、STATUS と同じ7ドット間隔）
+      const ITEM_H = 7;
       SETTINGS_KEYS.forEach((key,i)=>{
         const y = 19 + i * ITEM_H;
         const isSel = i === settingsSel;
@@ -5321,6 +5343,7 @@
                   : key==='weather'   ? (weatherMode==='off' ? T('off')
                                        : weatherMode==='city' ? cityName() : T('where'))
                   : key==='debug'     ? (debugMode?T('on'):T('off'))
+                  : key==='version'   ? APP_VERSION
                   : '';
         if(val){
           const lx = 7 + ctxN.measureText(T(key)).width / S;
@@ -5517,7 +5540,7 @@
     onPress(el,()=>{
       playClick(900); dpadAnim(el);
       if(inSettings){
-        if(confirmReset || locPrime) return;   // ダイアログ/説明中は移動不可（A/Bのみ）
+        if(confirmReset || locPrime || inAbout) return;   // ダイアログ/説明/バージョン表示中は移動不可（A/Bのみ）
         if(inWeather){                         // 天気リストの上下移動
           if(el.classList.contains('up'))   wSel = Math.max(0, wSel-1);
           if(el.classList.contains('down')) wSel = Math.min(weatherOptions().length-1, wSel+1);
@@ -5593,6 +5616,7 @@
       if(key==='language') toggleLang();
       if(key==='bodycolor'){ bodyColorIdx=(bodyColorIdx+1)%BODY_COLORS.length; applyBodyColor(); }
       if(key==='weather'){ inWeather=true; wSel=weatherSelIndex(); }     // 選択肢をリストで見せる
+      if(key==='version') inAbout=true;                                 // 題と著作権もここで見せる
       if(key==='debug'){
         debugMode=!debugMode;
         if(debugMode){
@@ -5610,7 +5634,7 @@
           confirmReset = false; locPrime = false;
           menuSel=0; menuScroll=0; settingsSel=0; inSettings=false; inPlay=false; inFeed=false; inStatus=false; bodyColorIdx=1; setSound(true);  // カラーはデフォルトのONYX（黒）
           weatherFetched=false; weather='clear'; debugMode=false;
-          setWeatherMode('off'); cityIdx = 0; inWeather = false;
+          setWeatherMode('off'); cityIdx = 0; inWeather = false; inAbout = false;
           clearInterval(debugTimer);
           timeOfDay=getTimeOfDay();
           // 控えと退避も一緒に消す。残すと、次の子を育てたあとで
@@ -5678,7 +5702,8 @@
   onPress(document.getElementById('nb'),()=>{
     playClick(); btnAnim(document.getElementById('nb'));
     if(inSettings){
-      if(inWeather){ inWeather=false; }         // 天気の選択をキャンセル
+      if(inAbout){ inAbout=false; }             // バージョンを閉じる
+      else if(inWeather){ inWeather=false; }    // 天気の選択をキャンセル
       else if(locPrime){ locPrime=false; }      // 用途説明をキャンセル（許可を求めない）
       else if(confirmReset){ confirmReset=false; }   // 確認ダイアログをキャンセル
       else inSettings=false;
@@ -5690,7 +5715,7 @@
   });
   onPress(document.getElementById('nmenu'),()=>{
     playClick(); btnAnim(document.getElementById('nmenu'),1,0.93);
-    inSettings=false; inPlay=false; inFeed=false; inStatus=false; confirmReset=false; locPrime=false; inWeather=false; showView('main');
+    inSettings=false; inPlay=false; inFeed=false; inStatus=false; confirmReset=false; locPrime=false; inWeather=false; inAbout=false; showView('main');
   });
 
   // ════════════════════════════════════════

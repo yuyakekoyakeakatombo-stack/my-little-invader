@@ -497,6 +497,17 @@ const MUTATIONS = [
   ['SOUND=OFF でも口を開けてしまう',
    "    if(!soundOn) return;   // SOUND=OFFならミュート\n    ensureAudio();",
    "    ensureAudio();\n    if(!soundOn) return;", 'caught'],
+  ['画面に出す版を、sw.js とずらす',
+   "const APP_VERSION = '2026-08-23-01';", "const APP_VERSION = '2026-01-01-01';", 'caught'],
+  ['著作権を © で書く（Press Start 2P に無く、1文字だけ字体が浮く）',
+   "const APP_COPY = '(C) 2026 Studio M.D.Q.';", "const APP_COPY = '\u00a9 2026 Studio M.D.Q.';", 'caught'],
+  ['著作権の名義を落とす',
+   "const APP_COPY = '(C) 2026 Studio M.D.Q.';", "const APP_COPY = '(C) 2026';", 'caught'],
+  ['SETTINGS の行間をもとの8ドットに戻す（いちばん下が画面から出る）',
+   "      const ITEM_H = 7;", "      const ITEM_H = 8;", 'caught'],
+  ['バージョンの項目を消す',
+   "const SETTINGS_KEYS = ['language','weather','sound','bodycolor','version','reset'];",
+   "const SETTINGS_KEYS = ['language','weather','sound','bodycolor','reset'];", 'caught'],
 ];
 
 const orig = fs.readFileSync(GAME, 'utf8');
