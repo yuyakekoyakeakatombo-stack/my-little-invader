@@ -232,6 +232,15 @@ const MUTATIONS = [
   ['別れかたの2行目がページ数に掛かる',
    "  const MEM_END_Y = 50, MEM_END_LH = 5;", "  const MEM_END_Y = 54, MEM_END_LH = 5;", 'caught'],
 
+  // ── 演出中の操作 ──
+  ['演出中でも MENU が開く', "getElementById('mmenu'),()=>{ if(cutscenePlaying()) return; playClick();",
+   "getElementById('mmenu'),()=>{ playClick();", 'caught'],
+  ['演出中でも 十字が効く', "      if(cutscenePlaying()) return;\n      playClick(900); dpadAnim(el);",
+   "      playClick(900); dpadAnim(el);", 'caught'],
+  ['おばけを見たあとも操作できないままにする',
+   "        || (pet.dead && !pet.memShown)    // 魂が抜けていくあいだ（見たあとの漂う姿は操作できる）",
+   "        || pet.dead", 'caught'],
+
   // ── 家出エンディング ──
   ['家出で「・・・」の回数を変える', "  const RUN_ON = 9, RUN_OFF = 7, RUN_TIMES = 3;",
    "  const RUN_ON = 9, RUN_OFF = 7, RUN_TIMES = 5;", 'caught'],

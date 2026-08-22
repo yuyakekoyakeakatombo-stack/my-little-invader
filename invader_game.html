@@ -5061,16 +5061,25 @@
   }
   setInterval(tickMain, 100);
 
+  // 演出のあいだは、どのボタンも受け付けない。
+  //  押した音や凹みだけ返ると「効いているのに何も起きない」ように見えるので、
+  //  playClick より手前で止める。エンディングは10秒あまり続き、終わると
+  //  おもいでが開くので、操作できない時間が残り続けることはない
+  function cutscenePlaying(){
+    return ufoEnding || departEnding || invadeEnding
+        || (pet.dead && !pet.memShown)    // 魂が抜けていくあいだ（見たあとの漂う姿は操作できる）
+        || arriveT >= 0;                  // 到着演出（もともとA・十字だけ塞いでいた）
+  }
   function btnAnim(el,ty=1,sc=0.95){ el.style.transform=`translateY(${ty}px) scale(${sc})`; el.style.filter='brightness(0.7)'; setTimeout(()=>{el.style.transform='';el.style.filter='';},120); }
   function dpadAnim(el){ el.style.transform='translateY(2px) scale(0.88)'; el.style.filter='brightness(2.5)'; setTimeout(()=>{el.style.transform='';el.style.filter='';},120); }
 
-  onPress(document.getElementById('mmenu'),()=>{ playClick(); btnAnim(document.getElementById('mmenu'),1,0.93); menuSel=0; menuScroll=0; inSettings=false; inPlay=false; inFeed=false; inStatus=false; confirmReset=false; locPrime=false; inWeather=false; playSel=0; feedSel=0; showView('menu'); });
-  onPress(document.getElementById('mb'),()=>{ playClick(); btnAnim(document.getElementById('mb')); nameSelActive=false; diarySelActive=false; });
+  onPress(document.getElementById('mmenu'),()=>{ if(cutscenePlaying()) return; playClick(); btnAnim(document.getElementById('mmenu'),1,0.93); menuSel=0; menuScroll=0; inSettings=false; inPlay=false; inFeed=false; inStatus=false; confirmReset=false; locPrime=false; inWeather=false; playSel=0; feedSel=0; showView('menu'); });
+  onPress(document.getElementById('mb'),()=>{ if(cutscenePlaying()) return; playClick(); btnAnim(document.getElementById('mb')); nameSelActive=false; diarySelActive=false; });
   // お世話アクションはMENU内のアイコングリッドへ移動
   // 未命名時：十字上で「NAME:????」を選択（黒塗り反転）→ Aで命名画面へ。下/Bで選択解除
   onPress(document.getElementById('ma'),()=>{
+    if(cutscenePlaying()) return;
     playClick(1400); btnAnim(document.getElementById('ma'));
-    if(arriveT >= 0) return;                      // 到着演出中は操作を受け付けない
     if(!pet.name && nameSelActive){
       nameSelActive=false; startNaming(); showView('naming');
     } else if(diarySelActive && diaryUnread > 0){
@@ -5079,8 +5088,8 @@
   });
   document.querySelectorAll('#view-main .dpad-arrow').forEach(el=>{
     onPress(el,()=>{
+      if(cutscenePlaying()) return;
       playClick(900); dpadAnim(el);
-      if(arriveT >= 0) return;                    // 到着演出中は操作を受け付けない
       if(!pet.name){
         if(el.classList.contains('up'))   nameSelActive = true;
         if(el.classList.contains('down')) nameSelActive = false;

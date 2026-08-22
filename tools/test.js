@@ -1902,6 +1902,26 @@ describe('ファイル', () => {
     ok(/PLAY_ITEMS\.forEach\(\(label,i\)=> memBestRow\(label, bestText\(i\), 27 \+ i\*8\)\);/.test(src),
        'おもいでに3本ぶんが並んでいない');
   });
+  // 演出中に押せてしまうと、別れの場面でメニューが開いたりする。
+  //  音や凹みだけ返るのも「効いているのに何も起きない」ように見えるので、
+  //  playClick より手前で止める
+  it('演出のあいだ、育成画面のボタンがすべて無効になっている', () => {
+    const src = read('invader_game.html');
+    const g = src.match(/function cutscenePlaying\(\)\{[\s\S]*?\n  \}/);
+    ok(g, '演出中かどうかの判定が無い');
+    for(const st of ['ufoEnding', 'departEnding', 'invadeEnding', 'pet.dead', 'arriveT'])
+      ok(g[0].includes(st), `判定に ${st} が入っていない`);
+    ok(/!pet\.memShown/.test(g[0]), 'おばけは、おもいでを見たあとも操作できないままになる');
+    // 4つのボタンすべてが、音を鳴らす前に止めていること
+    const heads = [
+      /getElementById\('mmenu'\),\(\)=>\{ if\(cutscenePlaying\(\)\) return; playClick/,
+      /getElementById\('mb'\),\(\)=>\{ if\(cutscenePlaying\(\)\) return; playClick/,
+      /getElementById\('ma'\),\(\)=>\{\s*\n\s*if\(cutscenePlaying\(\)\) return;\s*\n\s*playClick/,
+      /#view-main \.dpad-arrow[\s\S]*?onPress\(el,\(\)=>\{\s*\n\s*if\(cutscenePlaying\(\)\) return;\s*\n\s*playClick/,
+    ];
+    const names = ['MENU', 'B', 'A', '十字'];
+    heads.forEach((re, i) => ok(re.test(src), `${names[i]} が演出中でも反応する`));
+  });
   // ボタンの字は、字面が送りの左寄り・行の上寄りに乗る（Press Start 2P）。
   //  flex の中央ぞろえが合わせるのは「送り幅」と「行の箱」なので、そのままだと
   //  字そのものが左上へずれる。ブラウザが要る計測はテストから出来ないので、
