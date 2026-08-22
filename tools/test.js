@@ -427,6 +427,52 @@ describe('到着', () => {
     clock.set(t0 + 3 * 3600000);              // 3時間たっても昼のうち
     ok(!api.effectiveAsleep());
   });
+  // 端末の時計は、時刻の修正やずれの補正で過去へ動くことがある。
+  //  未来の lastTick を抱えたままだと、実時間が追いつくまで進行が止まり、
+  //  画面上は何をしても変わらないので故障と見分けがつかない
+  it('端末の時計が戻されても、進行が止まらない', () => {
+    const { api, clock } = load();
+    Object.assign(api.pet, api.defaultPet(), { stage:'larva', EP:3, hunger:5, mood:5 });
+    api.birthPet('T');
+    const t0 = clock.now();
+    clock.set(t0 + 2 * 86400000);           // 時計が2日ぶん進んでいた
+    api.advancePet();
+    clock.set(t0);                          // 正しい時刻に戻される
+    api.advancePet();
+    ok(api.pet.lastTick <= clock.now(), `lastTick が未来のまま（${api.pet.lastTick - clock.now()}ms先）`);
+    // そのあと実時間が進めば、ちゃんと減る
+    const before = api.pet.EP;
+    clock.advance(3 * 3600000);
+    api.advancePet();
+    ok(api.pet.EP > before, '時計を戻したあと、時間が進んでも成長が止まったまま');
+  });
+  it('時計を戻しても、記録している時刻の間隔は保たれる', () => {
+    const { api, clock } = load();
+    Object.assign(api.pet, api.defaultPet(), { stage:'larva', EP:3, hunger:5, mood:5 });
+    api.birthPet('T');
+    const t0 = clock.now();
+    clock.set(t0 + 2 * 86400000);
+    api.advancePet();
+    const day = api.petDay(), gap = api.pet.lastTick - api.pet.birth;
+    clock.set(t0);
+    api.advancePet();
+    eq(api.petDay(), day, '戻したとたんに DAY が巻き戻る:');
+    ok(Math.abs((api.pet.lastTick - api.pet.birth) - gap) < 60000,
+       'たんじょうと最終更新の間隔が狂っている');
+    // ずらす対象に漏れが無いか（未来に取り残された予定が無いこと）
+    api.PET_TIMES.forEach(k => {
+      if(api.pet[k]) ok(api.pet[k] <= clock.now() + 31 * 60000,
+        `${k} が現在より先に取り残されている（${Math.round((api.pet[k]-clock.now())/60000)}分先）`);
+    });
+  });
+  it('DAY は 1 未満にならない（時計がずれて たんじょうが未来でも）', () => {
+    const { api, clock } = load();
+    Object.assign(api.pet, api.defaultPet());
+    api.birthPet('U');
+    clock.set(clock.now() - 3 * 86400000);
+    eq(api.petDay(), 1, 'たんじょうが未来のときの DAY:');
+    eq(api.dayLabel(), 'DAY : 01', '画面に出る文字:');        // 「DAY : -2」と出ていた
+  });
   it('名前をつけた時刻が、その子の起点になる', () => {
     const { api, clock } = load();
     const t0 = arriveAt(api, clock, 23);
@@ -1651,6 +1697,21 @@ describe('ファイル', () => {
     const src = read('invader_game.html');
     ok(/\[SAVE_KEY,\s*SAVE_BAK,\s*SAVE_BAD\]\.forEach\(k\s*=>\s*localStorage\.removeItem\(k\)\)/.test(src),
        'ALL RESET が3つの鍵をまとめて消していない');
+  });
+  // ミニゲームの iframe は画面全体を覆い、閉じる手立ては中からの postMessage しかない。
+  //  中で立ち上がりに失敗すると、閉じられず 進行も止まったまま（inMiniGame）になる。
+  //  ブラウザが要るのでテストからは動かせないため、逃げ道の有無をソースで押さえる
+  it('ミニゲームが立ち上がらなかったときの逃げ道がある', () => {
+    const src = read('invader_game.html');
+    ok(/const MINI_GUARD_MS = \d+;/.test(src), '見張りの待ち時間が無い');
+    ok(/miniGuard = setTimeout\(\(\)=>\{ if\(miniFrame === f && !miniAlive\(f\)\) closeMiniGame\(true\); \}/.test(src),
+       'ミニゲームを開くときに見張りを仕掛けていない');
+    ok(/if\(miniGuard\)\{ clearTimeout\(miniGuard\); miniGuard = 0; \}/.test(src),
+       '閉じるときに見張りを解除していない（別のゲームを巻き添えにする）');
+    // 生死は「画面が塗られたか」で見る。canvas の有無だけだと、
+    //  中のスクリプトが落ちた場合（HTMLは出るが何も描かれない）を取り逃す
+    ok(/getImageData\(0, 0, 2, 2\)/.test(src), '塗られたかを見ていない');
+    ok(/catch\(e\)\{ return true; \}/.test(src), '中を覗けないときに勝手に閉じない扱いが無い');
   });
   // 到着の描画もテストから呼べない。粒の色分けはビームの位置を見て決めるので、
   //  ビームより先に雨を描くと、光の中の粒が上書きされて消えてしまう

@@ -197,6 +197,25 @@ const MUTATIONS = [
   ['粒が上下にばらけない',
    "      const y = Math.min(MAIN_GY - 1, oy + ry + Math.round(drift * 0.15 * dustLift(rx, ry)));",
    "      const y = oy + ry;", 'caught'],
+  // ── ミニゲームの逃げ道 ──
+  ['ミニゲームが立ち上がらなくても閉じない（画面を覆ったまま固まる）',
+   "    miniGuard = setTimeout(()=>{ if(miniFrame === f && !miniAlive(f)) closeMiniGame(true); }, MINI_GUARD_MS);",
+   "", 'caught'],
+  ['閉じるときに見張りを解除しない（次に開いたゲームを巻き添えにする）',
+   "    if(miniGuard){ clearTimeout(miniGuard); miniGuard = 0; }", "", 'caught'],
+  ['生死を canvas の有無だけで見る（中が落ちた場合を取り逃す）',
+   "      const px = cv.getContext('2d').getImageData(0, 0, 2, 2).data;", "      return true;", 'caught'],
+
+  // ── 端末の時計 ──
+  ['時計を戻されても立て直さない（実時間が追いつくまで進行が止まる）',
+   "    if(elapsed < 0){ rewindClock(-elapsed); return; }   // 時計が戻された", "", 'caught'],
+  ['時計を戻したとき、lastTick だけ直して他の時刻を置き去りにする',
+   "    PET_TIMES.forEach(k => { if(pet[k]) pet[k] = Math.max(0, pet[k] - back); });",
+   "    pet.lastTick = Date.now();", 'caught'],
+  ['DAY の下限を外す（たんじょうが未来だと DAY:-2 と出る）',
+   "    return Math.max(1, Math.min(99, days + 1));   // 誕生日=DAY01、次の0:00でDAY02",
+   "    return Math.min(99, days + 1);", 'caught'],
+
   // ── 説明書 ──
   ['タイプの呼び名を変える（説明書だけ古いまま残る）',
    "      gray:'グレイ', martian:'マーシャン', invader:'インベーダー',",
