@@ -232,6 +232,14 @@ const MUTATIONS = [
   ['別れかたの2行目がページ数に掛かる',
    "  const MEM_END_Y = 50, MEM_END_LH = 5;", "  const MEM_END_Y = 54, MEM_END_LH = 5;", 'caught'],
 
+  // ── 家出エンディング ──
+  ['家出で「・・・」の回数を変える', "  const RUN_ON = 9, RUN_OFF = 7, RUN_TIMES = 3;",
+   "  const RUN_ON = 9, RUN_OFF = 7, RUN_TIMES = 5;", 'caught'],
+  ['画面の外へ出きる前に終わる（歩いている途中でおもいでが開く）',
+   "  function runawayLen(cw){ return RUN_STILL + Math.ceil((centerX(cw) + cw) / RUN_SPEED) + RUN_AFTER; }",
+   "  function runawayLen(cw){ return RUN_STILL + Math.ceil(centerX(cw) / RUN_SPEED / 2) + RUN_AFTER; }", 'caught'],
+  ['出ていったあとの間を無くす', "  const RUN_AFTER = 14;", "  const RUN_AFTER = 0;", 'caught'],
+
   // ── おもいでの姿 ──
   ['おもいでの1ページ目に姿を出さない',
    "      if(body) stamp(ctxR, body, Math.round((W - body[0].length)/2), MEM_CHAR_BOT - body.length, NK);",

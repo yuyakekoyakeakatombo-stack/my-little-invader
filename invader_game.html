@@ -389,7 +389,7 @@
       mgave:'WHAT YOU GAVE', mbest:'BEST SCORES', mlast:'HOW THEY GREW',
       mcare:'CARE', mdisc:'MANNERS', mtemper:'NATURE',
       tlively:'LIVELY', tcalm:'CALM', tmid:'EVEN',
-      endReturn:'THEY CAME FOR THEM\nBACK TO THEIR STAR', endDepart:'THEY WENT SOMEWHERE',
+      endReturn:'THEY WENT SOMEWHERE', endDepart:'THEY CAME FOR THEM\nBACK TO THEIR STAR',
       endInvade:'THEY CALLED A FLEET\nAND CAME FOR EARTH', endStarve:'THEY WASTED AWAY', endSick:'THEY WASTED AWAY',
     },
     ja: {
@@ -414,7 +414,7 @@
       mgave:'してあげたこと', mbest:'ベストスコア', mlast:'そだちかた',
       mcare:'ケア', mdisc:'しつけ', mtemper:'せいかく',
       tlively:'やんちゃ', tcalm:'おっとり', tmid:'ふつう',
-      endReturn:'おむかえが きた\nほしへ かえった', endDepart:'どこかへ いってしまった',
+      endReturn:'どこかへ いってしまった', endDepart:'おむかえが きた\nほしへ かえった',
       endInvade:'たいぐんを よんで\nちきゅうに せめてきた', endStarve:'ちからつきた', endSick:'ちからつきた',
     },
   };
@@ -4337,16 +4337,36 @@
     }
   }
 
+  // ── 家出エンディング（E3・世話不足）：だまって出ていく ──
+  //  旅立ち（E4）も迎えが来る形だったので、二つの別れの印象が似てしまっていた。
+  //  こちらは迎えを出さない。その場で「・・・」を3回だけ見せて、あとは
+  //  とぼとぼ歩いて画面の外へ消える。言葉は残さない。
+  //  何があったかは おもいでの「どこかへ いってしまった」で受ける。
+  //  （フラグ名 ufoFlag / ufoT はセーブに入っているので、そのまま使う）
+  const RUN_ON = 9, RUN_OFF = 7, RUN_TIMES = 3;          // 「・・・」の点滅
+  const RUN_STILL = (RUN_ON + RUN_OFF) * RUN_TIMES;      // その場に立っている長さ
+  const RUN_SPEED = 0.5;    // ドット/フレーム。2コマで1ドット＝急がない足どり
+  const RUN_STEP  = 6;      // 足を入れ替える間隔（フレーム）
+  const RUN_AFTER = 14;     // 出ていったあとの間
+  function runawayLen(cw){ return RUN_STILL + Math.ceil((centerX(cw) + cw) / RUN_SPEED) + RUN_AFTER; }
   function drawUfoEnding(BG, DM, NK){
-    if(ufoT < 92) drawPickup(ufoT, BG, DM, NK);
-    else {             // 別れの言葉
-      ctxM.fillStyle = BG; ctxM.fillRect(0,0,W*S,H*S);
-      for(let x=0;x<W;x++) dot(ctxM,x,MAIN_GY,NK);
-      for(let x=0;x<W;x+=3) dot(ctxM,x,MAIN_GY-1,DM);
-      drawEndMessage('GOODBYE...', NK);
+    ctxM.fillStyle = BG; ctxM.fillRect(0,0,W*S,H*S);
+    STARS_M.forEach(([x,y],i)=>dot(ctxM,x,y+10,(fM+i*9)%28<20?DM:BG));
+    for(let x=0;x<W;x++) dot(ctxM,x,MAIN_GY,NK);
+    for(let x=0;x<W;x+=3) dot(ctxM,x,MAIN_GY-1,DM);
+    const sp = charSprites(), cw = sp.a[0].length, ch = sp.a.length;
+    const x0 = centerX(cw), y = MAIN_GY - ch;
+    if(ufoT < RUN_STILL){                                 // 立ちつくして「・・・」
+      stamp(ctxM, sp.rest, x0, y, NK);
+      if(ufoT % (RUN_ON + RUN_OFF) < RUN_ON)
+        stamp(ctxM, ICO_DOTS, x0 + Math.floor((cw - ICO_DOTS[0].length)/2), y - 3, NK);
+    } else {                                              // 左へ歩いて出ていく
+      const t = ufoT - RUN_STILL;
+      const x = Math.round(x0 - t * RUN_SPEED);
+      if(x + cw > 0) stamp(ctxM, (Math.floor(t / RUN_STEP) % 2) ? sp.b : sp.a, x, y, NK);
     }
-    ufoT++;
-    if(ufoT >= 130){
+    fM++; ufoT++;
+    if(ufoT >= runawayLen(cw)){
       // 終了 → 「いなくなったあと」の画面で止める。
       //  すぐ次の子が来ると、いなくなったことが流されてしまう。
       //  最後の日記を読み返す時間を残し、ALL RESET を押すまでこのまま。

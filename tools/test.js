@@ -1618,6 +1618,26 @@ describe('おもいで', () => {
     // 同じ点は毎回おなじ扱い（ちらつかない）
     eq(api.fadeKeeps(1, 2, 0.5), api.fadeKeeps(1, 2, 0.5), '判定がぶれないこと:');
   });
+  // 世話不足の別れは「家出」。旅立ち（迎えが来る）と印象を分けるため、
+  //  迎えは出さず、「・・・」を3回見せてから歩いて出ていく
+  it('家出は、迎えを出さずに歩いて出ていく', () => {
+    const { api, clock } = load();
+    eq(api.RUN_TIMES, 3, '「・・・」の回数:');
+    eq(api.RUN_STILL, (api.RUN_ON + api.RUN_OFF) * api.RUN_TIMES, '立ちつくす長さ:');
+    ok(api.RUN_SPEED > 0 && api.RUN_SPEED <= 1, `足どりが速すぎる（${api.RUN_SPEED}ドット/コマ）`);
+    ok(api.RUN_AFTER > 0, '出ていったあとの間が無い');
+    for(const o of [{stage:'larva'}, {stage:'adult', lineage:'grey'},
+                    {stage:'final', lineage:'grey', form:'g1'},
+                    {stage:'final', lineage:'inv',  form:'i2'}]){
+      pet(api, clock, o);
+      const cw = api.charSprites().a[0].length;
+      const walk = api.runawayLen(cw) - api.RUN_AFTER - api.RUN_STILL;   // 歩いているコマ数
+      const x = api.centerX(cw) - walk * api.RUN_SPEED;
+      ok(x + cw <= 0, `${o.stage}/${o.form||''}: 画面に残ったまま終わる（右端 ${x + cw}）`);
+      // 長すぎない（見ている側が待たされない）
+      ok(api.runawayLen(cw) <= 160, `長すぎる（${(api.runawayLen(cw)/10).toFixed(1)}秒）`);
+    }
+  });
   it('お別れの形が5種とも言葉になる', () => {
     const { api, clock } = load();
     const got = {};
