@@ -2240,25 +2240,28 @@
     diaryUnread++;
     saveDiary();
   }
-  function diaryBody(e){
+  //  lg を渡すと、その言語の文面で組み立てる（既定は表示中の言語）。
+  //  自分の文字で書く段階では、読み手の言語ではなく もとの文面を使う
+  function diaryBody(e, lg){
     if(!e) return [];
+    const ja = (lg || lang) === 'ja';
     const parts = (e.t||[])
       .map((t,i) => {
         const set = DIARY_LINES[t]; if(!set) return null;
         const m = set[Math.min((e.v && e.v[i]) || 0, set.length-1)];   // 保存した言い回しを使う
-        return lang==='ja' ? m.ja : m.en;
+        return ja ? m.ja : m.en;
       })
       .filter(Boolean);
     const mu = e.s && DIARY_MUSINGS[e.s];                              // ひとりごと
     if(mu){
       // 口調別（{plain,calm,rough}）でも、口調を持たない古い形（配列）でも読めるようにする。
       //  口調は日記に保存した e.vo を使う。あとから読み返しても文面が変わらないようにするため
-      const src = lang==='ja' ? mu.ja : mu.en;
+      const src = ja ? mu.ja : mu.en;
       parts.push(Array.isArray(src) ? src : (src[e.vo || 'plain'] || src.plain));
     }
     const cset = e.c && DIARY_CLOSE[e.c];
     const cm = cset ? cset[Math.min(e.cv || 0, cset.length - 1)] : null;   // 保存した番号の結びを使う
-    const cl = cm ? (lang==='ja' ? cm.ja : cm.en) : null;
+    const cl = cm ? (ja ? cm.ja : cm.en) : null;
     // 署名の位置(y52)まで入りきる行数に収める。結びは性格が出るところなので先に席を取り、
     // あふれるぶんは話題のほうを落とす
     const BODY_MAX = 7;
@@ -2286,7 +2289,12 @@
     const lv = entryLevel(e);
     const ratio = (lv <= LV_BABY) ? 0 : (e.wr == null ? 1 : e.wr);
     const rnd = diaryRnd('w' + (e.cd || '') + (e.d || 0));
-    return diaryBody(e).map(l => {
+    //  1字も読める字が混ざらない段階は、もとの文面（かな）から字数を取る。
+    //  英語の文面は かなの倍ちかい字数になるので、そのまま自分の文字に置きかえると
+    //  同じ出来事なのに英語のときだけ字がぎっしり並び、入りきらず小さく潰れる。
+    //  読めない字の数は「その子がどれだけ書いたか」であって、読み手の言語では変わらない
+    const src = (lv <= LV_BABY) ? 'ja' : lang;
+    return diaryBody(e, src).map(l => {
       if(!l) return [];
       // r には もとの単語をそのまま入れる。1字ずつ宇宙文字に置き換えて書くため
       return l.split(' ').filter(w => w.length)
@@ -5200,7 +5208,7 @@
   // 項目はキーで管理（表示ラベルは言語辞書、値は各キーで分岐）
   //  版の番号は sw.js の VERSION と同じもの。tools/bump-sw.sh が両方いっしょに
   //  書き換える（ずれると、テスターの端末に出ている版が分からなくなる）
-  const APP_VERSION = '2026-08-23-03';
+  const APP_VERSION = '2026-08-23-04';
   //  (C) は Press Start 2P に © が無く、別の字体に落ちて1文字だけ形が浮くため
   const APP_COPY = '(C) 2026 Studio M.D.Q.';
   const SETTINGS_KEYS = ['language','weather','sound','bodycolor','version','reset'];

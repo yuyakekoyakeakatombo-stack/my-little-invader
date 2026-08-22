@@ -513,6 +513,10 @@ const MUTATIONS = [
    "                  : key==='debug'     ? (debugMode?T('on'):T('off'))\n                  : key==='version'   ? APP_VERSION", 'caught'],
   ['バージョンの画面から版を落とす',
    "        ctxN.fillText('VER ' + APP_VERSION,(W*S)/2, 37*S);", "", 'caught'],
+  ['あかちゃんの日記も、読み手の言語で書く（英語だけ字がぎっしり並んで潰れる）',
+   "    const src = (lv <= LV_BABY) ? 'ja' : lang;", "    const src = lang;", 'caught'],
+  ['こどもの日記まで もとの文面で書く（英語で遊んでいるのに かなが出る）',
+   "    const src = (lv <= LV_BABY) ? 'ja' : lang;", "    const src = 'ja';", 'caught'],
 ];
 
 const orig = fs.readFileSync(GAME, 'utf8');

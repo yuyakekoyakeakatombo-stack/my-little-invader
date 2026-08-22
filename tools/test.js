@@ -910,6 +910,64 @@ describe('日記', () => {
 // ══ にっきの字 ══════════════════════════════════════════
 //  よその星から来たばかりの子は地球の言葉を書けない。段階が上がるにつれて書けるようになる
 describe('にっきの字', () => {
+  // 自分の文字だけで書く段階（あかちゃん）は、読み手の言語で字数が変わってはいけない。
+  //  英語の文面は かなの倍ちかい字数なので、そのまま置きかえると
+  //  同じ出来事なのに英語だけ字がぎっしり並び、入りきらず小さく潰れていた
+  const babyEntry = (lg) => {
+    const { api, clock } = load({ storage: { myvader_lang: lg } });
+    api.lang = lg;
+    const t0 = clock.now();
+    Object.assign(api.pet, api.defaultPet(), { name:'ALPHA', stage:'mid', birth:t0-86400000, lastTick:t0, EP:1, B:30 });
+    return { api, e: api.buildDiary({ fed:2, playSw:1 }, 2, '2026-06-15') };
+  };
+  const runeCount = (api, e) => api.diaryWords(e).flat().reduce((a,w)=>a + (w.t||w.r||'').length, 0);
+  it('あかちゃんの日記は、言語が変わっても字数が変わらない', () => {
+    const ja = babyEntry('ja'), en = babyEntry('en');
+    // 同じ出来事・同じ言い回しでそろえる
+    const e = { ...ja.e };
+    eq(en.api.entryLevel(e), en.api.LV_BABY, 'あかちゃんの段階のはず:');
+    eq(runeCount(en.api, e), runeCount(ja.api, e), 'あかちゃんの日記の字数（英語 / 日本語）:');
+  });
+  it('あかちゃんの日記は、どの言語でも1字も読める字が混ざらない', () => {
+    for(const lg of ['ja','en']){
+      const { api, e } = babyEntry(lg);
+      const readable = api.diaryWords(e).flat().filter(w => w.t);
+      eq(readable.length, 0, `${lg}: 読める字が混ざっている:`);
+    }
+  });
+  it('あかちゃんの日記は、字を小さく潰さずに収まる', () => {
+    const W = 54, S = 4, MAXW = W*S - 8;
+    for(const lg of ['ja','en']){
+      const { api, e } = babyEntry(lg);
+      const k = api.diaryBaseDot(api.entryLevel(e));   // あかちゃんの玉の大きさ（3）
+      const F = api.diaryFontSize(), gap = Math.max(4, F*0.4);
+      // あかちゃんは全部が自分の文字なので、はばは字数から決まる（フォントを測らずに出せる）
+      const lineW = ws => ws.reduce((a,w)=>a + ([...w.r].length*6*k - k) + gap, -gap);
+      api.diaryRows(e).filter(r=>r.words).forEach(r => {
+        const w = lineW(r.words);
+        ok(w <= MAXW, `${lg}: 行が枠からはみ出す（${Math.round(w)}px / 枠${MAXW}px）`);
+      });
+    }
+  });
+  // 読める字が混ざる段階から先は、表示中の言語で書く
+  it('こどもの日記は、表示中の言語で書かれる', () => {
+    const mk = lg => {
+      const { api, clock } = load({ storage: { myvader_lang: lg } });
+      api.lang = lg;
+      const t0 = clock.now();
+      Object.assign(api.pet, api.defaultPet(), { name:'ALPHA', stage:'larva', birth:t0-5*86400000, lastTick:t0, EP:4, B:30 });
+      const e = api.buildDiary({ fed:2, playSw:1 }, 5, '2026-06-15');
+      // 読める字も 自分の文字も、もとの単語は同じところから来る。
+      //  ここを見ないと、diaryWords がどの文面を使ったかを確かめられない
+      const ws = api.diaryWords(e).flat().map(w => w.t || w.r);
+      ok(ws.length > 0, `${lg}: 本文が空`);
+      return ws.join(' ');
+    };
+    ok(/[ぁ-んァ-ン]/.test(mk('ja')), 'ja: かなで書かれていない');
+    const en = mk('en');
+    ok(!/[ぁ-んァ-ン]/.test(en), `en: かなが混ざっている（${en}）`);
+  });
+
   // その日1日ぶんの材料を持たせた日記をひとつ作る
   const entry = (api, over) => Object.assign({
     d:1, n:'T', t:['fed','praised'], v:[0,0], s:'', vo:'plain', c:'', cv:0,
