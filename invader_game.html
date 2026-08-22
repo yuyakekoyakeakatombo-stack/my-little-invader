@@ -386,7 +386,7 @@
       plump:'PLUMP', sleek:'SLEEK', prickly:'PRICKLY',
       mdays:'DAYS TOGETHER', mfeed:'MEALS', msnack:'TREATS', mclean:'TIDYING',
       mpraise:'PRAISE', mplay:'PLAYING', mmed:'MEDICINE', msick:'ILLNESS',
-      mgave:'WHAT YOU GAVE', mbest:'BEST SCORES', mlast:'AT THE END',
+      mgave:'WHAT YOU GAVE', mbest:'BEST SCORES', mlast:'HOW THEY GREW',
       mcare:'CARE', mdisc:'MANNERS', mtemper:'NATURE',
       tlively:'LIVELY', tcalm:'CALM', tmid:'EVEN',
       endReturn:'THEY CAME FOR THEM', endDepart:'THEY SET OFF',
@@ -411,7 +411,7 @@
       plump:'プランプ', sleek:'スリーク', prickly:'プリックリー',
       mdays:'いっしょにいた ひ', mfeed:'ごはん', msnack:'おやつ', mclean:'そうじ',
       mpraise:'ほめた', mplay:'あそんだ', mmed:'くすり', msick:'びょうき',
-      mgave:'してあげたこと', mbest:'ベストスコア', mlast:'さいごの すがた',
+      mgave:'してあげたこと', mbest:'ベストスコア', mlast:'そだちかた',
       mcare:'ケア', mdisc:'しつけ', mtemper:'せいかく',
       tlively:'やんちゃ', tcalm:'おっとり', tmid:'ふつう',
       endReturn:'むかえが きた', endDepart:'たびだった',
@@ -619,7 +619,7 @@
         if(!openingReady) openingReady = true;
         const blink = Math.floor(titleWait / 9) % 2 === 0;
         ctxO.font = '8px "Press Start 2P"';
-        ctxO.fillStyle = blink ? ON : DIM;
+        ctxO.fillStyle = blink ? ON : OFF;   // 薄色だと点滅の半分が読めない
         ctxO.fillText('PRESS  A', cx, 35*S);
       }
     }
@@ -4614,7 +4614,7 @@
       ctxM.fillStyle=BG; ctxM.fillText('NAME:????', 2*S, 2*S);
     } else {
       ctxM.fillStyle=NK; ctxM.fillText('NAME:', 2*S, 2*S);
-      ctxM.fillStyle=(fM%10<5) ? NK : DM;
+      ctxM.fillStyle=(fM%10<5) ? NK : BG;   // 薄色だと読めないので、濃↔消で点滅させる
       ctxM.fillText('????', 2*S + 35, 2*S);   // 'NAME:'=5文字×7px
     }
     ctxM.font='7px "Press Start 2P"';   // DAYカウントは常にピクセル字体（名前がかなでも影響させない）
@@ -5211,7 +5211,7 @@
         const y0 = Math.max(TOP, Math.round((TOP + BOT - note.length*LH) / 2));
         ctxN.font=uiFont(6); ctxN.fillStyle=ON; ctxN.textAlign='center'; ctxN.textBaseline='top';
         note.forEach((line,i)=> ctxN.fillText(line, (W*S)/2, (y0 + i*LH)*S));
-        ctxN.font=uiFont(5); ctxN.fillStyle=DIM;
+        ctxN.font=uiFont(5); ctxN.fillStyle=ON;
         if((fN%14)<9) ctxN.fillText(T('locok'),(W*S)/2, 57*S);
         fN++;
         return;
@@ -5238,7 +5238,7 @@
           if(idx === weatherSelIndex()){ ctxN.textAlign='right'; ctxN.fillText('*',(W-3)*S,cy); }
           ctxN.textBaseline='top';
         }
-        ctxN.textAlign='center'; ctxN.font=uiFont(5); ctxN.fillStyle=DIM;
+        ctxN.textAlign='center'; ctxN.font=uiFont(5); ctxN.fillStyle=ON;
         if(wScroll > 0) ctxN.fillText('^',(W*S)/2, 17*S);
         if(wScroll + VIEW < opts.length) ctxN.fillText('v',(W*S)/2, 60*S);
         return;
@@ -5408,7 +5408,9 @@
       ctxN.font=uiFont(6);
       ctxN.fillStyle=ON; ctxN.textAlign='center'; ctxN.textBaseline='top';
       if(menuSel < 6){
-        ctxN.fillStyle = careDisabled(CARE_ORDER[menuSel]) ? DIM : ON;
+        // 使えないことはアイコン側の薄さで伝わる。名前まで薄くすると、
+        //  いまどの項目にいるのかが読めなくなる
+        ctxN.fillStyle = ON;
         ctxN.fillText(T(CARE_ORDER[menuSel].toLowerCase()), (W*S)/2, 36*S);
         ctxN.fillStyle = ON;
       }
@@ -6027,7 +6029,7 @@
     if(dstr){ ctxT.font = uiFont(6); ctxT.fillStyle = ON; ctxT.fillText(dstr, (W*S)/2, 10*S); }
     // ページ位置（前後にまだ日があることを示す）。見出しの左右に置く
     if(e){
-      ctxT.font = uiFont(6); ctxT.fillStyle = DIM;
+      ctxT.font = uiFont(6); ctxT.fillStyle = ON;
       if(diaryPage > 0)                 ctxT.fillText('<', 4*S, 7*S);
       if(diaryPage < diaryLog.length-1) ctxT.fillText('>', (W-4)*S, 7*S);
     }
@@ -6039,7 +6041,7 @@
     else                      drawDiaryWords(e);  // 単語ごとに日本語か自分の文字か
     // ページ数（本文の下）。書いた本人の名前は見出しに出るので、ここでは繰り返さない
     if(e){
-      ctxT.font = uiFont(6); ctxT.fillStyle = DIM;
+      ctxT.font = uiFont(6); ctxT.fillStyle = ON;
       ctxT.fillText((diaryPage + 1) + ' / ' + diaryLog.length, (W*S)/2, 57*S);
     }
   }
@@ -6136,7 +6138,7 @@
         ctxR.font = uiFont(7);
         ctxR.fillText(typeLabel() + (lang==='ja' ? '・' : ' ') + f, (W*S)/2, 39*S);
       } else {
-        ctxR.font = uiFont(6); ctxR.fillStyle = DM;
+        ctxR.font = uiFont(6); ctxR.fillStyle = NK;
         ctxR.fillText(stageLabel(), (W*S)/2, 40*S);
       }
       const e = endLabel();
@@ -6144,7 +6146,7 @@
 
     } else if(memPage === 1){
       // 2ページ目：してあげたこと。数だけを出し、多い少ないの評価はしない
-      ctxR.font = uiFont(6); ctxR.fillStyle = DM; ctxR.textAlign = 'center';
+      ctxR.font = uiFont(6); ctxR.fillStyle = NK; ctxR.textAlign = 'center';
       ctxR.fillText(T('mgave'), (W*S)/2, 17*S);
       const t = pet.total || {};
       const p = pet.plays || {};
@@ -6161,13 +6163,13 @@
     } else if(memPage === 2){
       // 3ページ目：ミニゲームの記録。2ページ目の「あそんだ」回数の隣に置きたいが、
       //  あちらは6行で埋まっているので、continue して独立した1ページにする
-      ctxR.font = uiFont(6); ctxR.fillStyle = DM; ctxR.textAlign = 'center';
+      ctxR.font = uiFont(6); ctxR.fillStyle = NK; ctxR.textAlign = 'center';
       ctxR.fillText(T('mbest'), (W*S)/2, 17*S);
       PLAY_ITEMS.forEach((label,i)=> memBestRow(label, bestText(i), 27 + i*8));
 
     } else {
-      // 4ページ目：さいごの姿。ここだけは隠していた値を開く
-      ctxR.font = uiFont(6); ctxR.fillStyle = DM; ctxR.textAlign = 'center';
+      // 4ページ目：どう育ったか。ここだけは隠していた値を開く
+      ctxR.font = uiFont(6); ctxR.fillStyle = NK; ctxR.textAlign = 'center';
       ctxR.fillText(T('mlast'), (W*S)/2, 17*S);
       memGauge(T('friend'), (pet.B||0)/100, 27);
       memGauge(T('mcare'),  (pet.C||0)/100, 35);
@@ -6177,7 +6179,7 @@
     }
 
     // ページ位置。日記と同じ見た目にそろえる
-    ctxR.font = uiFont(6); ctxR.fillStyle = DM; ctxR.textAlign = 'center';
+    ctxR.font = uiFont(6); ctxR.fillStyle = NK; ctxR.textAlign = 'center';
     if(memPage > 0)             ctxR.fillText('<', 4*S, 7*S);
     if(memPage < MEM_PAGES-1)   ctxR.fillText('>', (W-4)*S, 7*S);
     ctxR.fillText((memPage+1) + ' / ' + MEM_PAGES, (W*S)/2, 57*S);

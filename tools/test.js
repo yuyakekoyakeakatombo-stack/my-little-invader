@@ -1761,6 +1761,24 @@ describe('ファイル', () => {
   // ミニゲーム選択画面の描画はテストから呼べないので、
   //  いちばん良かった点数の出しかたをソースで押さえる
   // ページを足したのに数を増やし忘れると、最後のページへ行けなくなる（実際にやりかけた）
+  // 薄い色(DIM)は地との差が小さく、文字にすると読めない（実測 1.46:1）。
+  //  ミニゲームの説明文と おもいでの見出しで2度やっているので、機械で見張る
+  it('薄い色で文字を描いていない', () => {
+    const bad = [];
+    for(const f of files){
+      const lines = read(f).split('\n');
+      let cur = null;
+      lines.forEach((l, i) => {
+        // 代入の右辺に薄色が出てくるか（三項で片側だけ薄い、も拾う）
+        for(const m of l.matchAll(/fillStyle\s*=\s*([^;]+);/g)) cur = /\b(DM|DIM)\b/.test(m[1]);
+        if(/\btxt[CR]?M?\([^;]*,\s*(DIM|DM)\s*\)/.test(l))      // ミニゲーム側の描画
+          bad.push(`${f}:${i+1} ${l.trim().slice(0,70)}`);
+        else if(/fillText\(/.test(l) && cur)
+          bad.push(`${f}:${i+1} ${l.trim().slice(0,70)}`);
+      });
+    }
+    eq(bad.length, 0, '薄い色の文字:\n      ' + bad.join('\n      '));
+  });
   it('おもいでのページ数が、実際に描いているページ数と合っている', () => {
     const src = read('invader_game.html');
     const at = src.indexOf('function tickMemory()');

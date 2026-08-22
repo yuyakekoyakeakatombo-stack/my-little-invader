@@ -10,6 +10,20 @@ const path = require('path');
 const { execFileSync } = require('child_process');
 
 const DIR = path.join(__dirname, '..');
+// 二重に走らせない。この道具は本体を書き換えてから戻すので、
+//  同時に2つ動くと 片方の書き戻しがもう片方の変異を「元の姿」として
+//  固定してしまい、本体に壊れたコードが residue として残る（実際に起きた）。
+const LOCK = path.join(__dirname, '.mutate.lock');
+try{
+  fs.writeFileSync(LOCK, String(process.pid), { flag: 'wx' });
+}catch(e){
+  console.error('別の突然変異チェックが動いています。終わってから実行してください。');
+  console.error('（前回が異常終了した場合は ' + LOCK + ' を消してください）');
+  process.exit(1);
+}
+const unlock = () => { try{ fs.unlinkSync(LOCK); }catch(e){} };
+process.on('exit', unlock);
+process.on('SIGINT', () => { unlock(); process.exit(130); });
 const TEST = path.join(__dirname, 'mg-test.js');
 const FILE = {
   sw: path.join(DIR, 'spacewalk_game.html'),

@@ -12,6 +12,20 @@ const path = require('path');
 const { execFileSync } = require('child_process');
 
 const GAME = path.join(__dirname, '..', 'invader_game.html');
+// 二重に走らせない。この道具は本体を書き換えてから戻すので、
+//  同時に2つ動くと 片方の書き戻しがもう片方の変異を「元の姿」として
+//  固定してしまい、本体に壊れたコードが residue として残る（実際に起きた）。
+const LOCK = path.join(__dirname, '.mutate.lock');
+try{
+  fs.writeFileSync(LOCK, String(process.pid), { flag: 'wx' });
+}catch(e){
+  console.error('別の突然変異チェックが動いています。終わってから実行してください。');
+  console.error('（前回が異常終了した場合は ' + LOCK + ' を消してください）');
+  process.exit(1);
+}
+const unlock = () => { try{ fs.unlinkSync(LOCK); }catch(e){} };
+process.on('exit', unlock);
+process.on('SIGINT', () => { unlock(); process.exit(130); });
 const TEST = path.join(__dirname, 'test.js');
 
 // [名前, 置換前, 置換後, 期待]  期待='caught' … 検出できるべき
@@ -152,8 +166,7 @@ const MUTATIONS = [
    "  function diaryUnlocked(){ return diaryLog.length > 0; }",
    "  function diaryUnlocked(){ return false; }", 'caught'],
   ['PRESS A の字が小さいままになる',
-   "        ctxO.font = '8px \"Press Start 2P\"';\n        ctxO.fillStyle = blink ? ON : DIM;\n        ctxO.fillText('PRESS  A', cx, 35*S);",
-   "        ctxO.font = '6px \"Press Start 2P\"';\n        ctxO.fillStyle = blink ? ON : DIM;\n        ctxO.fillText('PRESS  A', cx, 35*S);", 'caught'],
+   "        ctxO.font = '8px \"Press Start 2P\"';", "        ctxO.font = '6px \"Press Start 2P\"';", 'caught'],
   ['アイコンから降りると右の列に着いてしまう',
    "          if(dir==='down')  menuSel = (r===0) ? menuSel+3 : topLeft;",
    "          if(dir==='down')  menuSel = (r===0) ? menuSel+3 : 6;", 'caught'],
@@ -205,6 +218,24 @@ const MUTATIONS = [
   ['きげんを上限ではなく満点で判定する（汚れているとき保たれない）',
    "    if((pet.mood||0) >= moodCap()) return pet.mood||0;",
    "    if((pet.mood||0) >= MOOD_MAX) return pet.mood||0;", 'caught'],
+
+  // ── 文字の読みやすさ ──
+  ['おもいでの見出しを薄い色に戻す（読めない）',
+   "      ctxR.font = uiFont(6); ctxR.fillStyle = NK; ctxR.textAlign = 'center';\n      ctxR.fillText(T('mgave'), (W*S)/2, 17*S);",
+   "      ctxR.font = uiFont(6); ctxR.fillStyle = DM; ctxR.textAlign = 'center';\n      ctxR.fillText(T('mgave'), (W*S)/2, 17*S);", 'caught'],
+  ['日記のページ数を薄い色に戻す',
+   "      ctxT.font = uiFont(6); ctxT.fillStyle = ON;\n      ctxT.fillText((diaryPage + 1)",
+   "      ctxT.font = uiFont(6); ctxT.fillStyle = DIM;\n      ctxT.fillText((diaryPage + 1)", 'caught'],
+  ['「????」の点滅の片側を薄い色に戻す（半分の時間読めない）',
+   "    ctxM.fillStyle=(fM%10<5) ? NK : BG;   // 薄色だと読めないので、濃↔消で点滅させる",
+   "    ctxM.fillStyle=(fM%10<5) ? NK : DM;", 'caught'],
+
+  ['PRESS A の点滅の片側を薄い色に戻す（半分の時間読めない）',
+   "        ctxO.fillStyle = blink ? ON : OFF;   // 薄色だと点滅の半分が読めない",
+   "        ctxO.fillStyle = blink ? ON : DIM;", 'caught'],
+  ['押せないお世話の名前を薄くする（どの項目にいるか読めない）',
+   "        ctxN.fillStyle = ON;\n        ctxN.fillText(T(CARE_ORDER[menuSel].toLowerCase()), (W*S)/2, 36*S);",
+   "        ctxN.fillStyle = careDisabled(CARE_ORDER[menuSel]) ? DIM : ON;\n        ctxN.fillText(T(CARE_ORDER[menuSel].toLowerCase()), (W*S)/2, 36*S);", 'caught'],
 
   // ── ベストスコアの表示 ──
   ['選択画面に点数を出さない',
