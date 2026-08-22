@@ -219,6 +219,16 @@ const MUTATIONS = [
    "    if((pet.mood||0) >= moodCap()) return pet.mood||0;",
    "    if((pet.mood||0) >= MOOD_MAX) return pet.mood||0;", 'caught'],
 
+  // ── おもいでの姿 ──
+  ['おもいでの1ページ目に姿を出さない',
+   "      if(body) stamp(ctxR, body, Math.round((W - body[0].length)/2), MEM_CHAR_BOT - body.length, NK);",
+   "", 'caught'],
+  ['姿を上ぞろえで置く（背の高さで下の名前との間隔が変わる）',
+   "      if(body) stamp(ctxR, body, Math.round((W - body[0].length)/2), MEM_CHAR_BOT - body.length, NK);",
+   "      if(body) stamp(ctxR, body, Math.round((W - body[0].length)/2), 16, NK);", 'caught'],
+  ['姿の足元を下げすぎて名前に掛ける',
+   "  const MEM_CHAR_BOT = 29;", "  const MEM_CHAR_BOT = 33;", 'caught'],
+
   // ── 文字の読みやすさ ──
   ['おもいでの見出しを薄い色に戻す（読めない）',
    "      ctxR.font = uiFont(6); ctxR.fillStyle = NK; ctxR.textAlign = 'center';\n      ctxR.fillText(T('mgave'), (W*S)/2, 17*S);",

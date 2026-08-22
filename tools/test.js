@@ -1779,6 +1779,29 @@ describe('ファイル', () => {
     }
     eq(bad.length, 0, '薄い色の文字:\n      ' + bad.join('\n      '));
   });
+  // 1ページ目に置く姿は、段階で背の高さが6〜13ドットと変わる。
+  //  上でそろえると、姿ごとに下の名前との間隔が変わってしまう
+  it('おもいでの姿は、下辺をそろえて置く', () => {
+    const { api, clock } = load();
+    const tops = new Set(), bots = new Set();
+    for(const o of [{stage:'larva'}, {stage:'adult', lineage:'grey'},
+                    {stage:'final', lineage:'grey', form:'g2'},
+                    {stage:'final', lineage:'tako', form:'t1'},
+                    {stage:'final', lineage:'inv',  form:'i3'}]){
+      pet(api, clock, Object.assign({ gone:true, goneBy:'return' }, o));
+      const sp = api.charSprites(), body = sp.rest || sp.a;
+      ok(body, `${o.stage}/${o.form||''}: 姿が無い`);
+      const h = body.length, w = body[0].length;
+      tops.add(api.MEM_CHAR_BOT - h); bots.add(api.MEM_CHAR_BOT);
+      ok(h >= 4 && h <= 14, `背の高さが想定外（${h}）`);
+      ok(w <= 54, `横幅が画面をはみ出す（${w}）`);
+      // 見出しの区切り線(y=13)と、名前(y=31)のあいだに収まること
+      ok(api.MEM_CHAR_BOT - h > 13, `${o.stage}: 区切り線に掛かる（上端 ${api.MEM_CHAR_BOT - h}）`);
+      ok(api.MEM_CHAR_BOT < 31, `名前に掛かる（足元 ${api.MEM_CHAR_BOT}）`);
+    }
+    eq(bots.size, 1, '足元がそろっていない:');
+    ok(tops.size > 1, '背の高さが全部同じなら、この置きかたを試せていない');
+  });
   it('おもいでのページ数が、実際に描いているページ数と合っている', () => {
     const src = read('invader_game.html');
     const at = src.indexOf('function tickMemory()');
@@ -1788,6 +1811,17 @@ describe('ファイル', () => {
     const m = src.match(/const MEM_PAGES = (\d+);/);
     ok(m, 'MEM_PAGES が見つからない');
     eq(Number(m[1]), branches + 1, 'ページ数:');
+  });
+  // 描画はテストから呼べないので、姿を置く一行をソースで押さえる
+  it('おもいでの1ページ目に、姿を足元ぞろえで置いている', () => {
+    const src = read('invader_game.html');
+    ok(/const MEM_CHAR_BOT = \d+;/.test(src), '足元の高さの決めが無い');
+    ok(/stamp\(ctxR, body, Math\.round\(\(W - body\[0\]\.length\)\/2\), MEM_CHAR_BOT - body\.length, NK\);/.test(src),
+       '姿を足元ぞろえ・中央ぞろえで置いていない');
+    // 1ページ目の分岐の中にあること（他のページに紛れ込んでいない）
+    const at = src.indexOf('// 1ページ目：だれと、どれだけ');
+    ok(at > 0 && src.indexOf('stamp(ctxR, body', at) < src.indexOf('} else if(memPage === 1)', at),
+       '姿を置く処理が1ページ目の中にない');
   });
   it('いちばん良かった点数が、選択画面と おもいで の両方に出る', () => {
     const src = read('invader_game.html');
