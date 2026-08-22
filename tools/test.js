@@ -2157,6 +2157,16 @@ describe('バージョンと著作権', () => {
     const bottom = TOP + (api.SETTINGS_KEYS.length - 1) * ITEM_H + HL_H;
     ok(bottom <= H, `いちばん下の項目が画面から はみ出す（行間 ${ITEM_H} / 下端 ${bottom} / 画面 ${H}）`);
   });
+  // 一覧には版の番号を出さない。番号だけ並んでいても読みどころが無く、
+  //  点線と数字で その一行だけ賑やかになる。中身は A を押した先で見せる
+  it('一覧の行には、版の番号を出さない', () => {
+    const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'invader_game.html'), 'utf8');
+    ok(!/key==='version'\s*\?/.test(src), '一覧の行に版の番号が出ている');
+  });
+  it('版の番号は、バージョンの画面には出す', () => {
+    const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'invader_game.html'), 'utf8');
+    ok(/fillText\('VER ' \+ APP_VERSION/.test(src), 'バージョンの画面に版が出ていない');
+  });
   it('著作権に名義が入っている', () => {
     const { api } = load();
     ok(/\d{4}/.test(api.APP_COPY), `年が無い: ${api.APP_COPY}`);

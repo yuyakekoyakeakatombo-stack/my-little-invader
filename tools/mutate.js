@@ -508,6 +508,11 @@ const MUTATIONS = [
   ['バージョンの項目を消す',
    "const SETTINGS_KEYS = ['language','weather','sound','bodycolor','version','reset'];",
    "const SETTINGS_KEYS = ['language','weather','sound','bodycolor','reset'];", 'caught'],
+  ['一覧の行にも版の番号を出す（点線と数字でその一行だけ賑やかになる）',
+   "                  : key==='debug'     ? (debugMode?T('on'):T('off'))",
+   "                  : key==='debug'     ? (debugMode?T('on'):T('off'))\n                  : key==='version'   ? APP_VERSION", 'caught'],
+  ['バージョンの画面から版を落とす',
+   "        ctxN.fillText('VER ' + APP_VERSION,(W*S)/2, 37*S);", "", 'caught'],
 ];
 
 const orig = fs.readFileSync(GAME, 'utf8');
