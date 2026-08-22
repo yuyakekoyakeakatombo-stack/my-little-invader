@@ -329,6 +329,7 @@
   let stage;                 // 難易度ステージ（ボスごとに+1）
   const MISS_MAX=5;
   const BOSS_INTERVAL=30;    // 秒ごとにボス
+  const BOSS_EXIT_SPEED=2;   // ボス戦後、左の外へ抜けるはやさ（ドット/フレーム）
   const BOSS_TIME=10;        // ボス戦の長さ秒
   let phaseTimer;            // 通常/ボスの残りフレーム
   let hitCooldown=0;
@@ -598,10 +599,12 @@
     }
     if(state===STATE.BOSS_CLEAR){
       clearTimer--;
-      // UFOを右外へ退場させる
-      bx+=1.6;
+      // UFOは左の外へ抜けていく。障害物と同じ向きに流れるので、
+      //  来た道を戻るより「先へ行ってしまった」ように見える
+      bx-=BOSS_EXIT_SPEED;
       movePlayer();   // クリア中は通常域に制限されるので自然に左へ戻る
-      if(clearTimer<=0) resumeWalk();
+      // 画面に残ったまま消えないよう、抜けきるまでは次へ進めない
+      if(clearTimer<=0 && bx+UFO_W < 0) resumeWalk();
       return;
     }
     if(state===STATE.PLAY){
@@ -858,7 +861,7 @@
       txtC('OVER',32,8,ON);
       txtC('SCORE',44,7,ON);   // 薄くて読みにくかったので濃く・大きく
       txtC((''+Math.max(0,score)).padStart(4,'0'),53,8,ON);
-      if(Math.floor(Date.now()/450)%2===0) txtC('A : TITLE   B : BACK',61,5,ON);
+      if(Math.floor(Date.now()/450)%2===0) txtC('B : BACK',61,5,ON);
       return;
     }
   }
@@ -911,10 +914,9 @@
 
   function confirmTitle(){ beep(880,0.07); if(menuSel===0) startGame(); else state=STATE.HELP; }
   function onADown(){ anim(document.getElementById('ba')); doWarp(); }
+  //  Aは「決定」だけ。戻るのはBに一本化する（画面のヒントもBだけを出す）
   function onAUp(){
     if(state===STATE.TITLE) confirmTitle();
-    else if(state===STATE.HELP) state=STATE.TITLE;
-    else if(state===STATE.GAMEOVER){ state=STATE.TITLE; menuSel=0; }
   }
   press(document.getElementById('ba'), onADown);
   release(document.getElementById('ba'), onAUp);

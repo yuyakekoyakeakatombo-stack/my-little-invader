@@ -119,6 +119,7 @@ const EXTRA = {
     get warpLeft(){ return warpLeft; }, set warpLeft(v){ warpLeft = v; },
     get hitCooldown(){ return hitCooldown; }, set hitCooldown(v){ hitCooldown = v; },
     get phaseTimer(){ return phaseTimer; }, set phaseTimer(v){ phaseTimer = v; },
+    get clearTimer(){ return clearTimer; }, set clearTimer(v){ clearTimer = v; },
     get bx(){ return bx; }, set bx(v){ bx = v; },
     get by(){ return by; }, set by(v){ by = v; },
     diff, hitsObstacle, hitsBoss, loseLife, movePlayer, doWarp,

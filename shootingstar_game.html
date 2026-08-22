@@ -677,7 +677,7 @@
       txtC('OVER',32,8,ON);
       txtC('SCORE',44,7,ON);   // 薄くて読みにくかったので濃く・大きく
       txtC((''+Math.max(0,score)).padStart(4,'0'),53,8,ON);
-      if(Math.floor(Date.now()/450)%2===0) txtC('A : TITLE   B : BACK',61,5,ON);
+      if(Math.floor(Date.now()/450)%2===0) txtC('B : BACK',61,5,ON);
       return;
     }
   }
@@ -720,11 +720,10 @@
     // プレイ中のみ押した瞬間に発射。状態遷移は離した時に処理（二重発火防止）
     if(state===STATE.PLAY){ keys.fire=true; fire(); fireTimer=fireGap(); }
   }
+  //  Aは「決定」だけ。戻るのはBに一本化する（画面のヒントもBだけを出す）
   function onAUp(){
     keys.fire=false;
     if(state===STATE.TITLE){ confirmTitle(); return; }
-    if(state===STATE.HELP){ state=STATE.TITLE; return; }
-    if(state===STATE.GAMEOVER){ state=STATE.TITLE; menuSel=0; return; }
   }
   press(ba,onADown); release(ba,onAUp);
   function onBPress(){

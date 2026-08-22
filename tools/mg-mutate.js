@@ -70,7 +70,7 @@ const MUTATIONS = [
   ['ab', 'ゲームオーバーでMENUが選択画面へ戻らない',
    "exitToMenu(state===STATE.GAMEOVER);   //", "exitToMenu();   //", 'caught'],
   ['sw', '案内を画面の下からはみ出す位置に置く',
-   "txtC('A : TITLE   B : BACK',61,5,ON);", "txtC('A : TITLE   B : BACK',64,5,ON);", 'caught'],
+   "txtC('B : BACK',61,5,ON);", "txtC('B : BACK',64,5,ON);", 'caught'],
   ['sw', '戻る案内にAを出してしまう',
    "txtC('B : BACK',62,5,ON);", "txtC('A/B : BACK',62,5,ON);", 'caught'],
 
@@ -135,6 +135,18 @@ const MUTATIONS = [
    "beamHalf: Math.min(3 + Math.floor(t/5), 7),", "beamHalf: 3 + Math.floor(t/5),", 'caught'],
   ['ab', 'つかまってもゲームオーバーにならない',
    "if(caughtTimer<=0){ state=STATE.GAMEOVER; reportScore(); beep(160,0.4,'sawtooth'); }", "", 'caught'],
+  ['sw', 'ボスが右へ抜ける（障害物と逆向きに戻っていく）',
+   "      bx-=BOSS_EXIT_SPEED;", "      bx+=BOSS_EXIT_SPEED;", 'caught'],
+  ['sw', 'ボスが抜けきる前に次へ進む（画面に残ったまま消える）',
+   "      if(clearTimer<=0 && bx+UFO_W < 0) resumeWalk();", "      if(clearTimer<=0) resumeWalk();", 'caught'],
+  ['sw', 'A で あそびかたから戻れてしまう',
+   "  function onAUp(){\n    if(state===STATE.TITLE) confirmTitle();\n  }",
+   "  function onAUp(){\n    if(state===STATE.TITLE) confirmTitle();\n    else if(state===STATE.HELP) state=STATE.TITLE;\n  }", 'caught'],
+  ['ab', 'A で ゲームオーバーから戻れてしまう',
+   "  function onAUp(){\n    if(state===STATE.TITLE) confirmTitle();\n  }",
+   "  function onAUp(){\n    if(state===STATE.TITLE) confirmTitle();\n    else if(state===STATE.GAMEOVER){ state=STATE.TITLE; menuSel=0; }\n  }", 'caught'],
+  ['ss', 'ヒントに A : TITLE が戻る',
+   "txtC('B : BACK',61,5,ON);", "txtC('A : TITLE   B : BACK',61,5,ON);", 'caught'],
 ];
 
 const orig = {};

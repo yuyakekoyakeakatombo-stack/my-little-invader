@@ -441,6 +441,51 @@ describe('アブダクション', () => {
   });
 });
 
+// ══ 操作の決まり ══════════════════════════════════════════
+//  戻るのはBに一本化する。Aは「決定」だけ
+describe('操作', () => {
+  const fs = require('fs'), path = require('path');
+  const read = g => fs.readFileSync(path.join(__dirname, '..', FILES[g]), 'utf8');
+
+  it('3本とも、Aで前の画面へ戻らない', () => {
+    for(const g of GAMES){
+      const src = read(g);
+      const m = src.match(/function onAUp\(\)\{[\s\S]*?\n  \}/);
+      ok(m, g + ': A を離したときの処理が見つからない');
+      ok(!/STATE\.HELP/.test(m[0]), g + ': A で あそびかたから戻れてしまう');
+      ok(!/STATE\.GAMEOVER/.test(m[0]), g + ': A で ゲームオーバーから戻れてしまう');
+      // 画面のヒントからも A を消してあること
+      ok(!/A : TITLE/.test(src), g + ': ヒントに A : TITLE が残っている');
+      ok(/txtC\('B : BACK'/.test(src), g + ': B : BACK のヒントが無い');
+    }
+  });
+});
+
+// ══ スペースウォークのボス ════════════════════════════════
+describe('ボスの去りかた', () => {
+  it('ボス戦のあと、UFOは左の外へ抜けきってから次へ進む', () => {
+    const { api } = load('spacewalk');
+    const S = api.STATE;
+    // 画面のどこにいても、残ったまま消えないこと
+    for(const startX of [43, 22, 0]){
+      api.startGame();
+      api.phaseTimer = 0;
+      let g = 0;
+      while(api.state !== S.BOSS && g++ < 400){ api.lives = 5; api.step(1); }
+      eq(api.state, S.BOSS, 'ボス戦に入ること:');
+      api.phaseTimer = 0; api.lives = 5; api.step(1);
+      eq(api.state, S.BOSS_CLEAR, 'ボス戦が終わること:');
+      api.bx = startX;
+      let f = 0;
+      while(api.state === S.BOSS_CLEAR && f < 300){ api.lives = 5; api.step(1); f++; }
+      ok(api.bx + 11 < 0, `x=${startX} から: 画面に残ったまま消えた（右端 ${api.bx + 11}）`);
+      ok(api.bx < startX, `x=${startX} から: 左へ抜けていない`);
+      eq(api.state, S.PLAY, `x=${startX} から: 抜けたあと通常に戻ること:`);
+      ok(f <= 60, `x=${startX} から: 退場に時間が掛かりすぎる（${(f/20).toFixed(1)}秒）`);
+    }
+  });
+});
+
 // ══ 結果 ══════════════════════════════════════════════════
 console.log('');
 if(fails.length){ console.log(fails.join('\n')); console.log(''); }
