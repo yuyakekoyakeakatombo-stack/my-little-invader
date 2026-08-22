@@ -1760,17 +1760,32 @@ describe('ファイル', () => {
   });
   // ミニゲーム選択画面の描画はテストから呼べないので、
   //  いちばん良かった点数の出しかたをソースで押さえる
-  it('ミニゲーム選択画面に、いちばん良かった点数が出る', () => {
+  // ページを足したのに数を増やし忘れると、最後のページへ行けなくなる（実際にやりかけた）
+  it('おもいでのページ数が、実際に描いているページ数と合っている', () => {
     const src = read('invader_game.html');
+    const at = src.indexOf('function tickMemory()');
+    ok(at > 0, 'tickMemory が見つからない');
+    const seg = src.slice(at, src.indexOf('setInterval(tickMemory', at));
+    const branches = (seg.match(/memPage === \d/g) || []).length;   // 明示の分岐＋最後の else
+    const m = src.match(/const MEM_PAGES = (\d+);/);
+    ok(m, 'MEM_PAGES が見つからない');
+    eq(Number(m[1]), branches + 1, 'ページ数:');
+  });
+  it('いちばん良かった点数が、選択画面と おもいで の両方に出る', () => {
+    const src = read('invader_game.html');
+    // 表示の決めかたは1か所。2画面で食い違わないようにしておく
+    ok(/function bestText\(i\)\{/.test(src), '点数の出しかたが共通になっていない');
+    ok(/PLAY_KEYS\[i\]/.test(src) && /'---'/.test(src), '未プレイと 0点 を区別していない');
+    ok(/p\[k\] > 0/.test(src), '遊んだ回数を見ていない（0点と区別できない）');
+    // 選択画面：カーソルを合わせているゲームのぶん
     const at = src.indexOf('// ── PLAY サブ画面（ミニゲーム選択）──');
     ok(at > 0, 'ミニゲーム選択画面が見つからない');
     const seg = src.slice(at, src.indexOf('} else {', at));
-    ok(/ctxN\.fillText\('BEST ' \+ bv/.test(seg), '点数を描いていない');
-    // 選んでいるゲームのぶんを出す（3つのうちどれか固定になっていないこと）
-    ok(/\['sw','ss','ab'\]\[playSel\]/.test(seg), 'カーソルの位置と結びついていない');
-    // 0点も取りうるので、一度も遊んでいない状態と区別する
-    ok(/bp\[bk\] > 0/.test(seg) && /'---'/.test(seg),
-       '未プレイと 0点 を区別していない');
+    ok(/ctxN\.fillText\('BEST ' \+ bestText\(playSel\)/.test(seg),
+       '選択画面がカーソルの位置と結びついていない');
+    // おもいで：3本ぶんを並べる
+    ok(/PLAY_ITEMS\.forEach\(\(label,i\)=> memBestRow\(label, bestText\(i\), 27 \+ i\*8\)\);/.test(src),
+       'おもいでに3本ぶんが並んでいない');
   });
   // ボタンの字は、字面が送りの左寄り・行の上寄りに乗る（Press Start 2P）。
   //  flex の中央ぞろえが合わせるのは「送り幅」と「行の箱」なので、そのままだと

@@ -386,7 +386,7 @@
       plump:'PLUMP', sleek:'SLEEK', prickly:'PRICKLY',
       mdays:'DAYS TOGETHER', mfeed:'MEALS', msnack:'TREATS', mclean:'TIDYING',
       mpraise:'PRAISE', mplay:'PLAYING', mmed:'MEDICINE', msick:'ILLNESS',
-      mgave:'WHAT YOU GAVE', mlast:'AT THE END',
+      mgave:'WHAT YOU GAVE', mbest:'BEST SCORES', mlast:'AT THE END',
       mcare:'CARE', mdisc:'MANNERS', mtemper:'NATURE',
       tlively:'LIVELY', tcalm:'CALM', tmid:'EVEN',
       endReturn:'THEY CAME FOR THEM', endDepart:'THEY SET OFF',
@@ -411,7 +411,7 @@
       plump:'プランプ', sleek:'スリーク', prickly:'プリックリー',
       mdays:'いっしょにいた ひ', mfeed:'ごはん', msnack:'おやつ', mclean:'そうじ',
       mpraise:'ほめた', mplay:'あそんだ', mmed:'くすり', msick:'びょうき',
-      mgave:'してあげたこと', mlast:'さいごの すがた',
+      mgave:'してあげたこと', mbest:'ベストスコア', mlast:'さいごの すがた',
       mcare:'ケア', mdisc:'しつけ', mtemper:'せいかく',
       tlively:'やんちゃ', tcalm:'おっとり', tmid:'ふつう',
       endReturn:'むかえが きた', endDepart:'たびだった',
@@ -5097,6 +5097,14 @@
   }
   const PLAY_ITEMS=['SPACEWALK','SHOOTING STAR','ABDUCTION'];
   const PLAY_FILES={'SPACEWALK':'spacewalk_game.html','SHOOTING STAR':'shootingstar_game.html','ABDUCTION':'abduction_game.html'};
+  const PLAY_KEYS=['sw','ss','ab'];        // PLAY_ITEMS と同じ並び。pet.best / pet.plays の鍵
+  // いちばん良かった点数の表示。0点も取りうるので、一度も遊んでいないゲームは
+  //  0 ではなく「---」にする。選択画面と おもいで の両方でこれを使う
+  function bestText(i){
+    const k = PLAY_KEYS[i], p = pet.plays || {}, b = pet.best || {};
+    if(!(Number.isFinite(p[k]) && p[k] > 0)) return '---';
+    return String(Math.max(0, Math.round(b[k] || 0)));
+  }
   let playSel=0;
   let menuSel=0, fN=0;
   let menuScroll=0;   // メニューの表示開始位置（選択追従スクロール）
@@ -5367,13 +5375,9 @@
       //  数字は言語に関わらず英字なので、ゲーム名と同じピクセル字体で揃える。
       //  一度も遊んでいないゲームは 0点と区別して「---」にする（0点も取りうるため）
       for(let x=1;x<W-1;x++) dot(ctxN,x,58,DIM);
-      const bk = ['sw','ss','ab'][playSel];
-      const bp = pet.plays || {}, bb = pet.best || {};
-      const played = Number.isFinite(bp[bk]) && bp[bk] > 0;
-      const bv = played ? String(Math.max(0, Math.round(bb[bk] || 0))) : '---';
       ctxN.font='7px "Press Start 2P"'; ctxN.fillStyle=ON;
       ctxN.textAlign='center'; ctxN.textBaseline='top';
-      ctxN.fillText('BEST ' + bv, (W*S)/2, 60*S);
+      ctxN.fillText('BEST ' + bestText(playSel), (W*S)/2, 60*S);
 
     } else {
       // ── メインメニュー：お世話アイコングリッド(2段×3列) ＋ サブ項目 ──
@@ -6060,7 +6064,7 @@
   //  ただし最後の1ページだけは答え合わせとして、隠していた値を目盛りで開く。
   // ════════════════════════════════════════
   const ctxR = initCanvas('lcd-r');
-  const MEM_PAGES = 3;
+  const MEM_PAGES = 4;
   let memPage = 0, memFrom = 'menu', fR = 0;
   // 体型の呼び名。形態IDの末尾で決まる（1=ふっくら / 2=すらり / 3=とげとげ）
   function formLabel(){
@@ -6079,6 +6083,17 @@
   function memOpen(from){ memFrom = from || 'menu'; memPage = 0; fR = 0; showView('memory'); }
   function memClose(){ showView(memFrom); }
 
+  //  ミニゲームの記録。ゲーム名は選択画面と同じ英語表記なので、
+  //   言語に関わらずピクセル字体で組む（memRow は言語で字体が変わる）
+  function memBestRow(label, val, y){
+    ctxR.font = '6px "Press Start 2P"'; ctxR.fillStyle = ON;
+    ctxR.textAlign = 'left';  ctxR.fillText(label, 3*S, y*S);
+    ctxR.textAlign = 'right'; ctxR.fillText(val, (W-3)*S, y*S);
+    ctxR.textAlign = 'left';                           // 幅を測る前に必ず戻す
+    const lw = ctxR.measureText(label).width / S, vw = ctxR.measureText(val).width / S;
+    //  点の高さは字の背の低さに合わせる（memRow の y+2 は9pxの日本語字体に合わせた値）
+    for(let x = Math.floor(3 + lw) + 2; x < (W-3) - vw - 1.5; x += STAT_LEADER) dot(ctxR, x, y + 1, DIM);
+  }
   //  項目名を左、値を右に置き、あいだを薄い点でつなぐ（STATUS と同じ組み方）
   function memRow(label, val, y){
     ctxR.font = uiFont(6); ctxR.fillStyle = ON;
@@ -6143,8 +6158,15 @@
       ];
       rows.forEach((r,i)=> memRow(r[0], String(r[1]), 23 + i*6));   // 最終行(53)がページ数(57)に掛からない位置
 
+    } else if(memPage === 2){
+      // 3ページ目：ミニゲームの記録。2ページ目の「あそんだ」回数の隣に置きたいが、
+      //  あちらは6行で埋まっているので、continue して独立した1ページにする
+      ctxR.font = uiFont(6); ctxR.fillStyle = DM; ctxR.textAlign = 'center';
+      ctxR.fillText(T('mbest'), (W*S)/2, 17*S);
+      PLAY_ITEMS.forEach((label,i)=> memBestRow(label, bestText(i), 27 + i*8));
+
     } else {
-      // 3ページ目：さいごの姿。ここだけは隠していた値を開く
+      // 4ページ目：さいごの姿。ここだけは隠していた値を開く
       ctxR.font = uiFont(6); ctxR.fillStyle = DM; ctxR.textAlign = 'center';
       ctxR.fillText(T('mlast'), (W*S)/2, 17*S);
       memGauge(T('friend'), (pet.B||0)/100, 27);

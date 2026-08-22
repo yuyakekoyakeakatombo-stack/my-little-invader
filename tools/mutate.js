@@ -208,11 +208,16 @@ const MUTATIONS = [
 
   // ── ベストスコアの表示 ──
   ['選択画面に点数を出さない',
-   "      ctxN.fillText('BEST ' + bv, (W*S)/2, 60*S);", "", 'caught'],
-  ['いつも1つ目のゲームの点数を出す（カーソルに追随しない）',
-   "      const bk = ['sw','ss','ab'][playSel];", "      const bk = 'sw';", 'caught'],
+   "      ctxN.fillText('BEST ' + bestText(playSel), (W*S)/2, 60*S);", "", 'caught'],
+  ['選択画面が いつも1つ目のゲームの点数を出す（カーソルに追随しない）',
+   "      ctxN.fillText('BEST ' + bestText(playSel), (W*S)/2, 60*S);",
+   "      ctxN.fillText('BEST ' + bestText(0), (W*S)/2, 60*S);", 'caught'],
   ['未プレイでも 0点 と出す（遊んで0点だったのと区別がつかない）',
-   "      const played = Number.isFinite(bp[bk]) && bp[bk] > 0;", "      const played = true;", 'caught'],
+   "    if(!(Number.isFinite(p[k]) && p[k] > 0)) return '---';", "", 'caught'],
+  ['おもいでに点数を並べない',
+   "      PLAY_ITEMS.forEach((label,i)=> memBestRow(label, bestText(i), 27 + i*8));", "", 'caught'],
+  ['おもいでのページ数を増やし忘れる（さいごの すがたへ行けなくなる）',
+   "  const MEM_PAGES = 4;", "  const MEM_PAGES = 3;", 'caught'],
 
   // ── ボタンの字の位置 ──
   ['A・B の字がボタンの中心からずれる（位置合わせを外す）',
