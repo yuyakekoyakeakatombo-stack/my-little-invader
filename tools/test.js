@@ -2198,11 +2198,20 @@ describe('ファイル', () => {
     const col = src.match(/const COL = \[ \{ x0:(\d+), x1:(\d+),[\s\S]*?\{ x0:(\d+), x1:([^,]+),/);
     ok(col, '列の範囲（COL）が見つからない');
     const leftEnd = +col[2] - 1, rightStart = +col[3];      // 網掛けは x1 の手前まで
-    const line = src.match(/for\(let y=Y0; y<Y0\+rows\*HL_H; y\+\+\) dot\(ctxN, (\d+), y, DIM\);/);
+    const line = src.match(/ctxN\.fillRect\((\d+)\*S \+ S\/(\d+), Y0\*S, S\/(\d+), rows\*HL_H\*S\);/);
     ok(line, '列の仕切りが引かれていない');
-    const x = +line[1];
+    const x = +line[1], S = 4;
     ok(x > leftEnd, `仕切り(x=${x})が左の網掛け(〜${leftEnd})に重なっている`);
     ok(x < rightStart, `仕切り(x=${x})が右の網掛け(${rightStart}〜)に重なっている`);
+    // 太さは半ドット。1ドットだと項目の字と同じ太さで、区切りに見えない
+    const thick = S / +line[3];
+    eq(thick, S/2, '仕切りの太さ(px):');
+    // 空いているドットの まんなかに置く（左右どちらの列にも寄らない）。
+    //  整数pxなので、拡大されても にじまない
+    const left = x*S + S / +line[2];
+    eq(left, x*S + (S - thick)/2, `仕切りの左端(${left}px)がドットの中央でない:`);
+    eq(left % 1, 0, `仕切りの左端(${left}px)が整数pxでない（にじむ）:`);
+    ok(left >= x*S && left + thick <= (x+1)*S, '仕切りが となりのドットへ はみ出している');
     // 行数が増えても、いちばん下が画面(y=64)からはみ出さない
     const hl = src.match(/const HL_H = \(rows >= 4\) \? (\d+) : (\d+);/);
     const y0 = src.match(/const Y0   = \(rows >= 4\) \? (\d+) : \(rows === 3 \? (\d+) : (\d+)\);/);
