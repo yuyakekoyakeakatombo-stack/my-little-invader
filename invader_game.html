@@ -2749,7 +2749,35 @@
   // カーソルが取りうる最大位置：末尾の追記位置まで（文字を飛ばして空きを作らせない）
   function nameCurMax(){ return Math.min(nameBuf.length, NAME_MAX-1); }
   let nameSelActive = false;     // 育成画面で「NAME:????」を選択中（黒塗り反転表示。Aで命名画面へ）
-  let diarySelActive = false;   // 育成画面で日記マークを選択中（Aで日記を開く）
+  //  育成画面のヘッダーで選んでいるマーク（null＝選んでいない）。
+  //  上でヘッダーに入り、左右で移り、下かBで抜ける。Aでその画面へ飛ぶ
+  let headSel = null;
+  const HEAD_ICON_W = 8, HEAD_ICON_GAP = 6;
+  const HEAD_IY = 7;            // px。名前・日数の文字の高さにそろえる
+  //  いま出せるマークを左から並べて返す
+  function headIcons(){
+    const list = [];
+    if(diaryUnlocked()) list.push('diary');                 // 1件も書かれていないうちは開いても空
+    if(pet.name && !pet.gone && !pet.dead) list.push('status');
+    return list;
+  }
+  //  マークの並びは右づめ。日数の左に置く
+  function headIconX(i, n){
+    const right = 142;                                      // px。DAY表示(152px〜)の手前で止める
+    return right - (n - i) * (HEAD_ICON_W + HEAD_ICON_GAP) + HEAD_ICON_GAP;
+  }
+  //  ヘッダーのマークを描く。ふだんは薄色、知らせがあるときだけ濃い色で点滅
+  function drawHeadIcons(DM, NK){
+    const list = headIcons();
+    if(headSel && !list.includes(headSel)) headSel = null;
+    list.forEach((k, i) => {
+      const x = headIconX(i, list.length);
+      const alert = (k === 'diary') ? diaryUnread > 0 : statusAlert();
+      if(headSel === k){ ctxM.fillStyle = DM; ctxM.fillRect(x-2, HEAD_IY-2, HEAD_ICON_W+4, 13); }   // 選択中は薄色で囲む
+      const blink = alert && (fM % 16 < 10);
+      stampPx(ctxM, k === 'diary' ? DIARY_ICON : STATUS_ICON, x, HEAD_IY, blink ? NK : DM);
+    });
+  }
   // 日記マーク（ノート）。ヘッダーの文字（6px）と並ぶので、1pxきざみの細かいドットで小さく描く。
   //  論理ドット（4px）で描くと文字の3倍の高さになって浮くため、ここだけ文字と同じ細かさにしてある
   // ヘッダーの文字（7px）と釣り合う大きさ。1pxきざみで置くので実寸は 8×9px
@@ -2762,6 +2790,19 @@
     [1,1,0,0,0,0,0,1],
     [1,1,0,1,1,1,0,1],
     [1,1,0,0,0,0,0,1],
+    [1,1,1,1,1,1,1,1],
+  ];
+  // ステータスのマーク。STATUS画面の目盛りに合わせて、伸びる棒3本にしてある。
+  //  日記のノート（横線）と見分けがつくよう、こちらは縦の棒にした
+  const STATUS_ICON = [
+    [0,0,0,0,0,0,1,1],
+    [0,0,0,0,0,0,1,1],
+    [0,0,0,1,1,0,1,1],
+    [0,0,0,1,1,0,1,1],
+    [0,0,0,1,1,0,1,1],
+    [1,1,0,1,1,0,1,1],
+    [1,1,0,1,1,0,1,1],
+    [1,1,0,1,1,0,1,1],
     [1,1,1,1,1,1,1,1],
   ];
   // 1キャンバスpxきざみで絵を置く（座標もpx）。文字と並べる小さなアイコン用
@@ -3882,6 +3923,25 @@
     }
     return false;
   }
+  // けんこうの状態。STATUS に出す文字と、ヘッダーの知らせを同じものから決める。
+  //  別々に書くと、画面には「ふつう」と出ているのに知らせだけ点いている、が起きる
+  function healthState(){
+    if(pet.dead)              return 'dead';      // おばけ
+    if(isWeak())              return 'weak';      // 衰弱（空腹18時間超。あと12時間で死）
+    if(pet.health==='SICK')   return 'sick';      // 病気（放置36時間で死）
+    // 空腹が続いている（このままだと衰弱）。以前は「ふつう」と出ていて、
+    //  けんこう欄だけ見た人には問題なしに読めてしまっていた
+    if(pet.hunger===0)        return 'starving';
+    // 命に関わるほどではないが、本調子ではない状態。
+    //  潜伏中の病気・きげんやおなかが下がりきる手前・汚れの放置を、まとめてここで伝える。
+    //  潜伏中は、気づいてくすりを飲ませれば発症を防げる。
+    //  汚れは「出た時点」ではなくハエがたかり始めてから。うんちは食後1時間ほどで出るので、
+    //  出ただけで本調子でない扱いにすると、ほとんどの時間が「ふつう」になってしまう
+    if(pet.incubAt || poopHasFlies() || pet.plateSpoiled || pet.mood <= 1 || pet.hunger <= 1) return 'normal';
+    return 'good';
+  }
+  // ヘッダーのステータスマークを点滅させるか。「よい」以外はすべて見てほしい状態
+  function statusAlert(){ return healthState() !== 'good'; }
   const CARE_LABELS = {FEED:'FEED',CLEAN:'CLEAN',MED:'MEDICINE',PET:'PRAISE',SCOLD:'SCOLD',GAME:'MINI GAME'};  // PET=褒める
   let careFlash = 0; // （旧・点滅用。現在未使用）
 
@@ -4492,12 +4552,8 @@
     ctxM.font=nameFont(7, pet.name); ctxM.textAlign='left';  ctxM.fillText(pet.name||'------', 2*S, 2*S);
     ctxM.font='7px "Press Start 2P"';
     ctxM.textAlign='right'; ctxM.fillText(dayLabel(), (W-2)*S, 2*S);
-    // 未読の日記（別れのことば）があるあいだは、ヘッダーのノートを点滅させる
-    if(diaryUnread > 0){
-      const IX = 100, IY = 7;
-      if(diarySelActive){ ctxM.fillStyle = DM; ctxM.fillRect(IX-2, IY-2, 12, 13); }
-      if(diarySelActive || fM%16 < 10) stampPx(ctxM, DIARY_ICON, IX, IY, NK);
-    } else if(diarySelActive) diarySelActive = false;
+    // 日記のマークは残るので、ここから最後のことばを読み返せる
+    drawHeadIcons(DM, NK);
     for(let x=0;x<W;x++) dot(ctxM,x,HEADER_Y,DM);
     STARS_M.forEach(([x,y],i)=>dot(ctxM,x,y+10,(fM+i*9)%28<20?DM:BG));
     // 演出で出した言葉を、リセットするまで残す。位置は演出の最終画面と同じ。
@@ -4686,14 +4742,8 @@
     ctxM.font='7px "Press Start 2P"';   // DAYカウントは常にピクセル字体（名前がかなでも影響させない）
     ctxM.fillStyle=NK;
     ctxM.textAlign='right'; ctxM.fillText(dayLabel(),  (W-2)*S, 2*S);
-    // 名前と日数のあいだに日記マーク。未読のあいだは点滅する（十字上で選択→Aで開く）
-    if(diaryUnread > 0){                          // 読み終わると消える（読み返すのは MENU→DIARY）
-      const IX = 100, IY = 7;                     // px。名前と日数のあいだ、文字の高さに揃える
-      if(diarySelActive){                         // 選択中は薄色の枠で囲む
-        ctxM.fillStyle = DM; ctxM.fillRect(IX-2, IY-2, 12, 13);
-      }
-      if(diarySelActive || fM%16 < 10) stampPx(ctxM, DIARY_ICON, IX, IY, NK);
-    } else if(diarySelActive) diarySelActive = false;
+    // 名前と日数のあいだにマーク（十字上でヘッダーへ、左右で移り、Aで開く）
+    drawHeadIcons(DM, NK);
     for(let x=0;x<W;x++) dot(ctxM,x,HEADER_Y,DM);
 
     // ── 天体（右上） ──
@@ -5117,7 +5167,7 @@
   function dpadAnim(el){ el.style.transform='translateY(2px) scale(0.88)'; el.style.filter='brightness(2.5)'; setTimeout(()=>{el.style.transform='';el.style.filter='';},120); }
 
   onPress(document.getElementById('mmenu'),()=>{ if(cutscenePlaying()) return; playClick(); btnAnim(document.getElementById('mmenu'),1,0.93); menuSel=0; menuScroll=0; inSettings=false; inPlay=false; inFeed=false; inStatus=false; confirmReset=false; locPrime=false; inWeather=false; playSel=0; feedSel=0; showView('menu'); });
-  onPress(document.getElementById('mb'),()=>{ if(cutscenePlaying()) return; playClick(); btnAnim(document.getElementById('mb')); nameSelActive=false; diarySelActive=false; });
+  onPress(document.getElementById('mb'),()=>{ if(cutscenePlaying()) return; playClick(); btnAnim(document.getElementById('mb')); nameSelActive=false; headSel=null; });
   // お世話アクションはMENU内のアイコングリッドへ移動
   // 未命名時：十字上で「NAME:????」を選択（黒塗り反転）→ Aで命名画面へ。下/Bで選択解除
   onPress(document.getElementById('ma'),()=>{
@@ -5125,8 +5175,11 @@
     playClick(1400); btnAnim(document.getElementById('ma'));
     if(!pet.name && nameSelActive){
       nameSelActive=false; startNaming(); showView('naming');
-    } else if(diarySelActive && diaryUnread > 0){
-      diarySelActive=false; openDiary('main');
+    } else if(headSel === 'diary'){
+      headSel=null; openDiary('main');
+    } else if(headSel === 'status'){
+      // ヘッダーから STATUS へ飛ぶ。MENU を開いて そのまま STATUS を出す
+      headSel=null; inSettings=false; inFeed=false; inPlay=false; inStatus=true; showView('menu');
     }
   });
   document.querySelectorAll('#view-main .dpad-arrow').forEach(el=>{
@@ -5136,9 +5189,16 @@
       if(!pet.name){
         if(el.classList.contains('up'))   nameSelActive = true;
         if(el.classList.contains('down')) nameSelActive = false;
-      } else if(diaryUnread > 0){
-        if(el.classList.contains('up'))   diarySelActive = true;   // ヘッダーの日記マークを選択
-        if(el.classList.contains('down')) diarySelActive = false;
+      } else {
+        // 上でヘッダーのマークへ、左右で隣のマークへ、下で戻る
+        const list = headIcons();
+        if(!list.length) return;
+        if(el.classList.contains('up')   && !headSel) headSel = list[0];
+        else if(el.classList.contains('down'))        headSel = null;
+        else if(headSel && (el.classList.contains('left') || el.classList.contains('right'))){
+          const i = list.indexOf(headSel), d = el.classList.contains('right') ? 1 : -1;
+          headSel = list[(i + d + list.length) % list.length];
+        }
       }
     });
   });
@@ -5209,7 +5269,7 @@
   // 項目はキーで管理（表示ラベルは言語辞書、値は各キーで分岐）
   //  版の番号は sw.js の VERSION と同じもの。tools/bump-sw.sh が両方いっしょに
   //  書き換える（ずれると、テスターの端末に出ている版が分からなくなる）
-  const APP_VERSION = '2026-08-23-09';
+  const APP_VERSION = '2026-08-23-10';
   //  (C) は Press Start 2P に © が無く、別の字体に落ちて1文字だけ形が浮くため
   const APP_COPY = '(C) 2026 Studio M.D.Q.';
   const SETTINGS_KEYS = ['language','weather','sound','bodycolor','version','reset'];
@@ -5376,20 +5436,7 @@
       for(let x=1;x<W-1;x++) dot(ctxN,x,16,DIM);   // 見出しの下の区切り線
 
       // けんこうはバーではなく文字で出す。バーだと「半分」が何を指すのか伝わらないため
-      const healthText =
-          pet.dead            ? T('dead')     // おばけ
-        : isWeak()            ? T('weak')     // 衰弱（空腹18時間超。あと12時間で死）
-        : pet.health==='SICK' ? T('sick')     // 病気（放置36時間で死）
-        // 空腹が続いている（このままだと衰弱）。以前は「ふつう」と出ていて、
-        //  けんこう欄だけ見た人には問題なしに読めてしまっていた
-        : pet.hunger===0      ? T('starving')
-        // 命に関わるほどではないが、本調子ではない状態。
-        //  潜伏中の病気・きげんやおなかが下がりきる手前・汚れの放置を、まとめてここで伝える。
-        //  潜伏中は、気づいてくすりを飲ませれば発症を防げる（下の MED を参照）。
-        //  汚れは「出た時点」ではなくハエがたかり始めてから。うんちは食後1時間ほどで出るので、
-        //  出ただけで本調子でない扱いにすると、ほとんどの時間が「ふつう」になってしまう
-        : (pet.incubAt || poopHasFlies() || pet.plateSpoiled || pet.mood <= 1 || pet.hunger <= 1) ? T('normal')
-        :                       T('good');
+      const healthText = T(healthState());
       // なかよし度Bは0〜100。20で割ると0〜5になり、下の×2で10本ぶんの目盛りになる
       const rows=[
         {label:T('hungry'), gauge:gaugeHunger()},
@@ -6177,7 +6224,7 @@
   }
   setInterval(tickDiary, 100);
 
-  function closeDiary(){ diarySelActive=false; showView(diaryFrom); }
+  function closeDiary(){ headSel=null; showView(diaryFrom); }
   onPress(document.getElementById('ta'),()=>{ playClick(); btnAnim(document.getElementById('ta')); closeDiary(); });
   onPress(document.getElementById('tb'),()=>{ playClick(); btnAnim(document.getElementById('tb')); closeDiary(); });
   onPress(document.getElementById('tmenu'),()=>{ playClick(); btnAnim(document.getElementById('tmenu'),1,0.93); closeDiary(); });

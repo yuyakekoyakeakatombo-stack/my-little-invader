@@ -164,6 +164,74 @@ describe('病気', () => {
   });
 });
 
+// ══ ヘッダーのマーク ══════════════════════════════════════
+//   ふだんは薄色で置いておき、知らせがあるときだけ濃い色で点滅する。
+//   出っぱなしにするのは「そこから飛べる」と分かってもらうため
+describe('ヘッダーのマーク', () => {
+  const at = (st, unread) => {
+    const { api, clock } = load();
+    const t0 = clock.now();
+    Object.assign(api.pet, api.defaultPet(), { name:'ALPHA', stage:'larva', birth:t0-5*86400000,
+      lastTick:t0, EP:2, B:40, hunger:4, mood:4, ...st });
+    api.addDiary({ d:5, n:'ALPHA', t:['fed'], v:[0], c:'', ts:t0, cd:'2026-06-15', lv:2, wr:1 });
+    api.diaryUnread = unread || 0;
+    return api;
+  };
+  it('日記とステータスの2つが出る', () => {
+    eq(at({}).headIcons(), ['diary','status'], 'ヘッダーのマーク:');
+  });
+  it('命名前は なにも出ない', () => {
+    const { api } = load();
+    eq(api.headIcons(), [], '命名前のマーク:');
+  });
+  it('別れたあとは ステータスが消え、日記だけ残る', () => {
+    const api = at({ gone:true, goneBy:'depart' });
+    eq(api.headIcons(), ['diary'], '別れたあとのマーク:');
+  });
+  //  以前は未読のときだけ出ていた。読み終わると消えてしまい、
+  //  日記へ飛べる場所だと分からなくなっていた
+  it('日記のマークは、読み終わっても残る', () => {
+    ok(at({}, 0).headIcons().includes('diary'), '既読で消えている');
+  });
+  it('ステータスの知らせは、けんこうが「よい」以外のときだけ点く', () => {
+    eq(at({}).statusAlert(), false, 'なんともない子:');
+    for(const [name, st] of [
+        ['びょうき',   { health:'SICK' }],
+        ['はらぺこ',   { hunger:0 }],
+        ['きげんが底', { mood:0 }],
+        ['やまいの芽', { incubAt: 1 }],
+      ]){
+      ok(at(st).statusAlert(), `${name}: 知らせが点かない`);
+    }
+  });
+  //  STATUS に出る文字と、ヘッダーの点滅は同じところから決める。
+  //  別々に書くと「ふつう」と出ているのに知らせだけ点く、が起きる
+  it('知らせと STATUS の文字が、同じ状態から出ている', () => {
+    for(const st of [{}, { health:'SICK' }, { hunger:0 }, { mood:0 }]){
+      const api = at(st);
+      eq(api.statusAlert(), api.healthState() !== 'good', `${JSON.stringify(st)}: 知らせと文字が食い違う`);
+    }
+  });
+  it('マークが DAY の表示に掛からない', () => {
+    const api = at({});
+    const list = api.headIcons();
+    const right = api.headIconX(list.length-1, list.length) + api.HEAD_ICON_W;
+    ok(right + 2 <= 152, `いちばん右のマークが ${right}px まで来ていて、DAY(152px〜)に掛かる`);
+    // 左どうしが重ならない
+    for(let i=1;i<list.length;i++){
+      const prev = api.headIconX(i-1, list.length) + api.HEAD_ICON_W;
+      ok(api.headIconX(i, list.length) > prev, 'マークどうしが重なっている');
+    }
+  });
+  it('2つのマークは、見分けのつく別の絵', () => {
+    const { api } = load();
+    const a = JSON.stringify(api.DIARY_ICON), b = JSON.stringify(api.STATUS_ICON);
+    ok(a !== b, '日記とステータスが同じ絵');
+    eq(api.STATUS_ICON[0].length, api.DIARY_ICON[0].length, 'マークの横はば:');
+    eq(api.STATUS_ICON.length, api.DIARY_ICON.length, 'マークの縦はば:');
+  });
+});
+
 // ══ お世話アイコン ════════════════════════════════════════
 describe('お世話', () => {
   it('薄く表示される操作は、押しても状態を変えない', () => {
