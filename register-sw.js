@@ -55,9 +55,12 @@
 
     var bar = document.createElement('div');
     bar.id = 'sw-update-bar';
-    bar.innerHTML = '<span class="m">あたらしい バージョンが あります</span>' +
-                    '<button class="go">よみこみなおす</button>' +
-                    '<button class="later">あとで</button>';
+    // 文言は 設定した言語で出す（説明書は英語で読めるので、ここだけ日本語だと浮く）
+    var en = false;
+    try{ en = localStorage.getItem('myvader_lang') === 'en'; }catch(e){}
+    bar.innerHTML = '<span class="m">' + (en ? 'A new version is available' : 'あたらしい バージョンが あります') + '</span>' +
+                    '<button class="go">' + (en ? 'Reload' : 'よみこみなおす') + '</button>' +
+                    '<button class="later">' + (en ? 'Later' : 'あとで') + '</button>';
     // 押された時点の待機ワーカーを取り直してから送る。
     //  バーを出した時に掴んだ参照は、その後の更新で古くなっていることがあるため
     bar.querySelector('.go').onclick = function () {

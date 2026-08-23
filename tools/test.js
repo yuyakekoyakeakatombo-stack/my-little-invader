@@ -2731,6 +2731,42 @@ describe('ファイル', () => {
     // 位置は 言語に関係ない数だけで決まっている（フォントの大きさを見ていない）
     ok(!/pageMark\([^)]*uiFont/.test(src), 'ページ送りの印の位置が 字の大きさに引きずられている');
   });
+  // 説明書は 日本語と英語を1枚に持ち、根の data-lang で出し分ける。
+  //  はじめて遊ぶ人は 言語をえらぶ前に説明書を開けるので、こちらにも切り替えを置く
+  it('説明書が 日本語と英語の両方を持っている', () => {
+    const src = read('manual.html');
+    const ja = (src.match(/<span class="lang-ja">/g) || []).length;
+    const en = (src.match(/<span class="lang-en">/g) || []).length;
+    ok(ja > 200, `日本語の入れものが ${ja} しかない`);
+    eq(en, ja, '日本語と英語の入れものの数:');
+    // 出し分けの指定と、切り替えのボタン
+    ok(/html:not\(\[data-lang="en"\]\) \.lang-en\{ display:none \}/.test(src), '英語を隠す指定が無い');
+    ok(/html\[data-lang="en"\] \.lang-ja\{ display:none \}/.test(src), '日本語を隠す指定が無い');
+    ok(/id="lang-ja"/.test(src) && /id="lang-en"/.test(src), 'ことばの切り替えボタンが無い');
+    //  もともと使っている .en（英語の併記ラベル）とは 別の名前になっていること
+    ok(!/\.en\{ display:none \}/.test(src), '既存の .en（併記ラベル）を隠してしまっている');
+  });
+  it('説明書は ゲームと同じ設定を読み書きする', () => {
+    const src = read('manual.html');
+    ok(/localStorage\.getItem\(KEY\)/.test(src) && /localStorage\.setItem\(KEY, v\)/.test(src),
+       '説明書が 言語設定を読み書きしていない');
+    ok(/var KEY = 'myvader_lang';/.test(src), 'ゲームと同じキーを見ていない');
+  });
+  //  説明書でえらんだことばを、閉じたときに ゲーム側へ引き継ぐ
+  it('説明書を閉じると、ゲームの言語が追従する', () => {
+    const src = read('invader_game.html');
+    const m = src.match(/function closeManual\(\)\{[\s\S]*?\n  \}/);
+    ok(m, 'closeManual が見つからない');
+    ok(/myvader_lang/.test(m[0]) && /setLang\(v\)/.test(m[0]),
+       '説明書でえらんだことばを ゲームに引き継いでいない');
+  });
+  //  更新のおしらせは ゲームと説明書で共通。設定した言語で出す
+  it('更新のおしらせも、設定した言語で出る', () => {
+    const src = read('register-sw.js');
+    ok(/myvader_lang/.test(src), 'おしらせが 言語設定を見ていない');
+    ok(/A new version is available/.test(src) && /あたらしい バージョンが あります/.test(src),
+       'おしらせに 両方の言語が無い');
+  });
   it('サービスワーカーのVERSIONが日付の形をしている', () => {
     const m = read('sw.js').match(/const VERSION = '([^']+)'/);
     ok(m, 'VERSION が見つからない');

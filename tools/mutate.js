@@ -718,6 +718,8 @@ const MUTATIONS = [
   ['左向きの三角が 右向きになる',
    "      ctx.fillRect(x + (dir === 'left' ? i : t-1-i), y0 + (L-w)/2, 1, w);",
    "      ctx.fillRect(x + (t-1-i), y0 + (L-w)/2, 1, w);", 'caught'],
+  ['説明書を閉じても、えらんだ ことばを引き継がない',
+   "      const v = localStorage.getItem('myvader_lang') === 'en' ? 'en' : 'ja';\n      if(v !== lang) setLang(v);", "", 'caught'],
 ];
 
 const orig = fs.readFileSync(GAME, 'utf8');
