@@ -2752,8 +2752,13 @@
   //  育成画面のヘッダーで選んでいるマーク（null＝選んでいない）。
   //  上でヘッダーに入り、左右で移り、下かBで抜ける。Aでその画面へ飛ぶ
   let headSel = null;
-  const HEAD_ICON_W = 8, HEAD_ICON_GAP = 6;
-  const HEAD_IY = 7;            // px。名前・日数の文字の高さにそろえる
+  //  ヘッダーの帯は 0〜32px（区切り線が32px）あるのに、9pxぶんしか使って
+  //  いなかった。マークを 8x8 で描くと歯車が潰れて何か分からないので、
+  //  文字ごと大きくして 12x12 にし、帯のまん中に置く
+  const HEAD_FONT = 8;          // px。名前と日数の文字の大きさ
+  const HEAD_TEXT_Y = 12;       // px。文字の上端（帯のまん中にそろえる）
+  const HEAD_ICON_W = 12, HEAD_ICON_H = 12, HEAD_ICON_GAP = 4;
+  const HEAD_IY = 10;           // px。マークの上端（文字と中心をそろえる）
   //  いま出せるマークを左から並べて返す
   function headIcons(){
     const list = [];
@@ -2780,7 +2785,7 @@
   }
   //  マークの並びは右づめ。日数の左に置く
   function headIconX(i, n){
-    const right = 142;                                      // px。DAY表示(152px〜)の手前で止める
+    const right = 138;                                      // px。DAY表示(144px〜)の手前で止める
     return right - (n - i) * (HEAD_ICON_W + HEAD_ICON_GAP) + HEAD_ICON_GAP;
   }
   //  ヘッダーのマークを描く。ふだんは薄色、知らせがあるときだけ濃い色で点滅
@@ -2790,7 +2795,7 @@
     list.forEach((k, i) => {
       const x = headIconX(i, list.length);
       const sel = (headSel === k);
-      if(sel){ ctxM.fillStyle = DM; ctxM.fillRect(x-2, HEAD_IY-2, HEAD_ICON_W+4, 13); }   // 選択中は薄色で囲む
+      if(sel){ ctxM.fillStyle = DM; ctxM.fillRect(x-2, HEAD_IY-2, HEAD_ICON_W+4, HEAD_ICON_H+4); }   // 選択中は薄色で囲む
       // 選んでいるあいだは濃い色で描く。薄色のままだと、薄色の枠に溶けて消える。
       //  せっていは知らせを持たないぶん、いつも濃い色で点けておく
       const blink = headAlert(k) && (fM % 16 < 10);
@@ -2804,28 +2809,34 @@
   //  中の横線は3本。書いてあるページに見せるための線なので、
   //  減らすと ただの箱になってノートに見えなくなる
   const DIARY_ICON = [
-    [1,1,1,1,1,1,1,1],
-    [1,1,0,0,0,0,0,1],
-    [1,1,0,1,1,1,0,1],
-    [1,1,0,0,0,0,0,1],
-    [1,1,0,1,1,1,0,1],
-    [1,1,0,0,0,0,0,1],
-    [1,1,0,1,1,1,0,1],
-    [1,1,0,0,0,0,0,1],
-    [1,1,1,1,1,1,1,1],
+    [1,1,1,1,1,1,1,1,1,1,1,1],
+    [1,1,0,0,0,0,0,0,0,0,0,1],
+    [1,1,0,0,0,0,0,0,0,0,0,1],
+    [1,1,0,1,1,1,1,1,1,1,0,1],
+    [1,1,0,0,0,0,0,0,0,0,0,1],
+    [1,1,0,0,0,0,0,0,0,0,0,1],
+    [1,1,0,1,1,1,1,1,1,1,0,1],
+    [1,1,0,0,0,0,0,0,0,0,0,1],
+    [1,1,0,0,0,0,0,0,0,0,0,1],
+    [1,1,0,1,1,1,1,1,1,1,0,1],
+    [1,1,0,0,0,0,0,0,0,0,0,1],
+    [1,1,1,1,1,1,1,1,1,1,1,1],
   ];
   // せっていのマーク。歯車。上下左右に歯を出し、まん中を抜いてある。
   //  日記（四角）ともステータス（棒）とも silhouette が重ならない形にした
   const GEAR_ICON = [
-    [0,0,1,0,0,1,0,0],
-    [0,0,1,1,1,1,0,0],
-    [0,1,1,1,1,1,1,0],
-    [1,1,1,0,0,1,1,1],
-    [1,1,0,0,0,0,1,1],
-    [1,1,1,0,0,1,1,1],
-    [0,1,1,1,1,1,1,0],
-    [0,0,1,1,1,1,0,0],
-    [0,0,1,0,0,1,0,0],
+    [0,0,0,0,0,1,1,0,0,0,0,0],
+    [0,0,0,0,0,1,1,0,0,0,0,0],
+    [0,0,1,1,1,1,1,1,1,1,0,0],
+    [0,0,1,1,1,1,1,1,1,1,0,0],
+    [0,0,1,1,1,0,0,1,1,1,0,0],
+    [1,1,1,1,0,0,0,0,1,1,1,1],
+    [1,1,1,1,0,0,0,0,1,1,1,1],
+    [0,0,1,1,1,0,0,1,1,1,0,0],
+    [0,0,1,1,1,1,1,1,1,1,0,0],
+    [0,0,1,1,1,1,1,1,1,1,0,0],
+    [0,0,0,0,0,1,1,0,0,0,0,0],
+    [0,0,0,0,0,1,1,0,0,0,0,0],
   ];
   // ステータスのマーク。横向きの棒グラフ。
   //  縦の棒だと携帯の電波マークに見えるので、横に寝かせて左に軸を引く。
@@ -2833,15 +2844,18 @@
   //  「長い・短い・長い」と対称に並べると E の字に見えるので、
   //  かならず一方向に伸ばす（そろえても letter には見えない）
   const STATUS_ICON = [
-    [1,0,0,0,0,0,0,0],
-    [1,1,1,1,0,0,0,0],
-    [1,1,1,1,0,0,0,0],
-    [1,0,0,0,0,0,0,0],
-    [1,1,1,1,1,1,0,0],
-    [1,1,1,1,1,1,0,0],
-    [1,0,0,0,0,0,0,0],
-    [1,1,1,1,1,1,1,1],
-    [1,1,1,1,1,1,1,1],
+    [1,0,0,0,0,0,0,0,0,0,0,0],
+    [1,1,1,1,1,0,0,0,0,0,0,0],
+    [1,1,1,1,1,0,0,0,0,0,0,0],
+    [1,1,1,1,1,0,0,0,0,0,0,0],
+    [1,0,0,0,0,0,0,0,0,0,0,0],
+    [1,1,1,1,1,1,1,1,0,0,0,0],
+    [1,1,1,1,1,1,1,1,0,0,0,0],
+    [1,1,1,1,1,1,1,1,0,0,0,0],
+    [1,0,0,0,0,0,0,0,0,0,0,0],
+    [1,1,1,1,1,1,1,1,1,1,1,1],
+    [1,1,1,1,1,1,1,1,1,1,1,1],
+    [1,1,1,1,1,1,1,1,1,1,1,1],
   ];
   // 1キャンバスpxきざみで絵を置く（座標もpx）。文字と並べる小さなアイコン用
   function stampPx(ctx, g, px0, py0, col){
@@ -4350,10 +4364,10 @@
   let ghostT = 0;
   function drawGhost(BG, DM, NK){
     ctxM.fillStyle = BG; ctxM.fillRect(0,0,W*S,H*S);
-    ctxM.font='7px "Press Start 2P"'; ctxM.textBaseline='top'; ctxM.fillStyle=NK;
-    ctxM.font=nameFont(7, pet.name); ctxM.textAlign='left';  ctxM.fillText(pet.name||'------', 2*S, 2*S);
-    ctxM.font='7px "Press Start 2P"';   // DAYカウントは常にピクセル字体
-    ctxM.textAlign='right'; ctxM.fillText(dayLabel(), (W-2)*S, 2*S);
+    ctxM.font=HEAD_FONT+'px "Press Start 2P"'; ctxM.textBaseline='top'; ctxM.fillStyle=NK;
+    ctxM.font=nameFont(HEAD_FONT, pet.name); ctxM.textAlign='left';  ctxM.fillText(pet.name||'------', 2*S, HEAD_TEXT_Y);
+    ctxM.font=HEAD_FONT+'px "Press Start 2P"';   // DAYカウントは常にピクセル字体
+    ctxM.textAlign='right'; ctxM.fillText(dayLabel(), (W-2)*S, HEAD_TEXT_Y);
     for(let x=0;x<W;x++) dot(ctxM,x,HEADER_Y,DM);
     for(let x=0;x<W;x++) dot(ctxM,x,MAIN_GY,NK);
     for(let x=0;x<W;x+=3) dot(ctxM,x,MAIN_GY-1,DM);
@@ -4586,10 +4600,10 @@
   //  日記マークは残るので、ヘッダーから最後のことばを読み返せる
   function drawGone(BG, DM, NK){
     ctxM.fillStyle = BG; ctxM.fillRect(0,0,W*S,H*S);
-    ctxM.font='7px "Press Start 2P"'; ctxM.textBaseline='top'; ctxM.fillStyle=NK;
-    ctxM.font=nameFont(7, pet.name); ctxM.textAlign='left';  ctxM.fillText(pet.name||'------', 2*S, 2*S);
-    ctxM.font='7px "Press Start 2P"';
-    ctxM.textAlign='right'; ctxM.fillText(dayLabel(), (W-2)*S, 2*S);
+    ctxM.font=HEAD_FONT+'px "Press Start 2P"'; ctxM.textBaseline='top'; ctxM.fillStyle=NK;
+    ctxM.font=nameFont(HEAD_FONT, pet.name); ctxM.textAlign='left';  ctxM.fillText(pet.name||'------', 2*S, HEAD_TEXT_Y);
+    ctxM.font=HEAD_FONT+'px "Press Start 2P"';
+    ctxM.textAlign='right'; ctxM.fillText(dayLabel(), (W-2)*S, HEAD_TEXT_Y);
     // 日記のマークは残るので、ここから最後のことばを読み返せる
     drawHeadIcons(DM, NK);
     for(let x=0;x<W;x++) dot(ctxM,x,HEADER_Y,DM);
@@ -4764,22 +4778,23 @@
     ctxM.fillStyle = BG; ctxM.fillRect(0,0,W*S,H*S);
 
     // 名前と日数（未命名時は NAME:???? の????を黒/薄緑で点滅。十字上で選択→Aで命名画面へ）
-    ctxM.font='7px "Press Start 2P"';
+    ctxM.font=HEAD_FONT+'px "Press Start 2P"';
     ctxM.textBaseline='top'; ctxM.textAlign='left';
     if(pet.name){
-      ctxM.font=nameFont(7, pet.name); ctxM.fillStyle=NK; ctxM.fillText(pet.name, 2*S, 2*S);
+      ctxM.font=nameFont(HEAD_FONT, pet.name); ctxM.fillStyle=NK; ctxM.fillText(pet.name, 2*S, HEAD_TEXT_Y);
     } else if(nameSelActive){
-      // 選択中：黒塗り帯に白抜き（反転）で明示
-      for(let dx=1;dx<19;dx++) for(let dy=1;dy<5;dy++) dot(ctxM,dx,dy,NK);
-      ctxM.fillStyle=BG; ctxM.fillText('NAME:????', 2*S, 2*S);
+      // 選択中：黒塗り帯に白抜き（反転）で明示。帯は文字の高さに合わせる
+      const y0 = Math.floor((HEAD_TEXT_Y-2)/S), y1 = Math.ceil((HEAD_TEXT_Y+HEAD_FONT+1)/S);
+      for(let dx=1;dx<21;dx++) for(let dy=y0;dy<y1;dy++) dot(ctxM,dx,dy,NK);
+      ctxM.fillStyle=BG; ctxM.fillText('NAME:????', 2*S, HEAD_TEXT_Y);
     } else {
-      ctxM.fillStyle=NK; ctxM.fillText('NAME:', 2*S, 2*S);
+      ctxM.fillStyle=NK; ctxM.fillText('NAME:', 2*S, HEAD_TEXT_Y);
       ctxM.fillStyle=(fM%10<5) ? NK : BG;   // 薄色だと読めないので、濃↔消で点滅させる
-      ctxM.fillText('????', 2*S + 35, 2*S);   // 'NAME:'=5文字×7px
+      ctxM.fillText('????', 2*S + 5*HEAD_FONT, HEAD_TEXT_Y);   // 'NAME:'は5文字
     }
-    ctxM.font='7px "Press Start 2P"';   // DAYカウントは常にピクセル字体（名前がかなでも影響させない）
+    ctxM.font=HEAD_FONT+'px "Press Start 2P"';   // DAYカウントは常にピクセル字体（名前がかなでも影響させない）
     ctxM.fillStyle=NK;
-    ctxM.textAlign='right'; ctxM.fillText(dayLabel(),  (W-2)*S, 2*S);
+    ctxM.textAlign='right'; ctxM.fillText(dayLabel(),  (W-2)*S, HEAD_TEXT_Y);
     // 名前と日数のあいだにマーク（十字上でヘッダーへ、左右で移り、Aで開く）
     drawHeadIcons(DM, NK);
     for(let x=0;x<W;x++) dot(ctxM,x,HEADER_Y,DM);
@@ -5311,7 +5326,7 @@
   // 項目はキーで管理（表示ラベルは言語辞書、値は各キーで分岐）
   //  版の番号は sw.js の VERSION と同じもの。tools/bump-sw.sh が両方いっしょに
   //  書き換える（ずれると、テスターの端末に出ている版が分からなくなる）
-  const APP_VERSION = '2026-08-23-15';
+  const APP_VERSION = '2026-08-23-16';
   //  (C) は Press Start 2P に © が無く、別の字体に落ちて1文字だけ形が浮くため
   const APP_COPY = '(C) 2026 Studio M.D.Q.';
   const SETTINGS_KEYS = ['language','weather','sound','bodycolor','version','reset'];
@@ -5357,10 +5372,10 @@
   function tickMenu(){
     ctxN.fillStyle=OFF; ctxN.fillRect(0,0,W*S,H*S);
     // 名前と日数
-    ctxN.font='7px "Press Start 2P"';
+    ctxN.font=HEAD_FONT+'px "Press Start 2P"';
     ctxN.textBaseline='top'; ctxN.fillStyle=ON;
-    ctxN.font=nameFont(7, pet.name); ctxN.textAlign='left';  ctxN.fillText(pet.name||'????', 2*S, 2*S); ctxN.font='7px "Press Start 2P"';
-    ctxN.textAlign='right'; ctxN.fillText(dayLabel(),  (W-2)*S, 2*S);
+    ctxN.font=nameFont(HEAD_FONT, pet.name); ctxN.textAlign='left';  ctxN.fillText(pet.name||'????', 2*S, HEAD_TEXT_Y); ctxN.font=HEAD_FONT+'px "Press Start 2P"';
+    ctxN.textAlign='right'; ctxN.fillText(dayLabel(),  (W-2)*S, HEAD_TEXT_Y);
     for(let x=0;x<W;x++) dot(ctxN,x,HEADER_Y,DIM);   // 育成画面と同じ位置（以前は1ドット下だった）
 
     if (inSettings) {

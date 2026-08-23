@@ -284,12 +284,31 @@ describe('ヘッダーのマーク', () => {
   it('マークが DAY の表示に掛からない', () => {
     const api = at({});
     const list = api.headIcons();
+    // DAY表示は「DAY : 99」の8文字。Press Start 2P は1文字＝文字の大きさ
+    const dayLeft = 54*4 - 2*4 - 8*api.HEAD_FONT;
     const right = api.headIconX(list.length-1, list.length) + api.HEAD_ICON_W;
-    ok(right + 2 <= 152, `いちばん右のマークが ${right}px まで来ていて、DAY(152px〜)に掛かる`);
+    ok(right + 2 <= dayLeft, `いちばん右のマークが ${right}px まで来ていて、DAY(${dayLeft}px〜)に掛かる`);
     // 左どうしが重ならない
     for(let i=1;i<list.length;i++){
       const prev = api.headIconX(i-1, list.length) + api.HEAD_ICON_W;
       ok(api.headIconX(i, list.length) > prev, 'マークどうしが重なっている');
+    }
+  });
+  //  ヘッダーの帯（0〜区切り線）に、文字もマークも収まっていること
+  it('文字とマークが、ヘッダーの帯に収まっている', () => {
+    const { api } = load();
+    const band = api.HEADER_Y * 4;
+    ok(api.HEAD_TEXT_Y + api.HEAD_FONT <= band, `文字が帯からはみ出す（下端 ${api.HEAD_TEXT_Y+api.HEAD_FONT} / 帯 ${band}）`);
+    ok(api.HEAD_IY + api.HEAD_ICON_H <= band, `マークが帯からはみ出す（下端 ${api.HEAD_IY+api.HEAD_ICON_H} / 帯 ${band}）`);
+    // 文字とマークの中心がそろっている（片方だけ浮いて見えないように）
+    const tc = api.HEAD_TEXT_Y + api.HEAD_FONT/2, ic = api.HEAD_IY + api.HEAD_ICON_H/2;
+    ok(Math.abs(tc - ic) <= 1, `文字(${tc})とマーク(${ic})の中心がずれている`);
+  });
+  it('3つのマークが、同じ大きさで描かれている', () => {
+    const { api } = load();
+    for(const [name, g] of [['日記', api.DIARY_ICON], ['ステータス', api.STATUS_ICON], ['せってい', api.GEAR_ICON]]){
+      eq(g[0].length, api.HEAD_ICON_W, `${name} の横はば:`);
+      eq(g.length, api.HEAD_ICON_H, `${name} の縦はば:`);
     }
   });
   it('2つのマークは、見分けのつく別の絵', () => {
