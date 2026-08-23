@@ -254,22 +254,40 @@ describe('ヘッダーのマーク', () => {
     ok(frame, '選択中の枠が薄色(DM)で描かれていない');
     ok(/\(sel \|\| blink\) \? NK : DM/.test(src), 'えらんでいるマークが濃い色(NK)にならない（枠に溶ける）');
   });
-  //  棒グラフにしたら 携帯の電波マークに見えたので折れ線にした。
-  //  折れ線に見えるには、列ごとに1ドットで、段差が1マスずつであること
-  it('ステータスのマークが、途切れない折れ線になっている', () => {
+  //  縦の棒だと携帯の電波マークに見えるので、横に寝かせてある。
+  //  グラフに見えるには、左に軸があって、長さの違う棒が横に伸びていること
+  it('ステータスのマークが、横向きの棒グラフになっている', () => {
     const { api } = load();
-    const g = api.STATUS_ICON;
-    const base = g.length - 1;                      // いちばん下は土台の線
-    ok(g[base].every(v => v), '土台の線が無い');
-    const ys = [];
-    for(let x=0;x<g[0].length;x++){
-      const col = [];
-      for(let y=0;y<base;y++) if(g[y][x]) col.push(y);
-      eq(col.length, 1, `${x}列目のドットの数（棒ではなく線であること）:`);
-      ys.push(col[0]);
+    const g = api.STATUS_ICON, H = g.length, W = g[0].length;
+    ok(g.every(r => r[0]), '左の軸が通っていない');
+    // 軸より右に、軸から続いて伸びているマスの数＝その行の棒の長さ
+    const rowLen = y => {
+      let n = 0;
+      while(1 + n < W && g[y][1+n]) n++;
+      eq(g[y].slice(1).filter(v => v).length, n, `${y}行目の棒が途中で切れている:`);
+      return n;
+    };
+    // 続いている行をひとまとめにして「1本の棒」として数える
+    const bars = [];
+    for(let y=0;y<H;y++){
+      const n = rowLen(y);
+      if(!n){ continue; }
+      const prev = bars[bars.length-1];
+      if(prev && prev.end === y-1){ prev.end = y; prev.len = Math.max(prev.len, n); }
+      else bars.push({ start:y, end:y, len:n });
     }
-    for(let i=1;i<ys.length;i++)
-      eq(Math.abs(ys[i]-ys[i-1]), 1, `${i-1}列目と${i}列目の段差（1マスでないと線が切れる）:`);
+    eq(bars.length, 3, '棒の本数（STATUS の目盛り3本にそろえる）:');
+    const lens = bars.map(b => b.len);
+    eq(new Set(lens).size, 3, `棒の長さが かぶっている（${lens}）。グラフに見えない:`);
+  });
+  //  この大きさで横線を3本入れると潰れて網に見える。1本だけにしてある
+  it('日記のマークの中の横線は1本', () => {
+    const { api } = load();
+    const g = api.DIARY_ICON, H = g.length, W = g[0].length;
+    // 綴じ側(0,1列)と外枠を除いた「紙の中」で、線が引かれている行を数える
+    let lines = 0;
+    for(let y=1;y<H-1;y++) if(g[y].slice(3, W-1).some(v => v)) lines++;
+    eq(lines, 1, '紙の中の横線の数:');
   });
 });
 
