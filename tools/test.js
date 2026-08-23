@@ -179,15 +179,22 @@ describe('タイトルの選択肢', () => {
     eq(api.openStep, 0, 'いきなり選択肢が出ている:');
     eq(api.openSel, 0, 'はじめに選ばれているもの（START）:');
   });
-  //  A を押したら まず ことばえらび。いきなり始まると 説明書を読む機会が無い
-  it('A を押すと、まず ことばえらびが出る', () => {
-    ok(/if\(openStep === 0\)\{ openStep = 1; langSel = \(lang === 'en'\) \? 1 : 0; return; \}/.test(src()),
-       'A で いきなり始まってしまう（ことばえらびを出していない）');
+  //  A を押したら まず はじめる・説明書。いきなり始まると 説明書を読む機会が無い
+  it('A を押すと、まず はじめる・説明書 が出る', () => {
+    ok(/if\(openStep === 0\)\{ openStep = 1; openSel = 0; return; \}/.test(src()),
+       'A で いきなり始まってしまう（選択肢を出していない）');
   });
-  //  ことばを決めてから はじめる・説明書。説明書も本編も その言語で読ませる
-  it('ことばをえらぶのは、はじめる・説明書 より前', () => {
-    ok(/if\(openStep === 1\)\{ setLang\(LANG_OPTS\[langSel\]\.k\); openStep = 2; openSel = 0; return; \}/.test(src()),
-       'ことばえらびから 次へ進めない');
+  //  ことばを聞くのは START のあと。説明書を見にきただけの人にはえらばせない
+  it('ことばをえらぶのは、START のあと', () => {
+    ok(/openStep = 2; langSel = \(lang === 'en'\) \? 1 : 0; return;/.test(src()),
+       'START から ことばえらびへ進まない');
+    // 説明書の枝は ことばえらびを通らない
+    const m = src().match(/if\(OPEN_OPTS\[openSel\] === 'MANUAL'\)\{[\s\S]{0,200}?\}/);
+    ok(m && !/openStep = 2/.test(m[0]), 'MANUAL なのに ことばをえらばされる');
+  });
+  it('ことばを決めた時点で、はじまる', () => {
+    ok(/setLang\(LANG_OPTS\[langSel\]\.k\);\s*\n\s*if\(!pet\.name && !pet\.birth\) startArrival\(\);/.test(src()),
+       'ことばを決めても ゲームが始まらない');
   });
   it('ことばは 2つ、それぞれの言語で書いてある', () => {
     const { api } = load();
