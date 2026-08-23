@@ -169,28 +169,35 @@ describe('病気', () => {
 //   まだ言語を選んでいない場所なので、ここは英語で出す
 describe('タイトルの選択肢', () => {
   const src = () => require('fs').readFileSync(require('path').join(__dirname, '..', 'invader_game.html'), 'utf8');
-  it('えらべるのは はじめると 説明書のふたつ', () => {
+  //  説明書が上、はじめるが下。読んでから始めてほしいので この順
+  it('えらべるのは 説明書と はじめるのふたつ、説明書が上', () => {
     const { api } = load();
-    eq(api.OPEN_OPTS, ['START', 'MANUAL'], 'タイトルの選択肢:');
+    eq(api.OPEN_OPTS, ['MANUAL', 'START'], 'タイトルの選択肢（上から）:');
     for(const t of api.OPEN_OPTS) ok(/^[\x20-\x7E]+$/.test(t), `${t}: 英語で書かれていない`);
   });
-  it('はじめは たたんである', () => {
+  it('はじめは いちばん上を選んでいる', () => {
     const { api } = load();
-    eq(api.openStep, 0, 'いきなり選択肢が出ている:');
-    eq(api.openSel, 0, 'はじめに選ばれているもの（START）:');
+    eq(api.openStep, 0, 'いきなり ことばえらびが出ている:');
+    eq(api.openSel, 0, 'はじめに選ばれているもの:');
   });
-  //  A を押したら まず はじめる・説明書。いきなり始まると 説明書を読む機会が無い
-  it('A を押すと、まず はじめる・説明書 が出る', () => {
-    ok(/if\(openStep === 0\)\{ openStep = 1; openSel = 0; return; \}/.test(src()),
-       'A で いきなり始まってしまう（選択肢を出していない）');
+  //  PRESS A は出さない。タイトルの下に そのまま並べる
+  it('PRESS A を出さない', () => {
+    ok(!/fillText\('PRESS/.test(src()), 'PRESS A を描くところが残っている');
+    ok(!/PRESS\s+A/.test(src().replace(/\/\/[^\n]*/g, '')), 'PRESS A が残っている');
+  });
+  //  選択肢が見えていないうちに押された A で、見えていないものが決まってしまわないように。
+  //  そのぶん、押したら待ちを飛ばして すぐ選択肢を出す
+  it('選択肢が出る前の A は、待ちを飛ばすだけ', () => {
+    ok(/if\(!openingReady\)\{ titleWait = 20; openingReady = true; return; \}/.test(src()),
+       '選択肢が見えていないうちに A で決まってしまう');
   });
   //  ことばを聞くのは START のあと。説明書を見にきただけの人にはえらばせない
   it('ことばをえらぶのは、START のあと', () => {
-    ok(/openStep = 2; langSel = \(lang === 'en'\) \? 1 : 0; return;/.test(src()),
+    ok(/openStep = 1; langSel = \(lang === 'en'\) \? 1 : 0; return;/.test(src()),
        'START から ことばえらびへ進まない');
     // 説明書の枝は ことばえらびを通らない
     const m = src().match(/if\(OPEN_OPTS\[openSel\] === 'MANUAL'\)\{[\s\S]{0,200}?\}/);
-    ok(m && !/openStep = 2/.test(m[0]), 'MANUAL なのに ことばをえらばされる');
+    ok(m && !/openStep = 1/.test(m[0]), 'MANUAL なのに ことばをえらばされる');
   });
   it('ことばを決めた時点で、はじまる', () => {
     ok(/setLang\(LANG_OPTS\[langSel\]\.k\);\s*\n\s*if\(!pet\.name && !pet\.birth\) startArrival\(\);/.test(src()),
@@ -2475,11 +2482,12 @@ describe('ファイル', () => {
   });
   // オープニングの描画はテストから読めないので、字の大きさをソースで押さえる。
   //  小さすぎて「押していい」ことが伝わらなかった
-  it('タイトルの PRESS A が、読める大きさで描かれている', () => {
+  it('タイトルの選択肢が、読める大きさで描かれている', () => {
     const src = read('invader_game.html');
-    const m = src.match(/ctxO\.font = '(\d+)px "Press Start 2P"';\s*\n\s*if\(openStep === 0\)\{/);
-    ok(m, 'PRESS A の字の指定が見つからない');
-    ok(Number(m[1]) >= 8, `PRESS A が小さい（${m[1]}px）`);
+    const m = src.match(/ctxO\.font = o\.jp \? \('(\d+)px ' \+ JP_FONT\) : '(\d+)px "Press Start 2P"';/);
+    ok(m, '選択肢の字の指定が見つからない');
+    ok(Number(m[1]) >= 10, `かなの選択肢が小さい（${m[1]}px）`);
+    ok(Number(m[2]) >= 8, `英語の選択肢が小さい（${m[2]}px）`);
   });
   // 十字キーの処理は画面の操作の中にあり、テストから呼べない。
   //  アイコンから下へ降りた着地点が「左の列の先頭」であることをソースで押さえる

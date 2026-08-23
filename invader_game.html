@@ -600,13 +600,13 @@
 
   let fO=0, openingReady=false, openingDone=false;
   let titleWait=0; // アニメ後の待機カウンタ
-  //  タイトルで A を押したあとの流れ。
-  //   0＝PRESS A ／ 1＝はじめる・説明書 ／ 2＝ことばをえらぶ
+  //  タイトルの下に出す選択肢。0＝はじめる・説明書 ／ 1＝ことばをえらぶ。
   //  ことばを聞くのは START を選んだあと。説明書を見にきただけの人に
   //  えらばせずに済む。ことばの名前は それぞれの言語で書く
   const LANG_OPTS = [{ k:'ja', t:'にほんご', jp:true }, { k:'en', t:'ENGLISH', jp:false }];
-  //  ことばを決める前なので、ここは英語のまま
-  const OPEN_OPTS = ['START', 'MANUAL'];
+  //  ことばを決める前なので、ここは英語のまま。
+  //  読んでから始めてほしいので、説明書を上に置く
+  const OPEN_OPTS = ['MANUAL', 'START'];
   let openStep = 0, openSel = 0, langSel = 0;
 
   function tickOpening(){
@@ -633,7 +633,7 @@
       if(fO >= O_TOTAL) openingDone = true;
     }
 
-    // ── タイトル＋PRESS A ──
+    // ── タイトル＋選択肢 ──
     //  UFOが去りきった時点で出す。キャラが歩き去る動きはこの裏で続く
     if(scene!=='opening') return;
     if(openingDone || fO >= O_UFO_GONE){
@@ -650,49 +650,43 @@
       ctxO.font = '11px "Press Start 2P"';
       ctxO.fillText('Invader', cx, 26*S);
 
-      // 一拍（約1.5秒=19フレーム）後にPRESS A点滅
-      if(titleWait > 19 || openStep){
+      // 一拍（約1.5秒=19フレーム）おいてから、タイトルの下に選択肢を並べる。
+      //  選んでいるほうの左に > を置く。
+      //  かなは ピクセル字体にグリフが無いので、ゴシック体で少し大きく描く
+      if(titleWait > 19){
         if(!openingReady) openingReady = true;
-        ctxO.font = '8px "Press Start 2P"';
-        if(openStep === 0){
-          const blink = Math.floor(titleWait / 9) % 2 === 0;
-          ctxO.fillStyle = blink ? ON : OFF;   // 薄色だと点滅の半分が読めない
-          ctxO.fillText('PRESS  A', cx, 35*S);
-        } else {
-          // ふたつの選択肢。選んでいるほうの左に > を置く。
-          //  かなは ピクセル字体にグリフが無いので、ゴシック体で少し大きく描く
-          const list = (openStep === 2) ? LANG_OPTS : OPEN_OPTS.map(t => ({ t, jp:false }));
-          const sel  = (openStep === 2) ? langSel : openSel;
-          list.forEach((o, i) => {
-            const y = (34 + i*9) * S;
-            ctxO.font = o.jp ? ('10px ' + JP_FONT) : '8px "Press Start 2P"';
-            ctxO.fillStyle = ON;
-            ctxO.fillText(o.t, cx, y);
-            if(i === sel){
-              const w = ctxO.measureText(o.t).width;
-              ctxO.font = '8px "Press Start 2P"';
-              ctxO.fillText('>', cx - w/2 - 10, y);
-            }
-          });
-        }
+        const list = (openStep === 1) ? LANG_OPTS : OPEN_OPTS.map(t => ({ t, jp:false }));
+        const sel  = (openStep === 1) ? langSel : openSel;
+        list.forEach((o, i) => {
+          const y = (34 + i*9) * S;
+          ctxO.font = o.jp ? ('10px ' + JP_FONT) : '8px "Press Start 2P"';
+          ctxO.fillStyle = ON;
+          ctxO.fillText(o.t, cx, y);
+          if(i === sel){
+            const w = ctxO.measureText(o.t).width;
+            ctxO.font = '8px "Press Start 2P"';
+            ctxO.fillText('>', cx - w/2 - 10, y);
+          }
+        });
       }
     }
   }
 
   setInterval(tickOpening, 80);
 
-  // A：まず ふたつの選択肢を出す。選んだあとに、はじめる／説明書を開く
+  // A：えらんだものを決める（説明書を開く／ことばへ進む／はじめる）
   onPress(document.getElementById('oa'), ()=>{
     if(manualFrame) return;                       // 説明書を開いているあいだは効かせない
     playClick(); btnAnim(document.getElementById('oa'));
-    if(openStep === 0){ openStep = 1; openSel = 0; return; }
-    if(openStep === 1){
+    // 選択肢が出るのを待たずに押されたら、待ちを飛ばして出す
+    if(!openingReady){ titleWait = 20; openingReady = true; return; }
+    if(openStep === 0){
       if(OPEN_OPTS[openSel] === 'MANUAL'){
         openManual();                             // 閉じると この選択肢に戻ってくる
         return;
       }
       // START → ことばをえらぶ。いま設定されているほうに合わせておく
-      openStep = 2; langSel = (lang === 'en') ? 1 : 0; return;
+      openStep = 1; langSel = (lang === 'en') ? 1 : 0; return;
     }
     // ことばを決めて はじめる。
     //  新規ゲーム（未命名・誕生前）なら、育成画面でビーム到着の演出から始める
@@ -701,20 +695,20 @@
     openStep = 0;
     showView('main');
   });
-  // B：ひとつ前に戻す（はじめる・説明書 → ことば → PRESS A）
+  // B：ことばえらびから、はじめる・説明書 に戻す
   onPress(document.getElementById('ob'), ()=>{
     if(manualFrame) return;
     playClick(); btnAnim(document.getElementById('ob'));
-    openStep = Math.max(0, openStep - 1);
+    openStep = 0;
   });
   document.querySelectorAll('#view-opening .dpad-arrow').forEach(el=>{
     onPress(el, ()=>{
-      if(manualFrame || !openStep) return;
+      if(manualFrame || !openingReady) return;
       playClick(900); dpadAnim(el);
-      const n = (openStep === 2) ? LANG_OPTS.length : OPEN_OPTS.length;
+      const n = (openStep === 1) ? LANG_OPTS.length : OPEN_OPTS.length;
       const d = el.classList.contains('up') ? n-1 : el.classList.contains('down') ? 1 : 0;
       if(!d) return;
-      if(openStep === 2) langSel = (langSel + d) % n;
+      if(openStep === 1) langSel = (langSel + d) % n;
       else               openSel = (openSel + d) % n;
     });
   });
@@ -5401,7 +5395,7 @@
   // 項目はキーで管理（表示ラベルは言語辞書、値は各キーで分岐）
   //  版の番号は sw.js の VERSION と同じもの。tools/bump-sw.sh が両方いっしょに
   //  書き換える（ずれると、テスターの端末に出ている版が分からなくなる）
-  const APP_VERSION = '2026-08-23-24';
+  const APP_VERSION = '2026-08-23-25';
   //  (C) は Press Start 2P に © が無く、別の字体に落ちて1文字だけ形が浮くため
   const APP_COPY = '(C) 2026 Studio M.D.Q.';
   const SETTINGS_KEYS = ['language','weather','sound','bodycolor','version','reset'];
@@ -5850,7 +5844,7 @@
           ufoEnding = false; ufoT = 0; departEnding = false; departT = 0; invadeEnding = false; invadeT = 0; invadeGoneAt = 0; evoT = 0;
           // オープニングは最初から流し直す。openingDone と titleWait も戻さないと、
           //  一度再生済みのフラグが残ったままで、UFOが降りてくる場面を飛ばして
-          //  いきなりタイトルと PRESS A が出てしまう
+          //  いきなりタイトルと選択肢が出てしまう
           applyBodyColor(); showView('opening');
           fO=0; openingReady=false; openingDone=false; titleWait=0; openStep=0; openSel=0; langSel=0;
         }
