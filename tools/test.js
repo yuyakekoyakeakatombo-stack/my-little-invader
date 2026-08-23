@@ -2668,6 +2668,41 @@ describe('ファイル', () => {
     ok(/THEIR/.test(api.T('nameq')), `英語の見出しが この子を指していない（${api.T('nameq')}）`);
     api.lang = 'ja';
   });
+  //  来たばかりの子を 満たされた状態で置かない。
+  //  さっそく世話をする余地があるようにしておく
+  it('到着直後の おなかと きげん', () => {
+    const { api } = load();
+    const p = api.defaultPet();
+    const lit = v => Math.round(v * 2);            // 目盛りは10本（1目盛り＝0.5）
+    eq(lit(p.hunger), 5, 'おなかの目盛り（満タン10の半分）:');
+    eq(lit(p.mood), 4, 'きげんの目盛り（満タン10から4目盛りぶん下）:');
+    ok(p.hunger > 1, 'はじめから ひもじい扱いになっている');
+    ok(p.mood > 1, 'はじめから きげんが底になっている');
+  });
+  //  おなかが 0.5刻みになったので、1ずつ引くと 0 を通りこして負になりうる。
+  //  負になると「ちょうど0」で見ている はらぺこ判定が しなくなる
+  it('おなかが 0より下に行かない', () => {
+    const { api, clock } = load();
+    const t0 = clock.now();
+    Object.assign(api.pet, api.defaultPet(), { name:'A', stage:'larva', birth:t0, lastTick:t0, EP:2, B:40 });
+    const hm = api.hungerMin();
+    const seen = [];
+    for(let i=0;i<12;i++){ clock.advance(hm*60000); api.advancePet(); seen.push(api.pet.hunger); }
+    ok(!seen.some(v => v < 0), `おなかが負になった: ${seen.join(',')}`);
+    ok(seen.includes(0), `ちょうど0を通らない（はらぺこ判定が効かない）: ${seen.join(',')}`);
+  });
+  //  ミニゲームで遊んだぶんの減りも、同じく 0で止まること
+  it('ミニゲームで遊んでも、おなかが 0より下に行かない', () => {
+    const { api, clock, store } = load();
+    const t0 = clock.now();
+    Object.assign(api.pet, api.defaultPet(), { name:'A', stage:'larva', birth:t0, lastTick:t0, EP:2, B:40, hunger:0.5 });
+    // ひと息に たくさん減るぶんを積んでおく（立て続けに遊んだ状態）
+    api.pet.hungerAcc = api.hungerMin() * 3;
+    store.set('myvader_result', JSON.stringify({ game:'spacewalk', score:100, at: t0 }));
+    api.processGameResult();
+    ok(api.pet.hunger >= 0, `おなかが ${api.pet.hunger} になった（負）`);
+    eq(api.pet.hunger, 0, '遊びきったあとの おなか:');
+  });
   it('サービスワーカーのVERSIONが日付の形をしている', () => {
     const m = read('sw.js').match(/const VERSION = '([^']+)'/);
     ok(m, 'VERSION が見つからない');

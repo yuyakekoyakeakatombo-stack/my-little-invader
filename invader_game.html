@@ -742,7 +742,10 @@
   function defaultPet(){ return {
     v: SAVE_V,
     name:'', birth:0, lastTick:0,
-    hunger:5, mood:4, health:'GOOD',      // 表示ステータス（おなか・きげんは0〜5の6段階）
+    // 表示ステータス（おなか・きげんは0〜5の6段階＝目盛り10本）。
+    //  来たばかりの子は 満たされた状態では置かない。おなかは半分（目盛り5本）、
+    //  きげんは満タンから4目盛ぶん下（目盛り4本）から始める
+    hunger:2.5, mood:2, health:'GOOD',
     hungerAcc:0, moodAcc:0,               // 進行タイマー（分）
     lastPlayAt:0, playStreak:0,           // 最後にミニゲームで遊んだ時刻／立て続けに遊んだ回数
     P:0, D:50, Dm:50, C:50, B:35, W:0,    // 隠しパラメータ（性格/しつけ/しつけの移動平均/ケア/なつき/汚れ）
@@ -1409,7 +1412,7 @@
       pet.lastPlayAt = r.at;
       pet.hungerAcc = (pet.hungerAcc||0) + PLAY_HUNGER_MIN * (1 + 0.4 * pet.playStreak);
       const hm = hungerMin();
-      while(pet.hungerAcc >= hm && pet.hunger > 0){ pet.hungerAcc -= hm; pet.hunger--; }
+      while(pet.hungerAcc >= hm && pet.hunger > 0){ pet.hungerAcc -= hm; pet.hunger = Math.max(0, pet.hunger - 1); }
       savePet();
     } catch(e){}
   }
@@ -2643,7 +2646,7 @@
       pet.hungerAcc += gameMin;                              // 空腹の速さは hungerMin() 側で見る
       pet.moodAcc   += gameMin * Lm * (dirtN > 0 ? 2 : 1);   // 汚れ放置中はごきげん低下が2倍
       const hm = hungerMin();
-      if(pet.hungerAcc >= hm){ pet.hungerAcc -= hm; if(pet.hunger > 0) pet.hunger--; }
+      if(pet.hungerAcc >= hm){ pet.hungerAcc -= hm; if(pet.hunger > 0) pet.hunger = Math.max(0, pet.hunger - 1); }
       if(pet.moodAcc   >= MOOD_MIN)  { pet.moodAcc   -= MOOD_MIN;   if(pet.mood   > 0) pet.mood--;   }
       clampMood();   // 汚れが出た・病気になった瞬間に、満タンだったきげんも上限まで下がる
 
@@ -5411,7 +5414,7 @@
   // 項目はキーで管理（表示ラベルは言語辞書、値は各キーで分岐）
   //  版の番号は sw.js の VERSION と同じもの。tools/bump-sw.sh が両方いっしょに
   //  書き換える（ずれると、テスターの端末に出ている版が分からなくなる）
-  const APP_VERSION = '2026-08-23-30';
+  const APP_VERSION = '2026-08-23-31';
   //  (C) は Press Start 2P に © が無く、別の字体に落ちて1文字だけ形が浮くため
   const APP_COPY = '(C) 2026 Studio M.D.Q.';
   const SETTINGS_KEYS = ['language','weather','sound','bodycolor','version','reset'];

@@ -694,6 +694,16 @@ const MUTATIONS = [
   ['作ろうとした時刻を、作れたときだけ記録する（作れないと毎回試す）',
    "    acBornAt = Date.now();                 // 「最後に作ろうとした時刻」。作れなくても歯止めに使う\n    try{ return new (window.AudioContext||window.webkitAudioContext)(); }\n    catch(e){ return null; }",
    "    try{ const c = new (window.AudioContext||window.webkitAudioContext)(); acBornAt = Date.now(); return c; }\n    catch(e){ return null; }", 'caught'],
+  ['到着直後の おなかが また満タンになる',
+   "    hunger:2.5, mood:2, health:'GOOD',", "    hunger:5, mood:2, health:'GOOD',", 'caught'],
+  ['到着直後の きげんが また満タン近くになる',
+   "    hunger:2.5, mood:2, health:'GOOD',", "    hunger:2.5, mood:4, health:'GOOD',", 'caught'],
+  ['おなかが 0を通りこして負になる',
+   "      while(pet.hungerAcc >= hm && pet.hunger > 0){ pet.hungerAcc -= hm; pet.hunger = Math.max(0, pet.hunger - 1); }",
+   "      while(pet.hungerAcc >= hm && pet.hunger > 0){ pet.hungerAcc -= hm; pet.hunger--; }", 'caught'],
+  ['ミニゲーム後の おなかが 0を通りこして負になる',
+   "      if(pet.hungerAcc >= hm){ pet.hungerAcc -= hm; if(pet.hunger > 0) pet.hunger = Math.max(0, pet.hunger - 1); }",
+   "      if(pet.hungerAcc >= hm){ pet.hungerAcc -= hm; if(pet.hunger > 0) pet.hunger--; }", 'caught'],
 ];
 
 const orig = fs.readFileSync(GAME, 'utf8');

@@ -21,7 +21,7 @@ const EXPORTS = `
   SAVE_KEY, SAVE_BAK, SAVE_BAD, get saveRecovered(){ return saveRecovered; }, wasHiddenRoute, bigEater, allRounder, pampered, SAVE_V, MIGRATIONS,
   closeOneDay, checkReturn, checkInvade, returnSigns, invadeSigns, wrathful, isWild,
   gainB, bondCapToday, markTouch, bondDrop, dailyCareScore,
-  doCare, careDisabled, onDisabledCare, advancePet, maybeEvolve,
+  doCare, careDisabled, onDisabledCare, advancePet, maybeEvolve, processGameResult, PLAY_HUNGER_MIN,
   get menuSel(){ return menuSel; }, set menuSel(v){ menuSel = v; },
   set inSettings(v){ inSettings = v; }, set inStatus(v){ inStatus = v; },
   set inFeed(v){ inFeed = v; }, set inPlay(v){ inPlay = v; },
