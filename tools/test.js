@@ -190,15 +190,81 @@ describe('ねているあいだの くすり', () => {
     }
     eq(cured, 30, '30回のうち 治った回数:');
   });
-  //  瀕死（餓死18時間）は くすりではなく ごはんで治す。
-  //  ごはんは もともと寝ていても出せるので、そちらは詰まらない
-  it('瀕死の子には、寝ていても ごはんを出せる', () => {
-    const api = at({ hunger:0, mood:2, starveAcc:1200 });
-    ok(api.isWeak(), '瀕死のはず');
-    ok(api.effectiveAsleep(), 'ねている状態のはず');
-    ok(!api.careDisabled('FEED'), '寝ていると ごはんも出せない');
-    api.doCare('FEED');
-    ok(api.pet.plateAt, '皿が出ていない（起きてから食べる）');
+  //  瀕死のあいだは眠らない。夜でも起きているので、そのまま世話ができる
+  it('瀕死の子は、夜でも眠らない', () => {
+    for(const [name, o] of [
+        ['くうふく', { hunger:0, mood:2, starveAcc:1200 }],
+        ['びょうき', { health:'SICK', sickAcc:1500 }]]){
+      const api = at(o);
+      ok(api.isWeak(), `${name}: 瀕死のはず`);
+      ok(!api.effectiveAsleep(), `${name}: 瀕死なのに眠っている`);
+      ok(!api.careDisabled('FEED'), `${name}: ごはんが出せない`);
+      ok(!api.careDisabled('MED'),  `${name}: くすりが飲ませられない`);
+    }
+  });
+});
+
+// ══ ふたつの ひんし ════════════════════════════════════
+//   くうふく（空腹18時間・死は30時間）と びょうき（病気24時間・死は36時間）。
+//   どちらも「あと12時間で死ぬ」ところから。見せかたは共通、マークだけ分ける
+describe('ふたつの ひんし', () => {
+  const mk = (o) => {
+    const { api, clock } = load();
+    const t0 = clock.now();
+    Object.assign(api.pet, api.defaultPet(), { name:'A', stage:'larva', birth:t0-5*86400000,
+      lastTick:t0, EP:2, B:40, hunger:4, mood:4, ...o });
+    return api;
+  };
+  it('どちらも 残り12時間から', () => {
+    const { api } = load();
+    eq(api.WEAK_SICK_MIN, 1440, '病気で瀕死になるまで(分):');       // 36時間 − 12時間
+    eq(api.WEAK_STARVE_MIN, 1080, '空腹で瀕死になるまで(分):');     // 30時間 − 12時間
+  });
+  it('病気を放置すると、途中から ひんし（びょうき）になる', () => {
+    for(const [h, want] of [[0,'sick'], [12,'sick'], [23,'sick'], [24,'weakSick'], [35,'weakSick']]){
+      const api = mk({ health:'SICK', sickAcc: h*60 });
+      eq(api.healthState(), want, `病気 ${h}時間目の表示:`);
+    }
+  });
+  it('空腹を放置すると、途中から ひんし（くうふく）になる', () => {
+    for(const [h, want] of [[0,'starving'], [17,'starving'], [18,'weakStarve'], [29,'weakStarve']]){
+      const api = mk({ hunger:0, starveAcc: h*60 });
+      eq(api.healthState(), want, `空腹 ${h}時間目の表示:`);
+    }
+  });
+  //  空腹のほうが先に死ぬ（30時間 対 36時間）ので、両方ならそちらを出す
+  it('両方が瀕死なら、先に死ぬ くうふくを出す', () => {
+    const api = mk({ hunger:0, starveAcc:1200, health:'SICK', sickAcc:1500 });
+    ok(api.isWeakStarve() && api.isWeakSick(), '両方が瀕死のはず');
+    eq(api.healthState(), 'weakStarve', '両方のときの表示:');
+  });
+  it('ふたつの ひんしに、別の名前がついている', () => {
+    const { api } = load();
+    for(const lg of ['ja', 'en']){
+      api.lang = lg;
+      const a = api.T('weakStarve'), b = api.T('weakSick');
+      ok(a && b, `${lg}: 名前が無い`);
+      ok(a !== b, `${lg}: ふたつの ひんしが 同じ名前（${a}）`);
+    }
+    api.lang = 'ja';
+    ok(/くうふく/.test(api.T('weakStarve')), '日本語に くうふく が入っていない');
+    ok(/びょうき/.test(api.T('weakSick')), '日本語に びょうき が入っていない');
+  });
+  //  けんこうの欄は 右端(46ドット)ぞろえ。名前が長いと 項目名にぶつかる
+  it('ひんしの名前が、STATUS の行に収まる', () => {
+    const { api } = load();
+    for(const [lg, px] of [['ja', 9], ['en', 6]]){
+      api.lang = lg;
+      for(const k of ['weakStarve', 'weakSick']){
+        const t = api.T(k);
+        let w = 0;
+        for(const ch of t) w += px * (ch.charCodeAt(0) < 0x100 ? 0.5 : 1);
+        const left = 46*4 - w;                       // 値の左端(px)
+        const labelEnd = 2*4 + px * (lg === 'ja' ? 4 : 6);   // けんこう / HEALTH の右端
+        ok(left > labelEnd + 4, `${lg} ${k}: 「${t}」が 項目名にぶつかる（値の左端 ${left} / 名前の右端 ${labelEnd}）`);
+      }
+    }
+    api.lang = 'ja';
   });
 });
 
@@ -2844,14 +2910,15 @@ describe('ファイル', () => {
     const sprite = src.slice(src.indexOf('let charCol = NK;'), src.indexOf("} else if (isBadWeather())"));
     order(sprite, '姿');
     ok(/charCol = DM;/.test(sprite), '瀕死の姿が 薄い色になっていない');
-    ok(/grid = asleep \? sp\.sleep : sp\.rest;/.test(sprite), '眠っているときの姿を見ていない');
+    ok(/grid = sp\.rest; yOff = 0; charCol = DM;/.test(sprite), 'うずくまって動かない姿になっていない');
     // マークの分岐
-    //  ICO_DROP は絵の定義でも出てくるので、マークを出すところから後ろで探す
+    //  マークを出すところ（showReact から 疎遠期の枝まで）を切り出す
     const emoFrom = src.indexOf('if (showReact) {');
-    const emo = src.slice(emoFrom, src.indexOf('ICO_DROP', emoFrom));
+    const emo = src.slice(emoFrom, src.indexOf('isEstranged()', emoFrom));
     order(emo, 'マーク');
-    ok(emo.indexOf('ICO_EXCL') < emo.indexOf('ICO_ZZZ'),
-       '瀕死の ！ より先に Zzz が出る');
+    //  くうふくは ！、びょうきは 汗。どちらで死にかけているかが分かるように
+    ok(/emo\(isWeakStarve\(\) \? ICO_EXCL : ICO_DROP\)/.test(emo),
+       '瀕死のマークが くうふく／びょうき で分かれていない');
   });
   it('サービスワーカーのVERSIONが日付の形をしている', () => {
     const m = read('sw.js').match(/const VERSION = '([^']+)'/);

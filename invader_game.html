@@ -378,7 +378,7 @@
       on:'ON', off:'OFF', sure:'SURE?', yesno:'A:YES  B:NO',
       locok:'A:OK  B:CANCEL',
       hungry:'HUNGRY', mood:'MOOD', health:'HEALTH', stage:'STAGE', ptype:'TYPE',
-      good:'GOOD', sick:'SICK', weak:'CRITICAL', normal:'NORMAL', starving:'STARVING', dead:'DEAD', friend:'BOND',
+      good:'GOOD', sick:'SICK', weakStarve:'CRITICAL:FOOD', weakSick:'CRITICAL:ILL', normal:'NORMAL', starving:'STARVING', dead:'DEAD', friend:'BOND',
       newborn:'NEWBORN', baby:'BABY', child:'CHILD', adult:'ADULT', finalst:'FINAL',
       gray:'GRAY', martian:'MARTIAN', invader:'INVADER',
       nameq:"WHAT'S THEIR NAME?", done:'DONE', del:'DELETE', langval:'ENGLISH',
@@ -404,7 +404,7 @@
       on:'オン', off:'オフ', sure:'ほんとうに？', yesno:'A:はい B:いいえ',
       locok:'A:OK  B:キャンセル',
       hungry:'おなか', mood:'きげん', health:'けんこう', stage:'せいちょう', ptype:'タイプ',
-      good:'げんき', sick:'びょうき', weak:'ひんし', normal:'ふつう', starving:'はらぺこ', dead:'おばけ', friend:'なかよし',
+      good:'げんき', sick:'びょうき', weakStarve:'ひんし（くうふく）', weakSick:'ひんし（びょうき）', normal:'ふつう', starving:'はらぺこ', dead:'おばけ', friend:'なかよし',
       newborn:'うまれたて', baby:'あかちゃん', child:'こども', adult:'おとな', finalst:'さいしゅう',
       gray:'グレイ', martian:'マーシャン', invader:'インベーダー',
       nameq:'このこの なまえは？', done:'けってい', del:'けす', langval:'にほんご',
@@ -910,7 +910,13 @@
   // 疎遠期：帰還の兆候が続いている状態。キャラが反応しなくなり、プレイヤーへの警告になる
   function isEstranged(){ return (pet.estrangedDays||0) >= 1 || (pet.lowBDays >= 3 && pet.B < 20); }
   // 衰弱：空腹MAXを18時間（起床換算）放置
-  function isWeak(){ return !pet.dead && pet.starveAcc >= 1080; }
+  // 瀕死。どちらも「あと12時間で死ぬ」ところから。
+  //  くうふく：空腹MAXのまま18時間（死は30時間）
+  //  びょうき：病気のまま24時間（死は36時間）
+  const WEAK_STARVE_MIN = 1080, WEAK_SICK_MIN = 1440;
+  function isWeakStarve(){ return !pet.dead && pet.starveAcc >= WEAK_STARVE_MIN; }
+  function isWeakSick(){   return !pet.dead && pet.sickAcc   >= WEAK_SICK_MIN; }
+  function isWeak(){ return isWeakStarve() || isWeakSick(); }
   // くすりが効く状態か（発症している／芽がある）。
   //  寝ているあいだも押させるかの判断に使う
   function needsMed(){ return pet.health === 'SICK' || !!pet.incubAt; }
@@ -2610,6 +2616,9 @@
   // DEBUG中は常に起きている扱い（3秒サイクルの夜に操作がランダムに弾かれるのを防ぎ、いつでも検証可能に）
   function effectiveAsleep(){
     if(debugMode) return false;
+    // 瀕死のあいだは眠らない。眠っていると くすり・ごはんの手が制限されるうえ、
+    //  あと半日で死ぬ状態が「ただ寝ているだけ」に見えてしまう
+    if(isWeak()) return false;
     return isAsleep(new Date()) && Date.now() >= (pet.wokeUntil || 0);
   }
 
@@ -4072,7 +4081,9 @@
   //  別々に書くと、画面には「ふつう」と出ているのに知らせだけ点いている、が起きる
   function healthState(){
     if(pet.dead)              return 'dead';      // おばけ
-    if(isWeak())              return 'weak';      // 衰弱（空腹18時間超。あと12時間で死）
+    // 瀕死。空腹のほうが先に死ぬ（30時間 対 36時間）ので、両方なら空腹を出す
+    if(isWeakStarve())        return 'weakStarve'; // 空腹18時間超。あと12時間で死
+    if(isWeakSick())          return 'weakSick';   // 病気24時間超。あと12時間で死
     if(pet.health==='SICK')   return 'sick';      // 病気（放置36時間で死）
     // 空腹が続いている（このままだと衰弱）。以前は「ふつう」と出ていて、
     //  けんこう欄だけ見た人には問題なしに読めてしまっていた
@@ -5026,10 +5037,9 @@
     let yOff=0, grid, bounceSpeed=30, bounceAmt=1;
     let charCol = NK;
     if (isWeak()) {
-      // 衰弱：薄い色でぐったり動かない。
-      //  眠っていても ここを先に見る。ふつうの寝姿に戻ってしまうと、
-      //  あと半日で死ぬ状態が「ただ寝ているだけ」に見えてしまう
-      grid = asleep ? sp.sleep : sp.rest; yOff = 0; charCol = DM;
+      // 瀕死：くうふくも びょうきも、薄い色で うずくまって動かない。
+      //  この状態のあいだは眠らないので（effectiveAsleep）、寝姿は出てこない
+      grid = sp.rest; yOff = 0; charCol = DM;
     } else if (asleep) {
       // 睡眠中：丸まって動かない（閉眼スプライト）
       grid = sp.sleep;
@@ -5295,9 +5305,9 @@
     if (showReact) {
       /* 演出アイコンは上で描画済み */
     } else if (isWeak()) {
-      // 衰弱：！を速く点滅（SOS）。眠っていても Zzz には替えない。
-      //  Zzz が出ていると「休んでいる」ように見えて、手を打つ機会を逃す
-      if((fM%8)<5) emo(ICO_EXCL);
+      // 瀕死：速く点滅させて急を伝える。どちらで死にかけているかが分かるよう、
+      //  くうふくは ！、びょうきは 汗と、ふだんと同じ絵を使う
+      if((fM%8)<5) emo(isWeakStarve() ? ICO_EXCL : ICO_DROP);
     } else if (asleep) {
       // 睡眠中：Zzz
       if((fM%30)<24) emo(ICO_ZZZ);
@@ -5438,7 +5448,7 @@
   // 項目はキーで管理（表示ラベルは言語辞書、値は各キーで分岐）
   //  版の番号は sw.js の VERSION と同じもの。tools/bump-sw.sh が両方いっしょに
   //  書き換える（ずれると、テスターの端末に出ている版が分からなくなる）
-  const APP_VERSION = '2026-08-23-36';
+  const APP_VERSION = '2026-08-24-01';
   //  (C) は Press Start 2P に © が無く、別の字体に落ちて1文字だけ形が浮くため
   const APP_COPY = '(C) 2026 Studio M.D.Q.';
   const SETTINGS_KEYS = ['language','weather','sound','bodycolor','version','reset'];

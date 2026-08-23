@@ -25,7 +25,7 @@ const EXPORTS = `
   get menuSel(){ return menuSel; }, set menuSel(v){ menuSel = v; },
   set inSettings(v){ inSettings = v; }, set inStatus(v){ inStatus = v; },
   set inFeed(v){ inFeed = v; }, set inPlay(v){ inPlay = v; },
-  isWeak, plateOnScreen, needsMed, hungerMin, feedGain, feedFill, HUNGER_MAX,
+  isWeak, isWeakStarve, isWeakSick, WEAK_STARVE_MIN, WEAK_SICK_MIN, plateOnScreen, needsMed, hungerMin, feedGain, feedFill, HUNGER_MAX,
    gaugeHunger, gaugeMood, raiseMood, MOOD_MIN,
   sleepConfig, isAsleep, birthPet, ARRIVE_AWAKE_MS, rewindClock, PET_TIMES, sleepKind, stayingUpLate, effectiveAsleep, owlShift,
   pickForm, pickLineage, pickVoice, voice, voiceIdx, pTrait,
