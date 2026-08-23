@@ -540,6 +540,16 @@ const MUTATIONS = [
   ['くすりを片側だけの塗りつぶしにする（空いている側が無くなる）',
    ".#.....###...\n.#......#....\n.#.....#.....\n..#...#......\n...###.......",
    ".#####+##...\n.#+++++#.....\n.#+++++#.....\n..#+++#......\n...###.......", 'caught'],
+  ['押せないアイコンでも、ふだんの音と断りの音が二重に鳴る',
+   "    playClick(onDisabledCare() ? 300 : 900);",
+   "    playClick(900); setTimeout(()=>playClick(300), 60);", 'caught'],
+  ['押せないアイコンでも、ふだんの音だけ鳴る（断られたと分からない）',
+   "    playClick(onDisabledCare() ? 300 : 900);", "    playClick(900);", 'caught'],
+  ['押せるアイコンまで断りの音になる',
+   "    playClick(onDisabledCare() ? 300 : 900);", "    playClick(300);", 'caught'],
+  ['サブ画面でもアイコンの状態を見てしまう',
+   "    return !inSettings && !inStatus && !inFeed && !inPlay\n        && menuSel < 6 && careDisabled(CARE_ORDER[menuSel]);",
+   "    return menuSel < 6 && careDisabled(CARE_ORDER[menuSel]);", 'caught'],
 ];
 
 const orig = fs.readFileSync(GAME, 'utf8');

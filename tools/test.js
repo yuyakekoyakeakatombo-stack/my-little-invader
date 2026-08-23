@@ -2395,6 +2395,49 @@ describe('音', () => {
     ok(ac.resumed > 0, 'resume していない');
     eq(ac.state, 'running', '起きたあとの状態:');
   });
+  // 押しても何も起きないアイコンは、断りの低い音だけを鳴らす。
+  //  ふだんの音と2つ鳴ると、いちど押せてから断られたように聞こえる
+  describe('押せないアイコンの音', () => {
+    const at = (sel, st) => {
+      const { api, clock } = load();
+      const t0 = clock.now();
+      Object.assign(api.pet, api.defaultPet(), { name:'ALPHA', stage:'larva', birth:t0-5*86400000,
+        lastTick:t0, EP:2, B:40, hunger:4, mood:4, ...st });
+      api.menuSel = sel;
+      return api;
+    };
+    it('押せないアイコンの上では、断りの音を選ぶ', () => {
+      const api = at(1, { W:0, plateAt:0, plateSpoiled:false });   // そうじ＝片づけるものが無い
+      ok(api.careDisabled('CLEAN'), 'そうじが押せない状態のはず');
+      ok(api.onDisabledCare(), '断りの音にならない');
+    });
+    it('押せるアイコンの上では、ふだんの音を選ぶ', () => {
+      const api = at(1, { W:2 });                                  // よごれあり
+      ok(!api.careDisabled('CLEAN'), 'そうじが押せる状態のはず');
+      ok(!api.onDisabledCare(), 'ふだんの音にならない');
+    });
+    it('下段の項目の上では、アイコンの状態を見ない', () => {
+      const api = at(1, { W:0, plateAt:0, plateSpoiled:false });
+      ok(api.onDisabledCare(), 'まず断りの音になるはず');
+      api.menuSel = 7;                                             // 6以上＝下段の項目
+      ok(!api.onDisabledCare(), '下段の項目でも断りの音になっている');
+    });
+    //  サブ画面に入っても menuSel はアイコンを指したまま。
+    //  そこを見てしまうと、SETTINGS などで決定したのに断りの音が鳴る
+    it('サブ画面に入っているあいだは、アイコンの状態を見ない', () => {
+      for(const key of ['inSettings','inStatus','inFeed','inPlay']){
+        const api = at(1, { W:0, plateAt:0, plateSpoiled:false });
+        ok(api.onDisabledCare(), `${key}: まず断りの音になるはず`);
+        api[key] = true;
+        ok(!api.onDisabledCare(), `${key} の画面なのに断りの音になっている`);
+      }
+    });
+    it('Aを押して鳴る音は1つだけ', () => {
+      const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'invader_game.html'), 'utf8');
+      ok(/playClick\(onDisabledCare\(\) \? 300 : 900\);/.test(src), '押した時点で音を選び分けていない');
+      ok(!/setTimeout\(\(\)\s*=>\s*playClick\(/.test(src), '押した音に重ねて鳴らす書き方が残っている');
+    });
+  });
   it('SOUND=OFF なら、口を作らない', () => {
     const { api, audioLog } = load({ storage: { myvader_sound: 'off' } });
     api.playClick(1200);

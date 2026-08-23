@@ -5209,7 +5209,7 @@
   // 項目はキーで管理（表示ラベルは言語辞書、値は各キーで分岐）
   //  版の番号は sw.js の VERSION と同じもの。tools/bump-sw.sh が両方いっしょに
   //  書き換える（ずれると、テスターの端末に出ている版が分からなくなる）
-  const APP_VERSION = '2026-08-23-08';
+  const APP_VERSION = '2026-08-23-09';
   //  (C) は Press Start 2P に © が無く、別の字体に落ちて1文字だけ形が浮くため
   const APP_COPY = '(C) 2026 Studio M.D.Q.';
   const SETTINGS_KEYS = ['language','weather','sound','bodycolor','version','reset'];
@@ -5616,8 +5616,17 @@
   });
 
   // A: 決定
+  // 押しても何も起きないお世話アイコンの上にいるか。
+  //  サブ画面に入っているあいだは、アイコンの並びは見えていない
+  function onDisabledCare(){
+    return !inSettings && !inStatus && !inFeed && !inPlay
+        && menuSel < 6 && careDisabled(CARE_ORDER[menuSel]);
+  }
   onPress(document.getElementById('na'),()=>{
-    playClick(900); btnAnim(document.getElementById('na'));
+    // 押せないアイコンは、断りの低い音だけを鳴らす。
+    //  ふだんの音と2つ鳴ると、いちど押せてから断られたように聞こえる
+    playClick(onDisabledCare() ? 300 : 900);
+    btnAnim(document.getElementById('na'));
     if(inSettings){
       if(locPrime){ locPrime=false; setWeatherMode('here'); return; }   // 用途説明のあと、A で許可要求
       if(inWeather){
@@ -5685,10 +5694,9 @@
         const act = CARE_ORDER[menuSel];
         // 薄く描いているアイコンは、押しても画面を切り替えない（MENUに留まる）。
         //  何も起きないのに育成画面へ飛ばされると「いま何か起きたのか？」と迷わせるうえ、
-        //  隣のアイコンを試したいときにもう一度MENUを開き直すことになる
-        //  Aを押した時点で 900Hz が鳴っているので、少し待ってから低い音を足す。
-        //  同時に鳴らすと重なって和音になり、断られた感じにならない
-        if(careDisabled(act)){ setTimeout(()=>playClick(300), 60); }
+        //  隣のアイコンを試したいときにもう一度MENUを開き直すことになる。
+        //  断りの音は押した時点で鳴らしているので、ここでは何もしない
+        if(careDisabled(act)){ /* 断りの音だけ。画面はそのまま */ }
         else if(act==='GAME'){
           // 遊べない理由は、育成画面へ移って仕草で見せる（アイコンを薄くしていない3つ）。
           //  就寝中・おばけ・命名前・エンディング後は careDisabled 側で弾いている
