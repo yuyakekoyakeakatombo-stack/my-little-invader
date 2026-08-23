@@ -2037,6 +2037,31 @@ describe('ファイル', () => {
         ok(ALLOWED.includes(m[1]), `${f} に検証用の window.${m[1]} が残っている`);
     }
   });
+  // 「画面のみかた」の絵は、実機の画面から取り込んだもの。
+  //  ヘッダーを作り変えたのに絵だけ古いまま、を防ぐ
+  it('説明書の画面の絵が、実機のヘッダーと合っている', () => {
+    const { api } = load();
+    const src = read('manual.html');
+    const m = src.match(/<div class="screen">[\s\S]*?<\/div>/);
+    ok(m, '画面の絵が見つからない');
+    const svg = m[0];
+    // 文字を字体で置くのはやめて、実機の画素をそのまま並べてある
+    ok(!/<text[^>]*>(ZUZU|DAY[^<]*)<\/text>/.test(svg), '名前や DAY が 昔の字体のままになっている');
+    // 1ドットより細かい矩形がある＝実機（1ドット=4px）から取り込んだ証拠
+    ok(/<rect x="[\d.]+" y="[\d.]*\.(25|5|75)"/.test(svg), '実機から取り込んだ細かさになっていない');
+    // ヘッダーのマークがある帯（x=21〜33 / y=2〜6ドット）に、何か描かれている
+    const inBand = [...svg.matchAll(/<rect x="([\d.]+)" y="([\d.]+)"/g)]
+      .filter(([, x, y]) => +x >= 21 && +x <= 33 && +y >= 2 && +y <= 6).length;
+    ok(inBand > 20, `マークの帯に ${inBand} 個しか無い。3つのマークが描かれていない`);
+    // 区切り線（ドットのy=8）が1本ある
+    ok(/<rect x="0" y="8" width="54"/.test(svg), 'ヘッダーの区切り線が無い');
+    // 引き出し線の数と、下の表の行数がそろっている
+    const marks = (svg.match(/<circle/g) || []).length;
+    const after = src.slice(src.indexOf(m[0]) + m[0].length);
+    const rows = (after.slice(0, after.indexOf('</table>')).match(/<tr>/g) || []).length;
+    eq(marks, rows, '引き出し線の数と 表の行数:');
+    eq(marks, 5, '引き出し線の数:');
+  });
   // ツリーの図は iPhone の画面で左右が切れていた。原因は2つ。
   //  ・詰める指定の区切りが 379px で、390〜414px（iPhone 12〜16 のふつうの幅）が
   //    どの段にも入らず、大きいままの箱が枠から あふれていた
