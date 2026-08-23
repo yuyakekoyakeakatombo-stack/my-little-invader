@@ -177,8 +177,25 @@ describe('ヘッダーのマーク', () => {
     api.diaryUnread = unread || 0;
     return api;
   };
-  it('日記とステータスの2つが出る', () => {
-    eq(at({}).headIcons(), ['diary','status'], 'ヘッダーのマーク:');
+  //  左がステータス、右が日記。上を押したときに選ばれるのは左のほう
+  it('左がステータス、右が日記', () => {
+    eq(at({}).headIcons(), ['status','diary'], 'ヘッダーのマーク（左から）:');
+  });
+  //  日記帳が1件もないうちは、マークを出さない＝選べない。
+  //  出しても開けるのは空のページで、押した意味が無い
+  it('はじめの日記が書かれるまで、日記のマークは選べない', () => {
+    const { api, clock } = load();
+    const t0 = clock.now();
+    Object.assign(api.pet, api.defaultPet(), { name:'ALPHA', stage:'larva', birth:t0-5*86400000,
+      lastTick:t0, EP:2, B:40, hunger:4, mood:4 });
+    api.clearDiary();
+    eq(api.headIcons(), ['status'], '日記が0件のときのマーク:');
+    // 上を押しても 日記には行けない（左右に動かしても日記は無い）
+    api.headSel = api.headIcons()[0];
+    eq(api.headSel, 'status', '上で選ばれるマーク:');
+    // 1件書かれたら出る
+    api.addDiary({ d:5, n:'ALPHA', t:['fed'], v:[0], c:'', ts:t0, cd:'2026-06-15', lv:2, wr:1 });
+    eq(api.headIcons(), ['status','diary'], '1件書かれたあとのマーク:');
   });
   it('命名前は なにも出ない', () => {
     const { api } = load();
@@ -229,6 +246,30 @@ describe('ヘッダーのマーク', () => {
     ok(a !== b, '日記とステータスが同じ絵');
     eq(api.STATUS_ICON[0].length, api.DIARY_ICON[0].length, 'マークの横はば:');
     eq(api.STATUS_ICON.length, api.DIARY_ICON.length, 'マークの縦はば:');
+  });
+  //  選択中は薄色の枠で囲む。マークまで薄色のままだと枠に溶けて消える
+  it('えらんでいるマークは、枠と別の色で描く', () => {
+    const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'invader_game.html'), 'utf8');
+    const frame = /if\(sel\)\{ ctxM\.fillStyle = DM;/.test(src);
+    ok(frame, '選択中の枠が薄色(DM)で描かれていない');
+    ok(/\(sel \|\| blink\) \? NK : DM/.test(src), 'えらんでいるマークが濃い色(NK)にならない（枠に溶ける）');
+  });
+  //  棒グラフにしたら 携帯の電波マークに見えたので折れ線にした。
+  //  折れ線に見えるには、列ごとに1ドットで、段差が1マスずつであること
+  it('ステータスのマークが、途切れない折れ線になっている', () => {
+    const { api } = load();
+    const g = api.STATUS_ICON;
+    const base = g.length - 1;                      // いちばん下は土台の線
+    ok(g[base].every(v => v), '土台の線が無い');
+    const ys = [];
+    for(let x=0;x<g[0].length;x++){
+      const col = [];
+      for(let y=0;y<base;y++) if(g[y][x]) col.push(y);
+      eq(col.length, 1, `${x}列目のドットの数（棒ではなく線であること）:`);
+      ys.push(col[0]);
+    }
+    for(let i=1;i<ys.length;i++)
+      eq(Math.abs(ys[i]-ys[i-1]), 1, `${i-1}列目と${i}列目の段差（1マスでないと線が切れる）:`);
   });
 });
 

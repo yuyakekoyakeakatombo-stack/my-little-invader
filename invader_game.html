@@ -2757,8 +2757,8 @@
   //  いま出せるマークを左から並べて返す
   function headIcons(){
     const list = [];
-    if(diaryUnlocked()) list.push('diary');                 // 1件も書かれていないうちは開いても空
     if(pet.name && !pet.gone && !pet.dead) list.push('status');
+    if(diaryUnlocked()) list.push('diary');                 // 1件も書かれていないうちは、選ばせない（開いても空）
     return list;
   }
   //  マークの並びは右づめ。日数の左に置く
@@ -2773,9 +2773,11 @@
     list.forEach((k, i) => {
       const x = headIconX(i, list.length);
       const alert = (k === 'diary') ? diaryUnread > 0 : statusAlert();
-      if(headSel === k){ ctxM.fillStyle = DM; ctxM.fillRect(x-2, HEAD_IY-2, HEAD_ICON_W+4, 13); }   // 選択中は薄色で囲む
+      const sel = (headSel === k);
+      if(sel){ ctxM.fillStyle = DM; ctxM.fillRect(x-2, HEAD_IY-2, HEAD_ICON_W+4, 13); }   // 選択中は薄色で囲む
+      // 選んでいるあいだは濃い色で描く。薄色のままだと、薄色の枠に溶けて消える
       const blink = alert && (fM % 16 < 10);
-      stampPx(ctxM, k === 'diary' ? DIARY_ICON : STATUS_ICON, x, HEAD_IY, blink ? NK : DM);
+      stampPx(ctxM, k === 'diary' ? DIARY_ICON : STATUS_ICON, x, HEAD_IY, (sel || blink) ? NK : DM);
     });
   }
   // 日記マーク（ノート）。ヘッダーの文字（6px）と並ぶので、1pxきざみの細かいドットで小さく描く。
@@ -2792,17 +2794,18 @@
     [1,1,0,0,0,0,0,1],
     [1,1,1,1,1,1,1,1],
   ];
-  // ステータスのマーク。STATUS画面の目盛りに合わせて、伸びる棒3本にしてある。
-  //  日記のノート（横線）と見分けがつくよう、こちらは縦の棒にした
+  // ステータスのマーク。折れ線グラフ。
+  //  棒グラフにしたら 携帯の電波マークに見えたので、1ドットの線にした。
+  //  段差はかならず1マスにしてある（2マス跳ぶと線が切れて見える）
   const STATUS_ICON = [
-    [0,0,0,0,0,0,1,1],
-    [0,0,0,0,0,0,1,1],
-    [0,0,0,1,1,0,1,1],
-    [0,0,0,1,1,0,1,1],
-    [0,0,0,1,1,0,1,1],
-    [1,1,0,1,1,0,1,1],
-    [1,1,0,1,1,0,1,1],
-    [1,1,0,1,1,0,1,1],
+    [0,0,0,0,0,0,0,0],
+    [0,0,0,0,0,0,0,1],
+    [0,0,0,0,0,0,1,0],
+    [0,0,0,0,0,1,0,0],
+    [0,0,1,0,1,0,0,0],
+    [0,1,0,1,0,0,0,0],
+    [1,0,0,0,0,0,0,0],
+    [0,0,0,0,0,0,0,0],
     [1,1,1,1,1,1,1,1],
   ];
   // 1キャンバスpxきざみで絵を置く（座標もpx）。文字と並べる小さなアイコン用
@@ -5269,7 +5272,7 @@
   // 項目はキーで管理（表示ラベルは言語辞書、値は各キーで分岐）
   //  版の番号は sw.js の VERSION と同じもの。tools/bump-sw.sh が両方いっしょに
   //  書き換える（ずれると、テスターの端末に出ている版が分からなくなる）
-  const APP_VERSION = '2026-08-23-10';
+  const APP_VERSION = '2026-08-23-11';
   //  (C) は Press Start 2P に © が無く、別の字体に落ちて1文字だけ形が浮くため
   const APP_COPY = '(C) 2026 Studio M.D.Q.';
   const SETTINGS_KEYS = ['language','weather','sound','bodycolor','version','reset'];

@@ -569,6 +569,16 @@ const MUTATIONS = [
    "    const right = 142;", "    const right = 158;", 'caught'],
   ['マークどうしが重なる',
    "  const HEAD_ICON_W = 8, HEAD_ICON_GAP = 6;", "  const HEAD_ICON_W = 8, HEAD_ICON_GAP = -6;", 'caught'],
+  ['ヘッダーのマークの左右が入れかわる',
+   "    if(pet.name && !pet.gone && !pet.dead) list.push('status');\n    if(diaryUnlocked()) list.push('diary');",
+   "    if(diaryUnlocked()) list.push('diary');\n    if(pet.name && !pet.gone && !pet.dead) list.push('status');", 'caught'],
+  ['日記が1件も無くても、日記のマークが選べてしまう',
+   "    if(diaryUnlocked()) list.push('diary');", "    list.push('diary');", 'caught'],
+  ['えらんでいるマークを薄色のまま描く（薄色の枠に溶けて消える）',
+   "(sel || blink) ? NK : DM", "blink ? NK : DM", 'caught'],
+  ['ステータスのマークの段差を2マスにする（線が切れて見える）',
+   "    [0,0,1,0,1,0,0,0],\n    [0,1,0,1,0,0,0,0],\n    [1,0,0,0,0,0,0,0],",
+   "    [0,0,1,0,0,1,0,0],\n    [0,1,0,0,0,0,0,0],\n    [1,0,0,0,0,0,0,0],", 'caught'],
 ];
 
 const orig = fs.readFileSync(GAME, 'utf8');
