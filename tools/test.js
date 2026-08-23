@@ -177,9 +177,9 @@ describe('ヘッダーのマーク', () => {
     api.diaryUnread = unread || 0;
     return api;
   };
-  //  左からステータス・日記・せってい。せっていはいつでも開ける
-  it('左からステータス・日記・せってい', () => {
-    eq(at({}).headIcons(), ['status','diary','settings'], 'ヘッダーのマーク（左から）:');
+  //  左から日記・ステータス・せってい。せっていはいつでも開ける
+  it('左から日記・ステータス・せってい', () => {
+    eq(at({}).headIcons(), ['diary','status','settings'], 'ヘッダーのマーク（左から）:');
   });
   //  日記帳が1件もないうちは、マークを出さない＝選べない。
   //  出しても開けるのは空のページで、押した意味が無い
@@ -189,13 +189,13 @@ describe('ヘッダーのマーク', () => {
     Object.assign(api.pet, api.defaultPet(), { name:'ALPHA', stage:'larva', birth:t0-5*86400000,
       lastTick:t0, EP:2, B:40, hunger:4, mood:4 });
     api.clearDiary();
-    eq(api.headIcons(), ['status','settings'], '日記が0件のときのマーク:');
+    eq(api.headIcons(), ['status','settings'], '日記が0件のときのマーク:');   // 日記が無ければ ステータスが先頭
     // 上を押しても 日記には行けない（左右に動かしても日記は無い）
     api.headSel = api.headIcons()[0];
     eq(api.headSel, 'status', '上で選ばれるマーク:');
     // 1件書かれたら出る
     api.addDiary({ d:5, n:'ALPHA', t:['fed'], v:[0], c:'', ts:t0, cd:'2026-06-15', lv:2, wr:1 });
-    eq(api.headIcons(), ['status','diary','settings'], '1件書かれたあとのマーク:');
+    eq(api.headIcons(), ['diary','status','settings'], '1件書かれたあとのマーク:');
   });
   it('命名前は なにも出ない', () => {
     const { api } = load();
@@ -314,6 +314,9 @@ describe('ヘッダーのマーク', () => {
     const dayLeft = 54*S - 2*S - 8*api.HEAD_FONT;
     ok(x >= last, `仕切り(${x})が いちばん右のマーク(〜${last})に重なっている`);
     ok(x + w <= dayLeft, `仕切り(〜${x+w})が DAY(${dayLeft}〜)に重なっている`);
+    // 左は かな7文字の名前（右端78px）に掛からない
+    const first = api.headIconX(0, list.length);
+    ok(first >= 78 + 4, `いちばん左のマーク(${first}px)が 名前(〜78px)に近すぎる`);
     eq(w, S/2, '仕切りの太さ(px):');
     eq(x % 1, 0, `仕切りの左端(${x}px)が整数pxでない（にじむ）:`);
   });
