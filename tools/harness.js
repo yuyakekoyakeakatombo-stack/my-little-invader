@@ -34,7 +34,7 @@ const EXPORTS = `
   CARE_ICONS, CARE_ORDER,
   endedShowMemory, MEM_CHAR_BOT, GHOST_MEM_DELAY,
   healthState, statusAlert, headIcons, headIconX, headAlert, headDefault, HEAD_ICON_W,
-  DIARY_ICON, STATUS_ICON, GEAR_ICON, HEAD_FONT, HEAD_TEXT_Y, HEAD_IY, HEAD_ICON_H, HEADER_Y,
+  DIARY_ICON, STATUS_ICON, GEAR_ICON, HEAD_FONT, HEAD_TEXT_Y, HEAD_IY, HEAD_ICON_H, HEADER_Y, HEAD_ICON_GAP,
   get nameSelActive(){ return nameSelActive; }, set nameSelActive(v){ nameSelActive = v; },
   get headSel(){ return headSel; }, set headSel(v){ headSel = v; },
   get diaryUnread(){ return diaryUnread; }, set diaryUnread(v){ diaryUnread = v; },

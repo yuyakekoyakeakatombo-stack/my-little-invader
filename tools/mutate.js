@@ -615,6 +615,14 @@ const MUTATIONS = [
    "    return list.includes('settings') ? 'settings' : list[0];", "    return list[0];", 'caught'],
   ['命名前でも ヘッダーのマークが出る（???? が選べなくなる）',
    "    if(!pet.name) return list;                              // 命名前は ????（名前）を選ばせる", "", 'caught'],
+  ['マークと DAY のあいだの仕切りを消す',
+   "      ctxM.fillRect(last + HEAD_ICON_GAP/2, HEAD_IY, S/2, HEAD_ICON_H);", "", 'caught'],
+  ['仕切りを マークと同じ太さにする（もう1つマークがあるように見える）',
+   "      ctxM.fillRect(last + HEAD_ICON_GAP/2, HEAD_IY, S/2, HEAD_ICON_H);",
+   "      ctxM.fillRect(last + HEAD_ICON_GAP/2, HEAD_IY, S, HEAD_ICON_H);", 'caught'],
+  ['マークが1つも無くても 仕切りを引く',
+   "    if(list.length){\n      const last = headIconX(list.length-1, list.length) + HEAD_ICON_W;",
+   "    {\n      const last = headIconX(Math.max(0,list.length-1), Math.max(1,list.length)) + HEAD_ICON_W;", 'caught'],
 ];
 
 const orig = fs.readFileSync(GAME, 'utf8');

@@ -304,6 +304,25 @@ describe('ヘッダーのマーク', () => {
     const tc = api.HEAD_TEXT_Y + api.HEAD_FONT/2, ic = api.HEAD_IY + api.HEAD_ICON_H/2;
     ok(Math.abs(tc - ic) <= 1, `文字(${tc})とマーク(${ic})の中心がずれている`);
   });
+  // マークと DAY のあいだの仕切り。メニューの列と同じ半ドットの細さ。
+  //  マークと同じ太さだと、もう1つマークがあるように見える
+  it('マークと DAY のあいだの仕切りが、どちらにも掛からない', () => {
+    const api = at({});
+    const S = 4, list = api.headIcons();
+    const last = api.headIconX(list.length-1, list.length) + api.HEAD_ICON_W;
+    const x = last + api.HEAD_ICON_GAP/2, w = S/2;
+    const dayLeft = 54*S - 2*S - 8*api.HEAD_FONT;
+    ok(x >= last, `仕切り(${x})が いちばん右のマーク(〜${last})に重なっている`);
+    ok(x + w <= dayLeft, `仕切り(〜${x+w})が DAY(${dayLeft}〜)に重なっている`);
+    eq(w, S/2, '仕切りの太さ(px):');
+    eq(x % 1, 0, `仕切りの左端(${x}px)が整数pxでない（にじむ）:`);
+  });
+  //  マークが1つも無いとき（命名前）は、仕切りも出さない
+  it('マークが無いときは、仕切りも出さない', () => {
+    const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'invader_game.html'), 'utf8');
+    ok(/if\(list\.length\)\{[\s\S]{0,220}?fillRect\(last \+ HEAD_ICON_GAP\/2, HEAD_IY, S\/2, HEAD_ICON_H\);/.test(src),
+       'マークが無いときにも仕切りを引いている');
+  });
   it('3つのマークが、同じ大きさで描かれている', () => {
     const { api } = load();
     for(const [name, g] of [['日記', api.DIARY_ICON], ['ステータス', api.STATUS_ICON], ['せってい', api.GEAR_ICON]]){
