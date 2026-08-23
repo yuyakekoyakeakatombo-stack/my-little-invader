@@ -494,23 +494,25 @@
   let ac = null, acBornAt = 0;
   const AC_RETRY = 1000;   // 作り直しの間隔(ms)。割り込みが続くあいだ作り続けないための歯止め
   function newAudio(){
-    try{
-      const c = new (window.AudioContext||window.webkitAudioContext)();
-      acBornAt = Date.now();
-      return c;
-    }catch(e){ return null; }
+    acBornAt = Date.now();                 // 「最後に作ろうとした時刻」。作れなくても歯止めに使う
+    try{ return new (window.AudioContext||window.webkitAudioContext)(); }
+    catch(e){ return null; }
   }
   function ensureAudio(){
     if(!ac) ac = newAudio();
     if(!ac) return;
     if(ac.state === 'running') return;
     if(ac.state === 'suspended'){ ac.resume().catch(()=>{}); return; }
-    // interrupted / closed。resume() をひととおり試しつつ、作り直す
+    // interrupted / closed。作り直す。ただし歯止めの内側では触らない
     if(Date.now() - acBornAt < AC_RETRY) return;
+    const fresh = newAudio();
+    // 作れなかったときに いまの口を捨てると、二度と鳴らなくなる。
+    //  割り込みは明けることがあるので、そのまま持っておいて resume を試す
+    if(!fresh){ ac.resume().catch(()=>{}); return; }
     const old = ac;
-    ac = newAudio();
+    ac = fresh;
     try{ old.close(); }catch(e){}          // 古いほうは閉じる。iOSは同時に持てる数に限りがある
-    if(ac && ac.state === 'suspended') ac.resume().catch(()=>{});
+    if(ac.state === 'suspended') ac.resume().catch(()=>{});
   }
   // すでに作ってあるときだけ、操作・前面復帰のついでに直す（保険）。
   //  まだ無いときに作らないのは、iOSでは操作の中で作らないと止まった状態で生まれるため
@@ -5409,7 +5411,7 @@
   // 項目はキーで管理（表示ラベルは言語辞書、値は各キーで分岐）
   //  版の番号は sw.js の VERSION と同じもの。tools/bump-sw.sh が両方いっしょに
   //  書き換える（ずれると、テスターの端末に出ている版が分からなくなる）
-  const APP_VERSION = '2026-08-23-29';
+  const APP_VERSION = '2026-08-23-30';
   //  (C) は Press Start 2P に © が無く、別の字体に落ちて1文字だけ形が浮くため
   const APP_COPY = '(C) 2026 Studio M.D.Q.';
   const SETTINGS_KEYS = ['language','weather','sound','bodycolor','version','reset'];

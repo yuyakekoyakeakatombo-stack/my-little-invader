@@ -2883,6 +2883,48 @@ describe('音', () => {
       ok(!/setTimeout\(\(\)\s*=>\s*playClick\(/.test(src), '押した音に重ねて鳴らす書き方が残っている');
     });
   });
+  //  作れなかったときに いまの口を捨てると、二度と鳴らなくなる。
+  //  割り込みは明けることがあるので、そのまま持っておく
+  it('新しい口を作れなくても、いまの口を捨てない', () => {
+    const { api, clock, sandbox, audioLog } = load();
+    api.playClick(1200);
+    const ac = audioLog[0];
+    eq(audioLog.length, 1, '口の数:');
+    ac.state = 'interrupted';
+    sandbox.window.AudioContext = function(){ throw new Error('作れない'); };
+    sandbox.window.webkitAudioContext = sandbox.window.AudioContext;
+    for(let i=0;i<3;i++){ clock.advance(api.AC_RETRY + 1); api.playClick(1200); }
+    eq(api.ac, ac, 'いまの口が 捨てられている:');
+    eq(ac.closed, 0, '作れないのに 古い口を閉じている:');
+    ok(ac.resumed > 0, '持っているだけで resume を試していない');
+  });
+  it('割り込みが明ければ、そのままの口で鳴る', () => {
+    const { api, clock, sandbox, audioLog } = load();
+    api.playClick(1200);
+    const ac = audioLog[0];
+    ac.state = 'interrupted';
+    sandbox.window.AudioContext = function(){ throw new Error('作れない'); };
+    sandbox.window.webkitAudioContext = sandbox.window.AudioContext;
+    clock.advance(api.AC_RETRY + 1); api.playClick(1200);
+    ac.state = 'running';                       // 割り込みが明けた
+    const before = ac.played;
+    api.playClick(1200);
+    ok(ac.played > before, '明けたのに鳴らない');
+    eq(audioLog.length, 1, '余分な口を作った:');
+  });
+  //  作れない状況で毎回試すと、そのたびに例外が出て重い。
+  //  「作ろうとした時刻」で歯止めをかける
+  it('作れないときも、試すのは歯止めの間隔ごと', () => {
+    const { api, clock, sandbox, audioLog } = load();
+    api.playClick(1200);
+    audioLog[0].state = 'interrupted';
+    let tries = 0;
+    sandbox.window.AudioContext = function(){ tries++; throw new Error('作れない'); };
+    sandbox.window.webkitAudioContext = sandbox.window.AudioContext;
+    clock.advance(api.AC_RETRY + 1);
+    for(let i=0;i<20;i++) api.playClick(1200);   // 時間を進めずに立て続けに
+    eq(tries, 1, '歯止めの中で作ろうとした回数:');
+  });
   it('SOUND=OFF なら、口を作らない', () => {
     const { api, audioLog } = load({ storage: { myvader_sound: 'off' } });
     api.playClick(1200);

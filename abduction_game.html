@@ -258,7 +258,8 @@
   let ac=null, acBornAt=0;
   const AC_RETRY=1000;   // 作り直しの間隔(ms)。割り込みが続くあいだ作り続けないための歯止め
   function newAudio(){
-    try{ const c=new (window.AudioContext||window.webkitAudioContext)(); acBornAt=Date.now(); return c; }
+    acBornAt=Date.now();                   // 「最後に作ろうとした時刻」。作れなくても歯止めに使う
+    try{ return new (window.AudioContext||window.webkitAudioContext)(); }
     catch(e){ return null; }
   }
   function ensureAudio(){
@@ -267,10 +268,13 @@
     if(ac.state==='running') return;
     if(ac.state==='suspended'){ ac.resume().catch(function(){}); return; }
     if(Date.now()-acBornAt < AC_RETRY) return;
+    const fresh=newAudio();
+    // 作れなかったときに いまの口を捨てると、二度と鳴らなくなる
+    if(!fresh){ ac.resume().catch(function(){}); return; }
     const old=ac;
-    ac=newAudio();
+    ac=fresh;
     try{ old.close(); }catch(e){}
-    if(ac && ac.state==='suspended') ac.resume().catch(function(){});
+    if(ac.state==='suspended') ac.resume().catch(function(){});
   }
   function reviveAudio(){ if(ac) ensureAudio(); }
   // ミニゲームを閉じるとき、開いていた口は閉じておく（iOSは同時に持てる数に限りがある）

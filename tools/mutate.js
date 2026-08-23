@@ -489,7 +489,7 @@ const MUTATIONS = [
    "{ ja:['ゆうひが しずむのを','ずっと みていた'],  en:['I WATCHED THE SUN','GO DOWN'] },",
    "{ ja:['きょうも ぶじに','おわった'],  en:['ANOTHER DAY','ENDED SAFELY'] },", 'live'],
   ['iOSの割り込み(interrupted)を見のがす（電話のあと ずっと無音になる）',
-   "    if(ac.state === 'suspended'){ ac.resume().catch(()=>{}); return; }\n    // interrupted / closed。resume() をひととおり試しつつ、作り直す\n    if(Date.now() - acBornAt < AC_RETRY) return;",
+   "    if(ac.state === 'suspended'){ ac.resume().catch(()=>{}); return; }\n    // interrupted / closed。作り直す。ただし歯止めの内側では触らない\n    if(Date.now() - acBornAt < AC_RETRY) return;",
    "    if(ac.state === 'suspended'){ ac.resume().catch(()=>{}); return; }\n    return;\n    if(Date.now() - acBornAt < AC_RETRY) return;", 'caught'],
   ['作り直しても古い口を閉じない（iOSは同時に持てる数に限りがある）',
    "    try{ old.close(); }catch(e){}", "", 'caught'],
@@ -688,6 +688,12 @@ const MUTATIONS = [
    "      nameq:\"WHAT SHOULD WE CALL THIS LITTLE ONE?\", done:'DONE'", 'caught'],
   ['命名画面の見出しが 画面からはみ出す長さになる',
    "      nameq:'このこの なまえは？', done:'けってい'", "      nameq:'このこのなまえをきめてあげてくださいなんでもいいですよ？', done:'けってい'", 'caught'],
+  ['作れなかったときに いまの口を捨てる（二度と鳴らなくなる）',
+   "    if(!fresh){ ac.resume().catch(()=>{}); return; }\n    const old = ac;\n    ac = fresh;",
+   "    const old = ac;\n    ac = fresh;", 'caught'],
+  ['作ろうとした時刻を、作れたときだけ記録する（作れないと毎回試す）',
+   "    acBornAt = Date.now();                 // 「最後に作ろうとした時刻」。作れなくても歯止めに使う\n    try{ return new (window.AudioContext||window.webkitAudioContext)(); }\n    catch(e){ return null; }",
+   "    try{ const c = new (window.AudioContext||window.webkitAudioContext)(); acBornAt = Date.now(); return c; }\n    catch(e){ return null; }", 'caught'],
 ];
 
 const orig = fs.readFileSync(GAME, 'utf8');
