@@ -2191,6 +2191,29 @@ describe('ファイル', () => {
     const sh = read('tools/bump-sw.sh');
     ok(/APP_VERSION/.test(sh), 'bump-sw.sh が invader_game.html の APP_VERSION を書き換えていない');
   });
+  // メニュー下段の2列のあいだの仕切り。網掛けは左が25まで・右が27からなので、
+  //  26 に引く。ここを外すと 項目の字や網掛けに重なる
+  it('メニューの列の仕切りが、網掛けの外側にあって画面に収まる', () => {
+    const src = read('invader_game.html');
+    const col = src.match(/const COL = \[ \{ x0:(\d+), x1:(\d+),[\s\S]*?\{ x0:(\d+), x1:([^,]+),/);
+    ok(col, '列の範囲（COL）が見つからない');
+    const leftEnd = +col[2] - 1, rightStart = +col[3];      // 網掛けは x1 の手前まで
+    const line = src.match(/for\(let y=Y0; y<Y0\+rows\*HL_H; y\+\+\) dot\(ctxN, (\d+), y, DIM\);/);
+    ok(line, '列の仕切りが引かれていない');
+    const x = +line[1];
+    ok(x > leftEnd, `仕切り(x=${x})が左の網掛け(〜${leftEnd})に重なっている`);
+    ok(x < rightStart, `仕切り(x=${x})が右の網掛け(${rightStart}〜)に重なっている`);
+    // 行数が増えても、いちばん下が画面(y=64)からはみ出さない
+    const hl = src.match(/const HL_H = \(rows >= 4\) \? (\d+) : (\d+);/);
+    const y0 = src.match(/const Y0   = \(rows >= 4\) \? (\d+) : \(rows === 3 \? (\d+) : (\d+)\);/);
+    ok(hl && y0, '行間と開始位置が見つからない');
+    for(const rows of [2,3,4]){
+      const h = rows >= 4 ? +hl[1] : +hl[2];
+      const top = rows >= 4 ? +y0[1] : (rows === 3 ? +y0[2] : +y0[3]);
+      const bottom = top + rows*h - 1;
+      ok(bottom <= 64, `${rows}行のとき、仕切りの下端が画面から出る（${bottom} / 画面は64まで）`);
+    }
+  });
   it('サービスワーカーのVERSIONが日付の形をしている', () => {
     const m = read('sw.js').match(/const VERSION = '([^']+)'/);
     ok(m, 'VERSION が見つからない');

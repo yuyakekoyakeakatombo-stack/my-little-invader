@@ -517,6 +517,13 @@ const MUTATIONS = [
    "    const src = (lv <= LV_BABY) ? 'ja' : lang;", "    const src = lang;", 'caught'],
   ['こどもの日記まで もとの文面で書く（英語で遊んでいるのに かなが出る）',
    "    const src = (lv <= LV_BABY) ? 'ja' : lang;", "    const src = 'ja';", 'caught'],
+  ['列の仕切りを消す',
+   "      for(let y=Y0; y<Y0+rows*HL_H; y++) dot(ctxN, 26, y, DIM);", "", 'caught'],
+  ['列の仕切りを、右の列の網掛けに重ねる',
+   "      for(let y=Y0; y<Y0+rows*HL_H; y++) dot(ctxN, 26, y, DIM);",
+   "      for(let y=Y0; y<Y0+rows*HL_H; y++) dot(ctxN, 27, y, DIM);", 'caught'],
+  ['4行のときも行間を7に戻す（仕切りの下端が画面から出る）',
+   "      const HL_H = (rows >= 4) ? 6 : 7;", "      const HL_H = 7;", 'caught'],
 ];
 
 const orig = fs.readFileSync(GAME, 'utf8');
