@@ -2662,6 +2662,11 @@ describe('ファイル', () => {
     }
     api.lang = 'ja';
     ok(/^この/.test(api.T('nameq')), '日本語の見出しが「このこの…」で始まっていない');
+    //  英語でも この子のことを聞いていると分かる言い方に。
+    //  ほかの英文と同じく、この子は they／their で呼ぶ
+    api.lang = 'en';
+    ok(/THEIR/.test(api.T('nameq')), `英語の見出しが この子を指していない（${api.T('nameq')}）`);
+    api.lang = 'ja';
   });
   it('サービスワーカーのVERSIONが日付の形をしている', () => {
     const m = read('sw.js').match(/const VERSION = '([^']+)'/);

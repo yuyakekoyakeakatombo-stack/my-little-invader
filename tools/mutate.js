@@ -681,6 +681,11 @@ const MUTATIONS = [
    "      ctx.fillRect(x + t-1-i, y0 + (L-w)/2, 1, w);", "      ctx.fillRect(x + i, y0 + (L-w)/2, 1, w);", 'caught'],
   ['▶ が行の中心からずれる',
    "    const y0 = Math.round(cy - L/2);", "    const y0 = Math.round(cy);", 'caught'],
+  ['英語の命名画面の見出しが、この子を指さない言い方に戻る',
+   "      nameq:\"WHAT'S THEIR NAME?\", done:'DONE'", "      nameq:'NAME?', done:'DONE'", 'caught'],
+  ['英語の見出しが 画面からはみ出す長さになる',
+   "      nameq:\"WHAT'S THEIR NAME?\", done:'DONE'",
+   "      nameq:\"WHAT SHOULD WE CALL THIS LITTLE ONE?\", done:'DONE'", 'caught'],
   ['命名画面の見出しが 画面からはみ出す長さになる',
    "      nameq:'このこの なまえは？', done:'けってい'", "      nameq:'このこのなまえをきめてあげてくださいなんでもいいですよ？', done:'けってい'", 'caught'],
 ];
