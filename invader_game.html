@@ -911,6 +911,9 @@
   function isEstranged(){ return (pet.estrangedDays||0) >= 1 || (pet.lowBDays >= 3 && pet.B < 20); }
   // 衰弱：空腹MAXを18時間（起床換算）放置
   function isWeak(){ return !pet.dead && pet.starveAcc >= 1080; }
+  // くすりが効く状態か（発症している／芽がある）。
+  //  寝ているあいだも押させるかの判断に使う
+  function needsMed(){ return pet.health === 'SICK' || !!pet.incubAt; }
 
   // ════════════════════════════════════════
   // 進化システム（企画書§5）
@@ -4052,7 +4055,10 @@
     switch(act){
       case 'FEED':  return plateOnScreen();                // 皿が残っているあいだは出せない
       case 'CLEAN': return !(pet.W > 0 || pet.plateAt || pet.plateSpoiled);   // 片づけるものが無い
-      case 'MED':   return asleep;                         // 就寝中だけ。健康な子に飲ませて嫌がられるのは有効な操作
+      // 就寝中は押せない。ただし くすりが要る子は別。
+      //  起こさないと飲ませられないと、しかって起こす（＝理不尽なしかる）しか
+      //  手が無くなる。具合が悪いのに罰を受ける形になってしまう
+      case 'MED':   return asleep && !needsMed();           // 健康な子に飲ませて嫌がられるのは有効な操作
       case 'PET':   return asleep;                         // 寝ているあいだは無反応
       case 'SCOLD': return false;                          // 寝ていても起こせるので常に可
       // ゲームは就寝中だけ薄くする。病気・空腹でも薄くしないのは、
@@ -4303,14 +4309,16 @@
         // 掃除するものが無い時は無反応（退屈マークを出さない）
         break;
       case 'MED':
-        // 寝ているあいだは何もしない（careDisabled でも弾いている）
-        if(asleep) break;
+        // 寝ているあいだは何もしない（careDisabled でも弾いている）。
+        //  ただし くすりが要る子には、起こさずに飲ませられる
+        if(asleep && !needsMed()) break;
         else if(pet.health === 'SICK'){
           // わがまま：くすりも飲まない。しかって聞かせるか、収まるのを待つ
           //  （わがままは最長1時間で自然に解ける。病気の死亡は36時間なので詰みにはならない）
           //  抽選は「本当にくすりが要る時」だけ。健康な子に飲ませただけで1時間も
-          //  ごはんを拒否されるのは、操作ミスに対する罰として重すぎる
-          if(pet.tantrumAt || rollTantrum('med')){ setReaction('refuse'); }
+          //  ごはんを拒否されるのは、操作ミスに対する罰として重すぎる。
+          //  寝ている子は わがままを言えないので、そのまま飲む
+          if(!asleep && (pet.tantrumAt || rollTantrum('med'))){ setReaction('refuse'); }
           else {
             pet.health = 'GOOD'; pet.sickAcc = 0; pet.sickCount++;  // 治療（回数は進化条件に使用）
             pet.total.med++;                                       // 通算（おもいで用）
@@ -5430,7 +5438,7 @@
   // 項目はキーで管理（表示ラベルは言語辞書、値は各キーで分岐）
   //  版の番号は sw.js の VERSION と同じもの。tools/bump-sw.sh が両方いっしょに
   //  書き換える（ずれると、テスターの端末に出ている版が分からなくなる）
-  const APP_VERSION = '2026-08-23-35';
+  const APP_VERSION = '2026-08-23-36';
   //  (C) は Press Start 2P に © が無く、別の字体に落ちて1文字だけ形が浮くため
   const APP_COPY = '(C) 2026 Studio M.D.Q.';
   const SETTINGS_KEYS = ['language','weather','sound','bodycolor','version','reset'];

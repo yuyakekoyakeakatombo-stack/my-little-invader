@@ -140,6 +140,68 @@ describe('ふれあい', () => {
 });
 
 // ══ 病気とその日の扱い ════════════════════════════════════
+// ══ ねているあいだの くすり ══════════════════════════════
+//   起こさないと飲ませられないと、しかって起こす（＝理不尽なしかる）しか
+//   手が無くなる。具合が悪いのに 罰を受ける形になってしまう
+describe('ねているあいだの くすり', () => {
+  const night = new Date(2026, 5, 15, 2, 0, 0).getTime();
+  const at = (o, when) => {
+    const { api, clock } = load({ at: when || night });
+    const t0 = clock.now();
+    Object.assign(api.pet, api.defaultPet(), { name:'A', stage:'larva', birth:t0-5*86400000,
+      lastTick:t0, EP:2, B:40, hunger:3, mood:3, ...o });
+    return api;
+  };
+  it('げんきな子が寝ているときは、これまでどおり押せない', () => {
+    const api = at({});
+    ok(api.effectiveAsleep(), 'ねている状態のはず');
+    ok(!api.needsMed(), 'くすりが要らない状態のはず');
+    ok(api.careDisabled('MED'), 'げんきな子にも 寝ているあいだ 飲ませられてしまう');
+  });
+  it('病気の子は、寝ていても飲ませられる', () => {
+    const api = at({ health:'SICK' });
+    ok(api.effectiveAsleep(), 'ねている状態のはず');
+    ok(!api.careDisabled('MED'), '寝ていると 飲ませられない');
+    api.doCare('MED');
+    eq(api.pet.health, 'GOOD', 'くすりのあとの けんこう:');
+  });
+  it('やまいの芽があるときも、寝ていて飲ませられる', () => {
+    const api = at({ incubAt: night - 3600000 });
+    ok(!api.careDisabled('MED'), '寝ていると 飲ませられない');
+    api.doCare('MED');
+    ok(!api.pet.incubAt, 'やまいの芽を摘めていない');
+  });
+  //  起こしてしまうと、しかって起こしたのと同じことになる
+  it('寝ている子に飲ませても、起こさないし きげんも下げない', () => {
+    const api = at({ health:'SICK', mood:3 });
+    const before = { mood: api.pet.mood, scold: api.pet.scoldBadCount || 0 };
+    api.doCare('MED');
+    ok(api.effectiveAsleep(), 'くすりで 起こしてしまっている');
+    eq(api.pet.mood, before.mood, 'くすりのあとの きげん:');
+    eq(api.pet.scoldBadCount || 0, before.scold, '理不尽なしかるに数えられている:');
+  });
+  //  寝ている子は わがままを言えない。拒まれると 起こすしか手が無くなる
+  it('寝ている子は、くすりを拒まない', () => {
+    let cured = 0;
+    for(let i=0;i<30;i++){
+      const api = at({ health:'SICK' });
+      api.doCare('MED');
+      if(api.pet.health === 'GOOD') cured++;
+    }
+    eq(cured, 30, '30回のうち 治った回数:');
+  });
+  //  瀕死（餓死18時間）は くすりではなく ごはんで治す。
+  //  ごはんは もともと寝ていても出せるので、そちらは詰まらない
+  it('瀕死の子には、寝ていても ごはんを出せる', () => {
+    const api = at({ hunger:0, mood:2, starveAcc:1200 });
+    ok(api.isWeak(), '瀕死のはず');
+    ok(api.effectiveAsleep(), 'ねている状態のはず');
+    ok(!api.careDisabled('FEED'), '寝ていると ごはんも出せない');
+    api.doCare('FEED');
+    ok(api.pet.plateAt, '皿が出ていない（起きてから食べる）');
+  });
+});
+
 describe('病気', () => {
   it('その日のうちに治せば放置に数えない', () => {
     const { api, clock } = load();

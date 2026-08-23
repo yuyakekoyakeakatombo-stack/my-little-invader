@@ -729,6 +729,20 @@ const MUTATIONS = [
   ['瀕死の姿が 濃い色のままになる',
    "      grid = asleep ? sp.sleep : sp.rest; yOff = 0; charCol = DM;",
    "      grid = asleep ? sp.sleep : sp.rest; yOff = 0;", 'caught'],
+  ['寝ていると くすりを飲ませられない（起こすしか手が無くなる）',
+   "      case 'MED':   return asleep && !needsMed();           // 健康な子に飲ませて嫌がられるのは有効な操作",
+   "      case 'MED':   return asleep;", 'caught'],
+  ['げんきな子にも 寝ているあいだ くすりを飲ませられる',
+   "      case 'MED':   return asleep && !needsMed();           // 健康な子に飲ませて嫌がられるのは有効な操作",
+   "      case 'MED':   return false;", 'caught'],
+  ['寝ている子に くすりが効かない（押せるのに何も起きない）',
+   "        if(asleep && !needsMed()) break;", "        if(asleep) break;", 'caught'],
+  ['寝ている子も くすりを拒む（結局 起こすことになる）',
+   "          if(!asleep && (pet.tantrumAt || rollTantrum('med'))){ setReaction('refuse'); }",
+   "          if(pet.tantrumAt || rollTantrum('med')){ setReaction('refuse'); }", 'caught'],
+  ['やまいの芽は くすりの対象から外れる',
+   "  function needsMed(){ return pet.health === 'SICK' || !!pet.incubAt; }",
+   "  function needsMed(){ return pet.health === 'SICK'; }", 'caught'],
 ];
 
 const orig = fs.readFileSync(GAME, 'utf8');
