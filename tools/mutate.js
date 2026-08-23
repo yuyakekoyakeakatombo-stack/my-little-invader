@@ -289,8 +289,8 @@ const MUTATIONS = [
    "    ctxM.fillStyle=(fM%10<5) ? NK : DM;", 'caught'],
 
   ['タイトルの選択肢を薄い色で描く（読みにくい）',
-   "          ctxO.fillStyle = ON;\n          ctxO.fillText(o.t, cx, y);",
-   "          ctxO.fillStyle = DIM;\n          ctxO.fillText(o.t, cx, y);", 'caught'],
+   "          ctxO.fillStyle = on ? ON : OFF;\n          ctxO.fillText(o.t, cx, y);",
+   "          ctxO.fillStyle = on ? DIM : OFF;\n          ctxO.fillText(o.t, cx, y);", 'caught'],
   ['押せないお世話の名前を薄くする（どの項目にいるか読めない）',
    "        ctxN.fillStyle = ON;\n        ctxN.fillText(T(CARE_ORDER[menuSel].toLowerCase()), (W*S)/2, 36*S);",
    "        ctxN.fillStyle = careDisabled(CARE_ORDER[menuSel]) ? DIM : ON;\n        ctxN.fillText(T(CARE_ORDER[menuSel].toLowerCase()), (W*S)/2, 36*S);", 'caught'],
@@ -658,6 +658,16 @@ const MUTATIONS = [
   ['待っているあいだに ボタンが効いてしまう',
    "        || nameOpenT >= 0;                // 到着のあと、命名画面が開くまでの一拍",
    "        || false;", 'caught'],
+  ['えらんでいる行が点滅しない（どれを選んでいるか動きで分からない）',
+   "          const on = (i !== sel) || blink;", "          const on = true;", 'caught'],
+  ['えらんでいない行まで点滅する',
+   "          const on = (i !== sel) || blink;", "          const on = blink;", 'caught'],
+  ['点滅の片側を薄い色にする（半分の時間読めない）',
+   "          ctxO.fillStyle = on ? ON : OFF;", "          ctxO.fillStyle = on ? ON : DIM;", 'caught'],
+  ['選択肢のあいだが広がって、ばらばらに見える',
+   "  const OPT_Y0 = 37, OPT_H = 6;", "  const OPT_Y0 = 37, OPT_H = 9;", 'caught'],
+  ['選択肢のあいだが詰まりすぎて 字が重なる',
+   "  const OPT_Y0 = 37, OPT_H = 6;", "  const OPT_Y0 = 37, OPT_H = 2;", 'caught'],
 ];
 
 const orig = fs.readFileSync(GAME, 'utf8');

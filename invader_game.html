@@ -607,6 +607,7 @@
   //  ことばを決める前なので、ここは英語のまま。
   //  読んでから始めてほしいので、説明書を上に置く
   const OPEN_OPTS = ['MANUAL', 'START'];
+  const OPT_Y0 = 37, OPT_H = 6;   // 選択肢の1行目の高さと行間（ドット）
   let openStep = 0, openSel = 0, langSel = 0;
 
   function tickOpening(){
@@ -657,12 +658,15 @@
         if(!openingReady) openingReady = true;
         const list = (openStep === 1) ? LANG_OPTS : OPEN_OPTS.map(t => ({ t, jp:false }));
         const sel  = (openStep === 1) ? langSel : openSel;
+        //  選んでいる行は点滅させる。薄色だと点滅の半分が読めないので、濃↔消で
+        const blink = Math.floor(titleWait / 9) % 2 === 0;
         list.forEach((o, i) => {
-          const y = (34 + i*9) * S;
+          const y = (OPT_Y0 + i*OPT_H) * S;
+          const on = (i !== sel) || blink;
           ctxO.font = o.jp ? ('10px ' + JP_FONT) : '8px "Press Start 2P"';
-          ctxO.fillStyle = ON;
+          ctxO.fillStyle = on ? ON : OFF;
           ctxO.fillText(o.t, cx, y);
-          if(i === sel){
+          if(i === sel && on){
             const w = ctxO.measureText(o.t).width;
             ctxO.font = '8px "Press Start 2P"';
             ctxO.fillText('>', cx - w/2 - 10, y);
@@ -5395,7 +5399,7 @@
   // 項目はキーで管理（表示ラベルは言語辞書、値は各キーで分岐）
   //  版の番号は sw.js の VERSION と同じもの。tools/bump-sw.sh が両方いっしょに
   //  書き換える（ずれると、テスターの端末に出ている版が分からなくなる）
-  const APP_VERSION = '2026-08-23-25';
+  const APP_VERSION = '2026-08-23-26';
   //  (C) は Press Start 2P に © が無く、別の字体に落ちて1文字だけ形が浮くため
   const APP_COPY = '(C) 2026 Studio M.D.Q.';
   const SETTINGS_KEYS = ['language','weather','sound','bodycolor','version','reset'];
