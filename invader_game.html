@@ -457,6 +457,18 @@
     return ctx;
   }
   function dot(ctx,x,y,col){ if(x<0||x>=W||y<0||y>=H)return; ctx.fillStyle=col||ON; ctx.fillRect(x*S,y*S,S,S); }
+  // えらんでいる項目を指す ▶。Press Start 2P は Latin しか持たないので、
+  //  文字として置くと 別の字体に落ちて そこだけ形が浮く。
+  //  文字と同じ高さの三角を、画素単位で直接描く。cy は行の上下中央（textBaseline='middle' と同じ基準）
+  function selMark(ctx, x, cy, col, len){
+    const L = len || 7, t = Math.ceil(L/2);      // t＝頂点までの段数＝三角の横はば
+    const y0 = Math.round(cy - L/2);
+    ctx.fillStyle = col || ON;
+    for(let i=0;i<t;i++){
+      const w = 2*i+1;                           // その段の縦の長さ
+      ctx.fillRect(x + t-1-i, y0 + (L-w)/2, 1, w);
+    }
+  }
   function stamp(ctx,grid,ox,oy,col){ const c=col||ON; grid.forEach((row,ry)=>row.forEach((v,rx)=>{if(v)dot(ctx,ox+rx,oy+ry,c);})); }
 
   // ── 遷移 ──
@@ -664,13 +676,11 @@
           const y = (OPT_Y0 + i*OPT_H) * S;
           const on = (i !== sel) || blink;
           ctxO.font = o.jp ? ('10px ' + JP_FONT) : '8px "Press Start 2P"';
+          const w = ctxO.measureText(o.t).width;
           ctxO.fillStyle = on ? ON : OFF;
           ctxO.fillText(o.t, cx, y);
-          if(i === sel && on){
-            const w = ctxO.measureText(o.t).width;
-            ctxO.font = '8px "Press Start 2P"';
-            ctxO.fillText('>', cx - w/2 - 10, y);
-          }
+          // ▶ は点滅させない。どの行を選んでいるかは 消えているあいだも分かるように
+          if(i === sel) selMark(ctxO, cx - w/2 - 9, y, ON);
         });
       }
     }
@@ -5399,7 +5409,7 @@
   // 項目はキーで管理（表示ラベルは言語辞書、値は各キーで分岐）
   //  版の番号は sw.js の VERSION と同じもの。tools/bump-sw.sh が両方いっしょに
   //  書き換える（ずれると、テスターの端末に出ている版が分からなくなる）
-  const APP_VERSION = '2026-08-23-26';
+  const APP_VERSION = '2026-08-23-27';
   //  (C) は Press Start 2P に © が無く、別の字体に落ちて1文字だけ形が浮くため
   const APP_COPY = '(C) 2026 Studio M.D.Q.';
   const SETTINGS_KEYS = ['language','weather','sound','bodycolor','version','reset'];
@@ -5514,7 +5524,7 @@
           const y = 20 + i*ROW_H, isSel = (idx === wSel), cy = (y + ROW_H/2)*S;
           if(isSel){ for(let dx=1;dx<W-1;dx++) for(let dy=0;dy<ROW_H;dy++) dot(ctxN,dx,y+dy,DIM); }
           ctxN.font=uiFont(6); ctxN.fillStyle=ON; ctxN.textAlign='left'; ctxN.textBaseline='middle';
-          if(isSel) ctxN.fillText('>',2*S,cy);
+          if(isSel) selMark(ctxN, 2*S, cy, ON);
           ctxN.fillText(weatherOptionLabel(opts[idx]), 7*S, cy);
           // いま設定されているものに印を付ける
           if(idx === weatherSelIndex()){ ctxN.textAlign='right'; ctxN.fillText('*',(W-3)*S,cy); }
@@ -5533,7 +5543,7 @@
         const HL_H = 7, cy = (y + HL_H/2)*S;                 // 文字は網掛けの上下中央に置く
         if(isSel){ for(let dx=1;dx<W-1;dx++) for(let dy=0;dy<HL_H;dy++) dot(ctxN,dx,y+dy,DIM); }
         ctxN.font=uiFont(6); ctxN.fillStyle=ON; ctxN.textAlign='left'; ctxN.textBaseline='middle';
-        if(isSel) ctxN.fillText('>',2*S,cy);
+        if(isSel) selMark(ctxN, 2*S, cy, ON);
         ctxN.fillText(T(key), 7*S, cy);
         // 現在の設定値。右端はステータス画面と同じ位置に揃え、項目名とのあいだを薄い点線でつなぐ
         const val = key==='sound'     ? (soundOn?T('on'):T('off'))
@@ -5616,7 +5626,7 @@
         const gx = FOOD_ICON_CX - (g[0].length >> 1);
         stamp2(ctxN, g, gx, y + Math.round((HL_H - g.length)/2), ON, isSel ? OFF : DIM);  // 選択中は反転地なのでDIM部分をOFFで抜く
         ctxN.font=uiFont(7); ctxN.fillStyle=ON; ctxN.textAlign='left'; ctxN.textBaseline='middle';
-        if(isSel) ctxN.fillText('>', 1*S, cy);
+        if(isSel) selMark(ctxN, 1*S, cy, ON);
         ctxN.fillText(T(key), 20*S, cy);
         ctxN.textBaseline='top';
       });
@@ -5637,7 +5647,7 @@
         // 長い項目名はサイズ7、それ以外8（ゲーム名は共通で英語表記）
         const fsz = (label.length>9) ? 7 : 8;
         ctxN.font=fsz+'px "Press Start 2P"'; ctxN.fillStyle=ON; ctxN.textAlign='left'; ctxN.textBaseline='middle';
-        if(isSel) ctxN.fillText('>',2*S,cy);
+        if(isSel) selMark(ctxN, 2*S, cy, ON);
         ctxN.fillText(label, 8*S, cy);
         ctxN.textBaseline='top';
       });
@@ -5711,7 +5721,7 @@
         const isSel = (menuSel === 6+idx);
         if(isSel){ for(let dx=c.x0;dx<c.x1;dx++) for(let dy=0;dy<HL_H;dy++) dot(ctxN,dx,y+dy,DIM); }
         ctxN.font=uiFont(7); ctxN.fillStyle=ON; ctxN.textAlign='left'; ctxN.textBaseline='middle';
-        if(isSel) ctxN.fillText('>', c.mark*S, cy);
+        if(isSel) selMark(ctxN, c.mark*S, cy, ON);
         ctxN.fillText(T(key), c.text*S, cy);
         ctxN.textBaseline='top';
         // 未読があるDIARYには「NEW」を点滅させる。列の右端にそろえる

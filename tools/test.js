@@ -190,6 +190,11 @@ describe('タイトルの選択肢', () => {
     ok(/const on = \(i !== sel\) \|\| blink;/.test(src()), 'えらんでいる行が点滅しない');
     ok(/ctxO\.fillStyle = on \? ON : OFF;/.test(src()), '点滅の片側が薄色（読めない）');
   });
+  //  ▶ は点滅させない。字が消えているあいだも どの行を選んでいるか分かるように
+  it('▶ は点滅しない', () => {
+    ok(/if\(i === sel\) selMark\(ctxO,/.test(src()), 'タイトルの ▶ が selMark で描かれていない');
+    ok(!/if\(i === sel && on\)/.test(src()), '▶ まで点滅している');
+  });
   //  タイトルから離しすぎず、ふたつが ひとかたまりに見える間隔にする
   it('選択肢どうしが 近くに並んでいる', () => {
     const { api } = load();
@@ -2606,6 +2611,41 @@ describe('ファイル', () => {
       ok(m, `${f}: apple-mobile-web-app-title が無い（iOSで別の名前になる）`);
       eq(m[1], APP, `${f} の apple-mobile-web-app-title:`);
     }
+  });
+  //  ▶（U+25B6）は Press Start 2P（Latinのみ）に無く、文字で置くと
+  //  そこだけ別の字体に落ちて形が浮く。画素で三角を描いて使う
+  it('選択中の印が、どの画面でも同じ ▶ で描かれている', () => {
+    const src = read('invader_game.html');
+    ok(/function selMark\(ctx, x, cy, col, len\)\{/.test(src), '▶ を描く selMark が無い');
+    // 一覧で選択中を示していた '>' が残っていないこと
+    const gt = [...src.matchAll(/fillText\('>'[^)]*\)/g)].map(m => m[0]);
+    // 残ってよいのは 日記・おもいでの「次のページがある」印だけ（左の '<' と対）
+    const pageArrows = (src.match(/if\(diaryPage < diaryLog\.length-1\)[^\n]*fillText\('>'/g) || []).length
+                     + (src.match(/if\(memPage < MEM_PAGES-1\)[^\n]*fillText\('>'/g) || []).length;
+    eq(gt.length, pageArrows, `選択中を示す '>' が ${gt.length - pageArrows} か所 残っている: ${gt.join(' / ')}`);
+    // 一覧のほうは selMark を使っている
+    const marks = (src.match(/if\(isSel\) selMark\(/g) || []).length;
+    ok(marks >= 5, `一覧の ▶ が ${marks} か所しか無い（メニュー・設定・天気・ごはん・ゲームの5つ）`);
+  });
+  //  描いた画素を拾って、ちゃんと右向きの三角になっているかを見る
+  it('▶ が 右向きの三角になっている', () => {
+    const { api } = load();
+    const cells = [];
+    const rec = { set fillStyle(v){}, fillRect(x, y, w, h){ cells.push([x, y, w, h]); } };
+    const L = 7;
+    api.selMark(rec, 0, 10, '#000', L);          // 行の中心 y=10
+    eq(cells.length, Math.ceil(L/2), '段の数（頂点までの段数）:');
+    // 左の列ほど縦に長く、右へ行くほど短い＝右向きの三角
+    const byX = cells.slice().sort((a, b) => a[0] - b[0]);
+    for(let i = 1; i < byX.length; i++)
+      ok(byX[i][3] < byX[i-1][3], `${i}列目が ${byX[i][3]} で 前の列(${byX[i-1][3]})より短くない。三角に見えない`);
+    eq(byX[0][3], L, 'いちばん左の縦の長さ（文字と同じ高さ）:');
+    eq(byX[byX.length-1][3], 1, 'いちばん右（頂点）の縦の長さ:');
+    // 上下の中心が、渡した中心にそろっている。
+    //  高さが奇数(7)なので、画素の格子に乗せるぶん 半画素までは ずれる
+    const top = Math.min(...cells.map(c => c[1])), bot = Math.max(...cells.map(c => c[1] + c[3]));
+    const mid = (top + bot) / 2;
+    ok(Math.abs(mid - 10) <= 0.5, `三角の上下の中心が ${mid} で、行の中心(10)から ずれている`);
   });
   it('サービスワーカーのVERSIONが日付の形をしている', () => {
     const m = read('sw.js').match(/const VERSION = '([^']+)'/);

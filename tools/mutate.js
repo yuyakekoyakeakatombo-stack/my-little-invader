@@ -668,6 +668,19 @@ const MUTATIONS = [
    "  const OPT_Y0 = 37, OPT_H = 6;", "  const OPT_Y0 = 37, OPT_H = 9;", 'caught'],
   ['選択肢のあいだが詰まりすぎて 字が重なる',
    "  const OPT_Y0 = 37, OPT_H = 6;", "  const OPT_Y0 = 37, OPT_H = 2;", 'caught'],
+  ['選択中の印を ＞（文字）に戻す（字体が浮く）',
+   "        if(isSel) selMark(ctxN, 2*S, cy, ON);\n        ctxN.fillText(T(key), 7*S, cy);",
+   "        if(isSel) ctxN.fillText('>',2*S,cy);\n        ctxN.fillText(T(key), 7*S, cy);", 'caught'],
+  ['タイトルの ▶ まで点滅する（字が消えると どこを選んでいるか分からない）',
+   "          if(i === sel) selMark(ctxO, cx - w/2 - 9, y, ON);",
+   "          if(i === sel && on) selMark(ctxO, cx - w/2 - 9, y, ON);", 'caught'],
+  ['▶ が三角に見えない（同じ長さの棒が並ぶ）',
+   "      const w = 2*i+1;                           // その段の縦の長さ\n      ctx.fillRect(x + t-1-i, y0 + (L-w)/2, 1, w);",
+   "      const w = L;\n      ctx.fillRect(x + t-1-i, y0 + (L-w)/2, 1, w);", 'caught'],
+  ['▶ が左向きになる',
+   "      ctx.fillRect(x + t-1-i, y0 + (L-w)/2, 1, w);", "      ctx.fillRect(x + i, y0 + (L-w)/2, 1, w);", 'caught'],
+  ['▶ が行の中心からずれる',
+   "    const y0 = Math.round(cy - L/2);", "    const y0 = Math.round(cy);", 'caught'],
 ];
 
 const orig = fs.readFileSync(GAME, 'utf8');
