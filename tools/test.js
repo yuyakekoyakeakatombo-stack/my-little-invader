@@ -176,13 +176,38 @@ describe('タイトルの選択肢', () => {
   });
   it('はじめは たたんである', () => {
     const { api } = load();
-    eq(api.openMenu, false, 'いきなり選択肢が出ている:');
+    eq(api.openStep, 0, 'いきなり選択肢が出ている:');
     eq(api.openSel, 0, 'はじめに選ばれているもの（START）:');
   });
-  //  A を押したら まず選択肢。いきなり始まると 説明書を読む機会が無い
-  it('A を押すと、まず選択肢が出る', () => {
-    ok(/if\(!openMenu\)\{ openMenu = true; openSel = 0; return; \}/.test(src()),
-       'A で いきなり始まってしまう（選択肢を出していない）');
+  //  A を押したら まず ことばえらび。いきなり始まると 説明書を読む機会が無い
+  it('A を押すと、まず ことばえらびが出る', () => {
+    ok(/if\(openStep === 0\)\{ openStep = 1; langSel = \(lang === 'en'\) \? 1 : 0; return; \}/.test(src()),
+       'A で いきなり始まってしまう（ことばえらびを出していない）');
+  });
+  //  ことばを決めてから はじめる・説明書。説明書も本編も その言語で読ませる
+  it('ことばをえらぶのは、はじめる・説明書 より前', () => {
+    ok(/if\(openStep === 1\)\{ setLang\(LANG_OPTS\[langSel\]\.k\); openStep = 2; openSel = 0; return; \}/.test(src()),
+       'ことばえらびから 次へ進めない');
+  });
+  it('ことばは 2つ、それぞれの言語で書いてある', () => {
+    const { api } = load();
+    eq(api.LANG_OPTS.map(o => o.k), ['ja', 'en'], 'ことばの並び:');
+    eq(api.LANG_OPTS[0].t, 'にほんご', '日本語の名前:');
+    eq(api.LANG_OPTS[1].t, 'ENGLISH', '英語の名前:');
+    ok(api.LANG_OPTS[0].jp, 'かなを ピクセル字体で描こうとしている（グリフが無い）');
+    ok(!api.LANG_OPTS[1].jp, '英語まで ゴシック体になっている');
+  });
+  it('えらんだ ことばが すぐ効く', () => {
+    const { api, store } = load({ storage: { myvader_lang: 'ja' } });
+    api.setLang('en');
+    eq(api.lang, 'en', 'えらんだあとの言語:');
+    eq(store.get('myvader_lang'), 'en', '保存された言語:');
+    api.setLang('ja');
+    eq(api.lang, 'ja', '戻したあとの言語:');
+  });
+  //  いま設定されているほうに合わせておく（毎回えらび直さずに A だけで進める）
+  it('ことばえらびは、いまの設定に合わせて開く', () => {
+    ok(/langSel = \(lang === 'en'\) \? 1 : 0;/.test(src()), 'いまの言語に合わせていない');
   });
   it('MANUAL をえらぶと、説明書を開いて そこで止まる', () => {
     const m = src().match(/if\(OPEN_OPTS\[openSel\] === 'MANUAL'\)\{[\s\S]{0,200}?\}/);
@@ -2445,7 +2470,7 @@ describe('ファイル', () => {
   //  小さすぎて「押していい」ことが伝わらなかった
   it('タイトルの PRESS A が、読める大きさで描かれている', () => {
     const src = read('invader_game.html');
-    const m = src.match(/ctxO\.font = '(\d+)px "Press Start 2P"';\s*\n\s*if\(!openMenu\)\{/);
+    const m = src.match(/ctxO\.font = '(\d+)px "Press Start 2P"';\s*\n\s*if\(openStep === 0\)\{/);
     ok(m, 'PRESS A の字の指定が見つからない');
     ok(Number(m[1]) >= 8, `PRESS A が小さい（${m[1]}px）`);
   });

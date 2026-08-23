@@ -436,7 +436,8 @@
         'OTHER PURPOSE.'],
   };
   function T(k){ return (I18N[lang] && I18N[lang][k]) || I18N.en[k] || k; }
-  function toggleLang(){ lang = (lang==='en') ? 'ja' : 'en'; try{ localStorage.setItem('myvader_lang', lang); }catch(e){} }
+  function setLang(v){ lang = (v === 'en') ? 'en' : 'ja'; try{ localStorage.setItem('myvader_lang', lang); }catch(e){} }
+  function toggleLang(){ setLang(lang === 'en' ? 'ja' : 'en'); }
   // フォント：英語はピクセル字体（Press Start 2P）
   //          日本語はグリフを持つゴシック体で、小さいと潰れるため大きめに描画（可読性優先）
   const JP_FONT = '"Hiragino Maru Gothic ProN","Yu Gothic","Hiragino Sans",sans-serif';
@@ -599,11 +600,14 @@
 
   let fO=0, openingReady=false, openingDone=false;
   let titleWait=0; // アニメ後の待機カウンタ
-  //  タイトルで A を押したあとに出す ふたつの選択肢。
-  //  遊びはじめる前に説明書を読めるようにするための入口。
-  //  ここは まだ言語設定に触れていない場所なので、英語で出す
+  //  タイトルで A を押したあとの流れ。
+  //   0＝PRESS A ／ 1＝ことばをえらぶ ／ 2＝はじめる・説明書
+  //  ことばを先に決めるのは、説明書も本編も その言語で読ませるため。
+  //  ことばの名前は、それぞれの言語で書く（読めるほうを選んでもらう）
+  const LANG_OPTS = [{ k:'ja', t:'にほんご', jp:true }, { k:'en', t:'ENGLISH', jp:false }];
+  //  ことばを決める前は どちらでも読めないので、ここは英語のまま
   const OPEN_OPTS = ['START', 'MANUAL'];
-  let openMenu = false, openSel = 0;
+  let openStep = 0, openSel = 0, langSel = 0;
 
   function tickOpening(){
     ctxO.fillStyle=DIM; ctxO.fillRect(0,0,W*S,H*S);
@@ -647,20 +651,28 @@
       ctxO.fillText('Invader', cx, 26*S);
 
       // 一拍（約1.5秒=19フレーム）後にPRESS A点滅
-      if(titleWait > 19 || openMenu){
+      if(titleWait > 19 || openStep){
         if(!openingReady) openingReady = true;
         ctxO.font = '8px "Press Start 2P"';
-        if(!openMenu){
+        if(openStep === 0){
           const blink = Math.floor(titleWait / 9) % 2 === 0;
           ctxO.fillStyle = blink ? ON : OFF;   // 薄色だと点滅の半分が読めない
           ctxO.fillText('PRESS  A', cx, 35*S);
         } else {
-          // ふたつの選択肢。選んでいるほうの左に > を置く
-          OPEN_OPTS.forEach((t, i) => {
+          // ふたつの選択肢。選んでいるほうの左に > を置く。
+          //  かなは ピクセル字体にグリフが無いので、ゴシック体で少し大きく描く
+          const list = (openStep === 1) ? LANG_OPTS : OPEN_OPTS.map(t => ({ t, jp:false }));
+          const sel  = (openStep === 1) ? langSel : openSel;
+          list.forEach((o, i) => {
             const y = (34 + i*9) * S;
+            ctxO.font = o.jp ? ('10px ' + JP_FONT) : '8px "Press Start 2P"';
             ctxO.fillStyle = ON;
-            ctxO.fillText(t, cx, y);
-            if(i === openSel) ctxO.fillText('>', cx - ctxO.measureText(t).width/2 - 10, y);
+            ctxO.fillText(o.t, cx, y);
+            if(i === sel){
+              const w = ctxO.measureText(o.t).width;
+              ctxO.font = '8px "Press Start 2P"';
+              ctxO.fillText('>', cx - w/2 - 10, y);
+            }
           });
         }
       }
@@ -673,28 +685,33 @@
   onPress(document.getElementById('oa'), ()=>{
     if(manualFrame) return;                       // 説明書を開いているあいだは効かせない
     playClick(); btnAnim(document.getElementById('oa'));
-    if(!openMenu){ openMenu = true; openSel = 0; return; }
+    // まず ことばをえらぶ。いま設定されているほうに合わせておく
+    if(openStep === 0){ openStep = 1; langSel = (lang === 'en') ? 1 : 0; return; }
+    if(openStep === 1){ setLang(LANG_OPTS[langSel].k); openStep = 2; openSel = 0; return; }
     if(OPEN_OPTS[openSel] === 'MANUAL'){
       openManual();                               // 閉じると この選択肢に戻ってくる
       return;
     }
     // 新規ゲーム（未命名・誕生前）なら、育成画面でビーム到着の演出から始める
     if(!pet.name && !pet.birth) startArrival();
-    openMenu = false;
+    openStep = 0;
     showView('main');
   });
-  // B：選択肢を畳んで PRESS A に戻す
+  // B：ひとつ前に戻す（はじめる・説明書 → ことば → PRESS A）
   onPress(document.getElementById('ob'), ()=>{
     if(manualFrame) return;
     playClick(); btnAnim(document.getElementById('ob'));
-    openMenu = false;
+    openStep = Math.max(0, openStep - 1);
   });
   document.querySelectorAll('#view-opening .dpad-arrow').forEach(el=>{
     onPress(el, ()=>{
-      if(manualFrame || !openMenu) return;
+      if(manualFrame || !openStep) return;
       playClick(900); dpadAnim(el);
-      if(el.classList.contains('up'))   openSel = (openSel + OPEN_OPTS.length - 1) % OPEN_OPTS.length;
-      if(el.classList.contains('down')) openSel = (openSel + 1) % OPEN_OPTS.length;
+      const n = (openStep === 1) ? LANG_OPTS.length : OPEN_OPTS.length;
+      const d = el.classList.contains('up') ? n-1 : el.classList.contains('down') ? 1 : 0;
+      if(!d) return;
+      if(openStep === 1) langSel = (langSel + d) % n;
+      else               openSel = (openSel + d) % n;
     });
   });
   onPress(document.getElementById('omenu'), ()=>{ playClick(); btnAnim(document.getElementById('omenu'),1,0.93); });
@@ -5380,7 +5397,7 @@
   // 項目はキーで管理（表示ラベルは言語辞書、値は各キーで分岐）
   //  版の番号は sw.js の VERSION と同じもの。tools/bump-sw.sh が両方いっしょに
   //  書き換える（ずれると、テスターの端末に出ている版が分からなくなる）
-  const APP_VERSION = '2026-08-23-22';
+  const APP_VERSION = '2026-08-23-23';
   //  (C) は Press Start 2P に © が無く、別の字体に落ちて1文字だけ形が浮くため
   const APP_COPY = '(C) 2026 Studio M.D.Q.';
   const SETTINGS_KEYS = ['language','weather','sound','bodycolor','version','reset'];
@@ -5831,7 +5848,7 @@
           //  一度再生済みのフラグが残ったままで、UFOが降りてくる場面を飛ばして
           //  いきなりタイトルと PRESS A が出てしまう
           applyBodyColor(); showView('opening');
-          fO=0; openingReady=false; openingDone=false; titleWait=0; openMenu=false; openSel=0;
+          fO=0; openingReady=false; openingDone=false; titleWait=0; openStep=0; openSel=0; langSel=0;
         }
       }
     } else if(inStatus){
