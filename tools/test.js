@@ -164,6 +164,66 @@ describe('病気', () => {
   });
 });
 
+// ══ タイトルの選択肢 ══════════════════════════════════════
+//   遊びはじめる前に説明書を読めるようにする入口。
+//   まだ言語を選んでいない場所なので、ここは英語で出す
+describe('タイトルの選択肢', () => {
+  const src = () => require('fs').readFileSync(require('path').join(__dirname, '..', 'invader_game.html'), 'utf8');
+  it('えらべるのは はじめると 説明書のふたつ', () => {
+    const { api } = load();
+    eq(api.OPEN_OPTS, ['START', 'MANUAL'], 'タイトルの選択肢:');
+    for(const t of api.OPEN_OPTS) ok(/^[\x20-\x7E]+$/.test(t), `${t}: 英語で書かれていない`);
+  });
+  it('はじめは たたんである', () => {
+    const { api } = load();
+    eq(api.openMenu, false, 'いきなり選択肢が出ている:');
+    eq(api.openSel, 0, 'はじめに選ばれているもの（START）:');
+  });
+  //  A を押したら まず選択肢。いきなり始まると 説明書を読む機会が無い
+  it('A を押すと、まず選択肢が出る', () => {
+    ok(/if\(!openMenu\)\{ openMenu = true; openSel = 0; return; \}/.test(src()),
+       'A で いきなり始まってしまう（選択肢を出していない）');
+  });
+  it('MANUAL をえらぶと、説明書を開いて そこで止まる', () => {
+    const m = src().match(/if\(OPEN_OPTS\[openSel\] === 'MANUAL'\)\{[\s\S]{0,200}?\}/);
+    ok(m, 'MANUAL の枝が無い');
+    ok(/openManual\(\);/.test(m[0]), '説明書を開いていない');
+    ok(/return;/.test(m[0]), 'そのままゲームが始まってしまう');
+    ok(!/showView\('main'\)/.test(m[0]), 'MANUAL なのに育成画面へ行ってしまう');
+  });
+  //  説明書は かぶせて出すだけなので、閉じれば下の選択肢がそのまま見えている
+  it('説明書を閉じても、選択肢は畳まれない', () => {
+    ok(!/function closeManual\(\)\{[^}]*openMenu\s*=\s*false/.test(src()),
+       '説明書を閉じると 選択肢まで畳まれてしまう');
+  });
+});
+
+// ══ 到着のあと、名前をつける画面へ ══════════════════════════
+describe('到着のあと', () => {
+  const src = () => require('fs').readFileSync(require('path').join(__dirname, '..', 'invader_game.html'), 'utf8');
+  it('着地を見とどける間がある', () => {
+    const { api } = load();
+    ok(api.ARR_TO_NAME >= 1, `一拍が ${api.ARR_TO_NAME} コマしかない`);
+    ok(api.ARR_TO_NAME <= 30, `一拍が ${api.ARR_TO_NAME} コマ（3秒超）は長すぎる`);
+    eq(api.nameOpenT, -1, 'はじめから待ちに入っている:');
+  });
+  it('到着が終わると、名前がまだのときだけ 待ちに入る', () => {
+    ok(/if\(arriveT >= ARR_TOTAL\)\{ arriveT = -1; if\(!pet\.name\) nameOpenT = ARR_TO_NAME; \}/.test(src()),
+       '到着のあとに 命名画面へ送る仕掛けが無い');
+  });
+  it('待ちが明けると、命名画面が自動で開く', () => {
+    ok(/if\(nameOpenT-- === 0\)\{ nameOpenT = -1; startNaming\(\); showView\('naming'\); return; \}/.test(src()),
+       '待ちが明けても命名画面が開かない');
+  });
+  //  待っているあいだにボタンが効くと、名前をつける前に画面を離れられてしまう
+  it('待っているあいだは ボタンが効かない', () => {
+    const { api } = load();
+    eq(api.cutscenePlaying(), false, 'ふだんから塞がっている:');
+    api.nameOpenT = 3;
+    eq(api.cutscenePlaying(), true, '待っているあいだに ボタンが効いてしまう:');
+  });
+});
+
 // ══ ヘッダーのマーク ══════════════════════════════════════
 //   ふだんは薄色で置いておき、知らせがあるときだけ濃い色で点滅する。
 //   出っぱなしにするのは「そこから飛べる」と分かってもらうため
@@ -2385,7 +2445,7 @@ describe('ファイル', () => {
   //  小さすぎて「押していい」ことが伝わらなかった
   it('タイトルの PRESS A が、読める大きさで描かれている', () => {
     const src = read('invader_game.html');
-    const m = src.match(/ctxO\.font = '(\d+)px "Press Start 2P"';\s*\n\s*ctxO\.fillStyle = blink/);
+    const m = src.match(/ctxO\.font = '(\d+)px "Press Start 2P"';\s*\n\s*if\(!openMenu\)\{/);
     ok(m, 'PRESS A の字の指定が見つからない');
     ok(Number(m[1]) >= 8, `PRESS A が小さい（${m[1]}px）`);
   });

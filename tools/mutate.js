@@ -625,6 +625,23 @@ const MUTATIONS = [
   ['マークが1つも無くても 仕切りを引く',
    "    if(list.length){\n      const last = headIconX(list.length-1, list.length) + HEAD_ICON_W;",
    "    {\n      const last = headIconX(Math.max(0,list.length-1), Math.max(1,list.length)) + HEAD_ICON_W;", 'caught'],
+  ['タイトルの A で いきなりゲームが始まる（説明書を読む機会が無い）',
+   "    if(!openMenu){ openMenu = true; openSel = 0; return; }", "", 'caught'],
+  ['MANUAL をえらんでも ゲームが始まってしまう',
+   "      openManual();                               // 閉じると この選択肢に戻ってくる\n      return;",
+   "      openManual();", 'caught'],
+  ['タイトルの選択肢が日本語になる（言語を選ぶ前の画面なのに）',
+   "  const OPEN_OPTS = ['START', 'MANUAL'];", "  const OPEN_OPTS = ['はじめる', 'せつめいしょ'];", 'caught'],
+  ['はじめから選択肢が出ている',
+   "  let openMenu = false, openSel = 0;", "  let openMenu = true, openSel = 0;", 'caught'],
+  ['到着のあと、命名画面へ送らない',
+   "if(arriveT >= ARR_TOTAL){ arriveT = -1; if(!pet.name) nameOpenT = ARR_TO_NAME; }",
+   "if(arriveT >= ARR_TOTAL){ arriveT = -1; }", 'caught'],
+  ['到着のあと 間を置かずに命名画面が開く（着地を見とどけられない）',
+   "  const ARR_TO_NAME = 9;", "  const ARR_TO_NAME = 0;", 'caught'],
+  ['待っているあいだに ボタンが効いてしまう',
+   "        || nameOpenT >= 0;                // 到着のあと、命名画面が開くまでの一拍",
+   "        || false;", 'caught'],
 ];
 
 const orig = fs.readFileSync(GAME, 'utf8');
