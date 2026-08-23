@@ -279,6 +279,10 @@ describe('ヘッダーのマーク', () => {
     eq(bars.length, 3, '棒の本数（STATUS の目盛り3本にそろえる）:');
     const lens = bars.map(b => b.len);
     eq(new Set(lens).size, 3, `棒の長さが かぶっている（${lens}）。グラフに見えない:`);
+    // 「長い・短い・長い」と対称に並べると E の字に見える。かならず一方向に伸ばす
+    const up   = lens.every((v,i) => i === 0 || v > lens[i-1]);
+    const down = lens.every((v,i) => i === 0 || v < lens[i-1]);
+    ok(up || down, `棒の長さが ${lens} で、山や谷になっている。E の字に見える`);
   });
   //  書いてあるページに見せるための線。減らすと ただの箱になる
   it('日記のマークの中に、横線が3本ある', () => {
