@@ -280,14 +280,14 @@ describe('ヘッダーのマーク', () => {
     const lens = bars.map(b => b.len);
     eq(new Set(lens).size, 3, `棒の長さが かぶっている（${lens}）。グラフに見えない:`);
   });
-  //  この大きさで横線を3本入れると潰れて網に見える。1本だけにしてある
-  it('日記のマークの中の横線は1本', () => {
+  //  書いてあるページに見せるための線。減らすと ただの箱になる
+  it('日記のマークの中に、横線が3本ある', () => {
     const { api } = load();
     const g = api.DIARY_ICON, H = g.length, W = g[0].length;
     // 綴じ側(0,1列)と外枠を除いた「紙の中」で、線が引かれている行を数える
     let lines = 0;
     for(let y=1;y<H-1;y++) if(g[y].slice(3, W-1).some(v => v)) lines++;
-    eq(lines, 1, '紙の中の横線の数:');
+    eq(lines, 3, '紙の中の横線の数:');
   });
 });
 
