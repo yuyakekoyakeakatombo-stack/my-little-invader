@@ -2767,6 +2767,30 @@ describe('ファイル', () => {
     ok(/A new version is available/.test(src) && /あたらしい バージョンが あります/.test(src),
        'おしらせに 両方の言語が無い');
   });
+  //  瀕死（衰弱）は あと半日で死ぬ状態。眠っていても ふつうの寝姿・Zzz に
+  //  戻ってしまうと「ただ寝ているだけ」に見えて、手を打つ機会を逃す
+  it('瀕死のときは、眠っていても 衰弱の見せかたが優先される', () => {
+    const src = read('invader_game.html');
+    //  分岐の並び順そのものを見る。あとに置いてあると、
+    //  眠っているあいだは 手前の asleep で拾われてしまう
+    const order = (block, label) => {
+      const w = block.indexOf('isWeak()'), a = block.indexOf('asleep');
+      ok(w >= 0 && a >= 0, `${label}: 分岐が見つからない`);
+      ok(w < a, `${label}: isWeak が asleep より後ろにある（眠っていると衰弱の見せかたにならない）`);
+    };
+    // 姿の分岐（drawMainBackdrop のあとの、姿を決めるところ）
+    const sprite = src.slice(src.indexOf('let charCol = NK;'), src.indexOf("} else if (isBadWeather())"));
+    order(sprite, '姿');
+    ok(/charCol = DM;/.test(sprite), '瀕死の姿が 薄い色になっていない');
+    ok(/grid = asleep \? sp\.sleep : sp\.rest;/.test(sprite), '眠っているときの姿を見ていない');
+    // マークの分岐
+    //  ICO_DROP は絵の定義でも出てくるので、マークを出すところから後ろで探す
+    const emoFrom = src.indexOf('if (showReact) {');
+    const emo = src.slice(emoFrom, src.indexOf('ICO_DROP', emoFrom));
+    order(emo, 'マーク');
+    ok(emo.indexOf('ICO_EXCL') < emo.indexOf('ICO_ZZZ'),
+       '瀕死の ！ より先に Zzz が出る');
+  });
   it('サービスワーカーのVERSIONが日付の形をしている', () => {
     const m = read('sw.js').match(/const VERSION = '([^']+)'/);
     ok(m, 'VERSION が見つからない');

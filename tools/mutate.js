@@ -720,6 +720,15 @@ const MUTATIONS = [
    "      ctx.fillRect(x + (t-1-i), y0 + (L-w)/2, 1, w);", 'caught'],
   ['説明書を閉じても、えらんだ ことばを引き継がない',
    "      const v = localStorage.getItem('myvader_lang') === 'en' ? 'en' : 'ja';\n      if(v !== lang) setLang(v);", "", 'caught'],
+  ['瀕死でも 眠っていれば ふつうの寝姿に戻る（薄い色にならない）',
+   "    if (isWeak()) {\n      // 衰弱：薄い色でぐったり動かない。",
+   "    if (asleep) {\n      grid = sp.sleep; yOff = 0;\n    } else if (isWeak()) {\n      // 衰弱：薄い色でぐったり動かない。", 'caught'],
+  ['瀕死でも 眠っていれば Zzz が出る（休んでいるように見える）',
+   "    } else if (isWeak()) {\n      // 衰弱：！を速く点滅（SOS）。眠っていても Zzz には替えない。",
+   "    } else if (asleep) {\n      if((fM%30)<24) emo(ICO_ZZZ);\n    } else if (isWeak()) {\n      // 衰弱：！を速く点滅（SOS）。眠っていても Zzz には替えない。", 'caught'],
+  ['瀕死の姿が 濃い色のままになる',
+   "      grid = asleep ? sp.sleep : sp.rest; yOff = 0; charCol = DM;",
+   "      grid = asleep ? sp.sleep : sp.rest; yOff = 0;", 'caught'],
 ];
 
 const orig = fs.readFileSync(GAME, 'utf8');
