@@ -2477,6 +2477,23 @@ describe('ファイル', () => {
       ok(bottom <= 64, `${rows}行のとき、仕切りの下端が画面から出る（${bottom} / 画面は64まで）`);
     }
   });
+  // ホーム画面に追加したときの名前。iOSは マニフェストがあると short_name を
+  //  使うので、そこが略名だと「My Invader」のような別の名前で並んでしまう。
+  //  どの入口（QRの行き先＝index.html／説明書／ゲーム本体）から追加しても
+  //  同じ名前になるよう、名前を書いている場所を全部そろえる
+  it('ホーム画面の名前が、どこから追加しても同じ', () => {
+    const APP = 'My Little Invader';
+    const mf = JSON.parse(read('manifest.json'));
+    eq(mf.name, APP, 'マニフェストの name:');
+    eq(mf.short_name, APP, 'マニフェストの short_name:');
+    for(const f of ['index.html', 'manual.html', 'invader_game.html']){
+      const src = read(f);
+      ok(/<link rel="manifest"/.test(src), `${f}: マニフェストを読んでいない`);
+      const m = src.match(/<meta name="apple-mobile-web-app-title" content="([^"]*)"/);
+      ok(m, `${f}: apple-mobile-web-app-title が無い（iOSで別の名前になる）`);
+      eq(m[1], APP, `${f} の apple-mobile-web-app-title:`);
+    }
+  });
   it('サービスワーカーのVERSIONが日付の形をしている', () => {
     const m = read('sw.js').match(/const VERSION = '([^']+)'/);
     ok(m, 'VERSION が見つからない');

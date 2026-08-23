@@ -1,6 +1,6 @@
 {
   "name": "My Little Invader",
-  "short_name": "My Invader",
+  "short_name": "My Little Invader",
   "description": "UFOが置いていったインベーダーのたまごを育てる、レトロ2色LCD風の育成ゲーム。",
   "lang": "ja",
   "start_url": "invader_game.html",
