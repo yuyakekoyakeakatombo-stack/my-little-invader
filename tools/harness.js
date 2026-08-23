@@ -28,6 +28,7 @@ const EXPORTS = `
   todayKey, petDay, dayLabel, daysBetweenKeys,
   formLabel, endLabel, typeLabel, stageLabel, menuList, menuCols, MENU_RIGHT,
   APP_VERSION, APP_COPY, SETTINGS_KEYS,
+  CARE_ICONS, CARE_ORDER,
   endedShowMemory, MEM_CHAR_BOT, GHOST_MEM_DELAY,
   RUN_ON, RUN_OFF, RUN_TIMES, RUN_STILL, RUN_SPEED, RUN_STEP, RUN_AFTER, runawayLen,
   ICO_DOTS, centerX, EMO_GAP, EMO_UP, GHOST_STILL, GHOST_RISE_T, GHOST_HOLD, GHOST_Y_TOP,

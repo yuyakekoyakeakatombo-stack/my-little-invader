@@ -2230,6 +2230,66 @@ describe('ファイル', () => {
   });
 });
 
+// ══ お世話アイコン ══════════════════════════════════════
+describe('お世話アイコン', () => {
+  //  アイコンは半ドット(S/2)で描くので、1マス(18×11ドット)には
+  //  36×22 まで入る。はみ出すと となりのマスに掛かる
+  it('6つとも マスに収まる', () => {
+    const { api } = load();
+    const MAXW = 18*2, MAXH = 11*2;
+    for(const k of api.CARE_ORDER){
+      const g = api.CARE_ICONS[k];
+      ok(g && g.length, `${k}: アイコンが無い`);
+      ok(g.length <= MAXH, `${k}: 縦が ${g.length} で マス(${MAXH})から はみ出す`);
+      ok(g[0].length <= MAXW, `${k}: 横が ${g[0].length} で マス(${MAXW})から はみ出す`);
+      ok(g.every(r => r.length === g[0].length), `${k}: 行の長さが そろっていない`);
+    }
+  });
+  //  くすりは「片側だけ中身が入ったカプセル」。この形でくすりに見えているので、
+  //  片側が空いていること・輪郭が閉じていることを見張る
+  describe('くすり', () => {
+    const med = () => load().api.CARE_ICONS.MED;
+    // 外から塗りつぶして、届かなかった地の色のマス＝輪郭で閉じた空き
+    const closedHole = g => {
+      const H = g.length, W = g[0].length;
+      const seen = g.map(r => r.map(() => false));
+      const q = [];
+      for(let y=0;y<H;y++) for(let x=0;x<W;x++)
+        if((x===0||y===0||x===W-1||y===H-1) && g[y][x]===0 && !seen[y][x]){ seen[y][x]=true; q.push([x,y]); }
+      while(q.length){
+        const [x,y] = q.pop();
+        for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){
+          const nx=x+dx, ny=y+dy;
+          if(nx<0||ny<0||nx>=W||ny>=H||seen[ny][nx]||g[ny][nx]!==0) continue;
+          seen[ny][nx]=true; q.push([nx,ny]);
+        }
+      }
+      let n = 0;
+      for(let y=0;y<H;y++) for(let x=0;x<W;x++) if(g[y][x]===0 && !seen[y][x]) n++;
+      return n;
+    };
+    it('濃い輪郭と、中間色の中身の両方を持つ', () => {
+      const flat = med().flat();
+      ok(flat.includes(2), '濃い色（輪郭）が無い');
+      ok(flat.includes(1), '中間色（中身）が無い。片側だけ色が入った形に見えない');
+    });
+    //  半分ずつでないと、カプセルではなく「輪郭だけの棒」や「ただの塊」に見える。
+    //  中身（中間色）と 空き（閉じた地の色）が同じくらいの広さであることを見る
+    it('色が入った側と 空いている側が、同じくらいの広さ', () => {
+      const g = med();
+      const dim = g.flat().filter(v => v === 1).length;
+      const hole = closedHole(g);
+      ok(dim >= 8, `中身が ${dim} マスしかない（輪郭だけの棒に見える）`);
+      ok(hole >= 8, `空きが ${hole} マスしかない（ただの塊に見える）`);
+      const r = Math.max(dim, hole) / Math.min(dim, hole);
+      ok(r <= 1.8, `中身 ${dim} と 空き ${hole} が偏っている（${r.toFixed(1)}倍）`);
+    });
+    it('輪郭が閉じていて、空いている側が外とつながっていない', () => {
+      ok(closedHole(med()) > 0, '空いている側が外へつながっている（輪郭に穴がある）');
+    });
+  });
+});
+
 // ══ バージョンと著作権 ════════════════════════════════════
 describe('バージョンと著作権', () => {
   it('SETTINGS に バージョンの項目がある', () => {
