@@ -264,7 +264,7 @@ describe('ヘッダーのマーク', () => {
       eq(api.headDefault(), 'settings', '選ばれるマーク:');
     });
   });
-  //  せっていは知らせを持たない。いつも濃い色で点いている
+  //  せっていは知らせを持たない＝点滅しない。ふだんは ほかと同じ薄い色
   it('せっていは 点滅しない', () => {
     for(const st of [{}, { health:'SICK' }]){
       eq(at(st, 1).headAlert('settings'), false, 'せっていに知らせが出ている:');
@@ -345,7 +345,7 @@ describe('ヘッダーのマーク', () => {
     const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'invader_game.html'), 'utf8');
     const frame = /if\(sel\)\{ ctxM\.fillStyle = DM;/.test(src);
     ok(frame, '選択中の枠が薄色(DM)で描かれていない');
-    ok(/\(sel \|\| blink \|\| k === 'settings'\) \? NK : DM/.test(src), 'えらんでいるマークが濃い色(NK)にならない（枠に溶ける）');
+    ok(/\(sel \|\| blink\) \? NK : DM/.test(src), 'えらんでいるマークが濃い色(NK)にならない（枠に溶ける）');
   });
   //  縦の棒だと携帯の電波マークに見えるので、横に寝かせてある。
   //  グラフに見えるには、左に軸があって、長さの違う棒が横に伸びていること
@@ -2049,10 +2049,15 @@ describe('ファイル', () => {
     ok(!/<text[^>]*>(ZUZU|DAY[^<]*)<\/text>/.test(svg), '名前や DAY が 昔の字体のままになっている');
     // 1ドットより細かい矩形がある＝実機（1ドット=4px）から取り込んだ証拠
     ok(/<rect x="[\d.]+" y="[\d.]*\.(25|5|75)"/.test(svg), '実機から取り込んだ細かさになっていない');
-    // ヘッダーのマークがある帯（x=21〜33 / y=2〜6ドット）に、何か描かれている
+    // ヘッダーのマークがある帯（x=25〜34 / y=2〜6ドット）に、何か描かれている。
+    //  絵に出しているのは まだ にっきが無い状態＝ステータスと せっていの2つ
     const inBand = [...svg.matchAll(/<rect x="([\d.]+)" y="([\d.]+)"/g)]
-      .filter(([, x, y]) => +x >= 21 && +x <= 33 && +y >= 2 && +y <= 6).length;
-    ok(inBand > 20, `マークの帯に ${inBand} 個しか無い。3つのマークが描かれていない`);
+      .filter(([, x, y]) => +x >= 25 && +x <= 34 && +y >= 2 && +y <= 6).length;
+    ok(inBand > 20, `マークの帯に ${inBand} 個しか無い。マークが描かれていない`);
+    // 日記のマークがある位置（x=21.5〜24.5）には、何も無い
+    const diaryBand = [...svg.matchAll(/<rect x="([\d.]+)" y="([\d.]+)"/g)]
+      .filter(([, x, y]) => +x >= 21 && +x < 25 && +y >= 2 && +y <= 6).length;
+    eq(diaryBand, 0, 'にっきのマークの位置に 何か描かれている:');
     // 区切り線（ドットのy=8）が1本ある
     ok(/<rect x="0" y="8" width="54"/.test(svg), 'ヘッダーの区切り線が無い');
     // 引き出し線の数と、下の表の行数がそろっている

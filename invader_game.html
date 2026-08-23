@@ -2798,11 +2798,10 @@
       const x = headIconX(i, list.length);
       const sel = (headSel === k);
       if(sel){ ctxM.fillStyle = DM; ctxM.fillRect(x-2, HEAD_IY-2, HEAD_ICON_W+4, HEAD_ICON_H+4); }   // 選択中は薄色で囲む
-      // 選んでいるあいだは濃い色で描く。薄色のままだと、薄色の枠に溶けて消える。
-      //  せっていは知らせを持たないぶん、いつも濃い色で点けておく
+      // 選んでいるあいだは濃い色で描く。薄色のままだと、薄色の枠に溶けて消える
       const blink = headAlert(k) && (fM % 16 < 10);
       const spr = k === 'diary' ? DIARY_ICON : k === 'status' ? STATUS_ICON : GEAR_ICON;
-      stampPx(ctxM, spr, x, HEAD_IY, (sel || blink || k === 'settings') ? NK : DM);
+      stampPx(ctxM, spr, x, HEAD_IY, (sel || blink) ? NK : DM);
     });
     // マークと DAY のあいだの仕切り。メニューの列と同じ半ドットの細さにして、
     //  区切りだけを示す（マークと同じ太さだと、もう1つマークがあるように見える）。
@@ -5336,7 +5335,7 @@
   // 項目はキーで管理（表示ラベルは言語辞書、値は各キーで分岐）
   //  版の番号は sw.js の VERSION と同じもの。tools/bump-sw.sh が両方いっしょに
   //  書き換える（ずれると、テスターの端末に出ている版が分からなくなる）
-  const APP_VERSION = '2026-08-23-19';
+  const APP_VERSION = '2026-08-23-20';
   //  (C) は Press Start 2P に © が無く、別の字体に落ちて1文字だけ形が浮くため
   const APP_COPY = '(C) 2026 Studio M.D.Q.';
   const SETTINGS_KEYS = ['language','weather','sound','bodycolor','version','reset'];
