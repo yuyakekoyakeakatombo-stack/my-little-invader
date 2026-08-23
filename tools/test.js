@@ -177,9 +177,9 @@ describe('ヘッダーのマーク', () => {
     api.diaryUnread = unread || 0;
     return api;
   };
-  //  左がステータス、右が日記。上を押したときに選ばれるのは左のほう
-  it('左がステータス、右が日記', () => {
-    eq(at({}).headIcons(), ['status','diary'], 'ヘッダーのマーク（左から）:');
+  //  左からステータス・日記・せってい。せっていはいつでも開ける
+  it('左からステータス・日記・せってい', () => {
+    eq(at({}).headIcons(), ['status','diary','settings'], 'ヘッダーのマーク（左から）:');
   });
   //  日記帳が1件もないうちは、マークを出さない＝選べない。
   //  出しても開けるのは空のページで、押した意味が無い
@@ -189,21 +189,21 @@ describe('ヘッダーのマーク', () => {
     Object.assign(api.pet, api.defaultPet(), { name:'ALPHA', stage:'larva', birth:t0-5*86400000,
       lastTick:t0, EP:2, B:40, hunger:4, mood:4 });
     api.clearDiary();
-    eq(api.headIcons(), ['status'], '日記が0件のときのマーク:');
+    eq(api.headIcons(), ['status','settings'], '日記が0件のときのマーク:');
     // 上を押しても 日記には行けない（左右に動かしても日記は無い）
     api.headSel = api.headIcons()[0];
     eq(api.headSel, 'status', '上で選ばれるマーク:');
     // 1件書かれたら出る
     api.addDiary({ d:5, n:'ALPHA', t:['fed'], v:[0], c:'', ts:t0, cd:'2026-06-15', lv:2, wr:1 });
-    eq(api.headIcons(), ['status','diary'], '1件書かれたあとのマーク:');
+    eq(api.headIcons(), ['status','diary','settings'], '1件書かれたあとのマーク:');
   });
   it('命名前は なにも出ない', () => {
     const { api } = load();
     eq(api.headIcons(), [], '命名前のマーク:');
   });
-  it('別れたあとは ステータスが消え、日記だけ残る', () => {
+  it('別れたあとは ステータスが消える', () => {
     const api = at({ gone:true, goneBy:'depart' });
-    eq(api.headIcons(), ['diary'], '別れたあとのマーク:');
+    eq(api.headIcons(), ['diary','settings'], '別れたあとのマーク:');
   });
   //  以前は未読のときだけ出ていた。読み終わると消えてしまい、
   //  日記へ飛べる場所だと分からなくなっていた
@@ -229,6 +229,58 @@ describe('ヘッダーのマーク', () => {
       eq(api.statusAlert(), api.healthState() !== 'good', `${JSON.stringify(st)}: 知らせと文字が食い違う`);
     }
   });
+  // 上を1回押したときに どれが選ばれるか。
+  //  点滅しているもの＞せってい の順。点滅が2つあるときはステータスが先
+  describe('上を1回押したとき', () => {
+    it('どれも点いていなければ せってい', () => {
+      const api = at({}, 0);
+      eq(api.statusAlert(), false, '知らせが出ている:');
+      eq(api.headDefault(), 'settings', '選ばれるマーク:');
+    });
+    it('ステータスだけ点いていれば ステータス', () => {
+      eq(at({ health:'SICK' }, 0).headDefault(), 'status', '選ばれるマーク:');
+    });
+    it('日記だけ点いていれば 日記', () => {
+      eq(at({}, 1).headDefault(), 'diary', '選ばれるマーク:');
+    });
+    it('両方点いていれば ステータスが先', () => {
+      const api = at({ health:'SICK' }, 1);
+      ok(api.headAlert('status') && api.headAlert('diary'), '両方点いているはず');
+      eq(api.headDefault(), 'status', '選ばれるマーク:');
+    });
+    //  十字の上が この決め方を使っていること。
+    //  ここで list[0] を使うと、点滅を無視して いちばん左が選ばれてしまう
+    it('十字の上が、この決め方を使っている', () => {
+      const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'invader_game.html'), 'utf8');
+      ok(/classList\.contains\('up'\)\s*&& !headSel\) headSel = headDefault\(\);/.test(src),
+         '上を押したときに headDefault() を使っていない');
+    });
+    it('日記がまだ無く、ステータスも点いていなければ せってい', () => {
+      const { api, clock } = load();
+      const t0 = clock.now();
+      Object.assign(api.pet, api.defaultPet(), { name:'ALPHA', stage:'larva', birth:t0-5*86400000,
+        lastTick:t0, EP:2, B:40, hunger:4, mood:4 });
+      api.clearDiary();
+      eq(api.headDefault(), 'settings', '選ばれるマーク:');
+    });
+  });
+  //  せっていは知らせを持たない。いつも濃い色で点いている
+  it('せっていは 点滅しない', () => {
+    for(const st of [{}, { health:'SICK' }]){
+      eq(at(st, 1).headAlert('settings'), false, 'せっていに知らせが出ている:');
+    }
+  });
+  //  命名前は ヘッダーのマークを出さず、上で ????（名前）を選ばせる
+  it('命名前は、上で ???? が選ばれる', () => {
+    const { api } = load();
+    eq(api.pet.name, '', '名前がついていないはず:');
+    eq(api.headIcons(), [], '命名前のマーク:');
+    eq(api.headDefault(), null, '命名前に選ばれるマーク:');
+    // 上の十字が ???? を選ぶ枝を通ること（マークの枝には入らない）
+    const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'invader_game.html'), 'utf8');
+    ok(/if\(!pet\.name\)\{[\s\S]{0,200}?nameSelActive = true;/.test(src),
+       '命名前に ???? を選ぶ枝が無い');
+  });
   it('マークが DAY の表示に掛からない', () => {
     const api = at({});
     const list = api.headIcons();
@@ -252,7 +304,7 @@ describe('ヘッダーのマーク', () => {
     const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'invader_game.html'), 'utf8');
     const frame = /if\(sel\)\{ ctxM\.fillStyle = DM;/.test(src);
     ok(frame, '選択中の枠が薄色(DM)で描かれていない');
-    ok(/\(sel \|\| blink\) \? NK : DM/.test(src), 'えらんでいるマークが濃い色(NK)にならない（枠に溶ける）');
+    ok(/\(sel \|\| blink \|\| k === 'settings'\) \? NK : DM/.test(src), 'えらんでいるマークが濃い色(NK)にならない（枠に溶ける）');
   });
   //  縦の棒だと携帯の電波マークに見えるので、横に寝かせてある。
   //  グラフに見えるには、左に軸があって、長さの違う棒が横に伸びていること
