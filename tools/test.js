@@ -265,12 +265,22 @@ describe('到着のあと', () => {
     eq(api.nameOpenT, -1, 'はじめから待ちに入っている:');
   });
   it('到着が終わると、名前がまだのときだけ 待ちに入る', () => {
-    ok(/if\(arriveT >= ARR_TOTAL\)\{ arriveT = -1; if\(!pet\.name\) nameOpenT = ARR_TO_NAME; \}/.test(src()),
+    ok(/if\(pet\.name\)\{ arriveT = -1; return; \}/.test(src()),
+       '名前がついているのに 命名画面へ送ろうとしている');
+    ok(/if\(nameOpenT < 0\) nameOpenT = ARR_TO_NAME;/.test(src()),
        '到着のあとに 命名画面へ送る仕掛けが無い');
   });
   it('待ちが明けると、命名画面が自動で開く', () => {
-    ok(/if\(nameOpenT-- === 0\)\{ nameOpenT = -1; startNaming\(\); showView\('naming'\); return; \}/.test(src()),
+    ok(/if\(nameOpenT-- === 0\)\{ arriveT = -1; nameOpenT = -1; startNaming\(\); showView\('naming'\); \}/.test(src()),
        '待ちが明けても命名画面が開かない');
+  });
+  //  一拍のあいだ ふつうの育成画面を描くと、就寝時間帯に始めたときに
+  //  寝姿が一瞬見える（まだ生まれておらず、起きている扱いにもなっていないため）
+  it('待っているあいだも、到着の最後のコマのまま止めている', () => {
+    ok(/arriveT = ARR_TOTAL - 1;/.test(src()), '最後のコマで止めていない');
+    // tickMain 側に「一拍だけ ふつうの画面を描く」枝が残っていないこと
+    ok(!/if\(nameOpenT >= 0\)\{\s*\n\s*if\(nameOpenT-- === 0\)/.test(src()),
+       '育成画面を描く側に 待ちの処理が残っている');
   });
   //  待っているあいだにボタンが効くと、名前をつける前に画面を離れられてしまう
   it('待っているあいだは ボタンが効かない', () => {

@@ -4970,8 +4970,15 @@
 
     fM++;                                        // ????の点滅・雲や雨の動きを演出中も進める
     arriveT++;
-    // 終了 → 名前がまだなら、一拍おいて命名画面へ
-    if(arriveT >= ARR_TOTAL){ arriveT = -1; if(!pet.name) nameOpenT = ARR_TO_NAME; }
+    if(arriveT < ARR_TOTAL) return;
+    // 名前がついている＝続きから始めた。そのまま育成画面へ
+    if(pet.name){ arriveT = -1; return; }
+    // 名前がまだなら、着地した最後のコマで止めたまま一拍おいて、命名画面へ送る。
+    //  ここで演出を終わらせて ふつうの育成画面に戻すと、就寝時間帯に始めたときに
+    //  寝姿が一瞬見えてしまう（この子はまだ生まれておらず、起きている扱いにもなっていない）
+    arriveT = ARR_TOTAL - 1;
+    if(nameOpenT < 0) nameOpenT = ARR_TO_NAME;
+    if(nameOpenT-- === 0){ arriveT = -1; nameOpenT = -1; startNaming(); showView('naming'); }
   }
 
   let fM=0;
@@ -4992,11 +4999,8 @@
     if(ufoEnding){ drawUfoEnding(BG, DM, NK); return; }   // 帰還エンディング再生中
     if(pet.dead){ drawGhost(BG, DM, NK); return; }        // おばけ状態
     if(pet.gone){ drawGone(BG, DM, NK); return; }         // 帰還したあと（主のいない庭）
-    if(arriveT >= 0){ drawArrival(BG, DM, NK); return; }  // 到着演出（新規ゲーム開始時）
-    // 到着のあとの一拍。着地した画面をそのまま見せてから、名前をつける画面へ送る
-    if(nameOpenT >= 0){
-      if(nameOpenT-- === 0){ nameOpenT = -1; startNaming(); showView('naming'); return; }
-    }
+    // 到着演出（新規ゲーム開始時）。終わったあとの一拍も、この中で最後のコマのまま止める
+    if(arriveT >= 0){ drawArrival(BG, DM, NK); return; }
     // 睡眠判定（しかられて起きた直後は起きている。DEBUG中は表示時間帯に連動）
     const asleep = effectiveAsleep();
 
@@ -5417,7 +5421,7 @@
   // 項目はキーで管理（表示ラベルは言語辞書、値は各キーで分岐）
   //  版の番号は sw.js の VERSION と同じもの。tools/bump-sw.sh が両方いっしょに
   //  書き換える（ずれると、テスターの端末に出ている版が分からなくなる）
-  const APP_VERSION = '2026-08-23-32';
+  const APP_VERSION = '2026-08-23-33';
   //  (C) は Press Start 2P に © が無く、別の字体に落ちて1文字だけ形が浮くため
   const APP_COPY = '(C) 2026 Studio M.D.Q.';
   const SETTINGS_KEYS = ['language','weather','sound','bodycolor','version','reset'];
