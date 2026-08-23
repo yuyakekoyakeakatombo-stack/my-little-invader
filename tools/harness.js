@@ -46,7 +46,7 @@ const EXPORTS = `
   arrivalPhase, arrivalBeamHalf, arrivalRainShown, resetArrivalRain, arrRain, EGG_A, easeOut,
   get arriveT(){ return arriveT; }, set arriveT(v){ arriveT = v; },
   OPEN_OPTS, ARR_TO_NAME, get nameOpenT(){ return nameOpenT; }, set nameOpenT(v){ nameOpenT = v; },
-  LANG_OPTS, setLang, OPT_Y0, OPT_H, selMark,
+  LANG_OPTS, setLang, OPT_Y0, OPT_H, selMark, T,
   get openStep(){ return openStep; }, set openStep(v){ openStep = v; },
   get langSel(){ return langSel; }, set langSel(v){ langSel = v; },
   get openSel(){ return openSel; }, set openSel(v){ openSel = v; }, cutscenePlaying,

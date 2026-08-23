@@ -681,6 +681,8 @@ const MUTATIONS = [
    "      ctx.fillRect(x + t-1-i, y0 + (L-w)/2, 1, w);", "      ctx.fillRect(x + i, y0 + (L-w)/2, 1, w);", 'caught'],
   ['▶ が行の中心からずれる',
    "    const y0 = Math.round(cy - L/2);", "    const y0 = Math.round(cy);", 'caught'],
+  ['命名画面の見出しが 画面からはみ出す長さになる',
+   "      nameq:'このこの なまえは？', done:'けってい'", "      nameq:'このこのなまえをきめてあげてくださいなんでもいいですよ？', done:'けってい'", 'caught'],
 ];
 
 const orig = fs.readFileSync(GAME, 'utf8');

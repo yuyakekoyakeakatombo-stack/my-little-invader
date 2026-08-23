@@ -2647,6 +2647,22 @@ describe('ファイル', () => {
     const mid = (top + bot) / 2;
     ok(Math.abs(mid - 10) <= 0.5, `三角の上下の中心が ${mid} で、行の中心(10)から ずれている`);
   });
+  //  命名画面の見出し。日本語は 9px のゴシック体で描くので、
+  //  長くすると 画面(54ドット=216px)から はみ出す
+  it('命名画面の見出しが、画面のはばに収まる', () => {
+    const { api } = load();
+    for(const [lg, px] of [['ja', 9], ['en', 6]]){
+      api.lang = lg;
+      const t = api.T('nameq');
+      ok(t, `${lg}: 見出しが空`);
+      // 全角は文字の大きさぶん、半角はその半分
+      let w = 0;
+      for(const ch of t) w += px * (ch.charCodeAt(0) < 0x100 ? 0.5 : 1);
+      ok(w <= 54*4 - 8, `${lg}: 「${t}」が ${w}px で 画面からはみ出す`);
+    }
+    api.lang = 'ja';
+    ok(/^この/.test(api.T('nameq')), '日本語の見出しが「このこの…」で始まっていない');
+  });
   it('サービスワーカーのVERSIONが日付の形をしている', () => {
     const m = read('sw.js').match(/const VERSION = '([^']+)'/);
     ok(m, 'VERSION が見つからない');
