@@ -460,15 +460,18 @@
   // えらんでいる項目を指す ▶。Press Start 2P は Latin しか持たないので、
   //  文字として置くと 別の字体に落ちて そこだけ形が浮く。
   //  文字と同じ高さの三角を、画素単位で直接描く。cy は行の上下中央（textBaseline='middle' と同じ基準）
-  function selMark(ctx, x, cy, col, len){
+  function selMark(ctx, x, cy, col, len, dir){
     const L = len || 7, t = Math.ceil(L/2);      // t＝頂点までの段数＝三角の横はば
     const y0 = Math.round(cy - L/2);
     ctx.fillStyle = col || ON;
     for(let i=0;i<t;i++){
-      const w = 2*i+1;                           // その段の縦の長さ
-      ctx.fillRect(x + t-1-i, y0 + (L-w)/2, 1, w);
+      const w = 2*i+1;                           // その段の縦の長さ（1が頂点、Lが底）
+      ctx.fillRect(x + (dir === 'left' ? i : t-1-i), y0 + (L-w)/2, 1, w);
     }
   }
+  //  日記・おもいでの「前後にまだページがある」印。x は三角の中心
+  //  （もとの ＜ ＞ と同じ位置に置けるように、中心で指定する）
+  function pageMark(ctx, dir, cx, cy, col){ selMark(ctx, cx - 2, cy, col, 7, dir); }
   function stamp(ctx,grid,ox,oy,col){ const c=col||ON; grid.forEach((row,ry)=>row.forEach((v,rx)=>{if(v)dot(ctx,ox+rx,oy+ry,c);})); }
 
   // ── 遷移 ──
@@ -5414,7 +5417,7 @@
   // 項目はキーで管理（表示ラベルは言語辞書、値は各キーで分岐）
   //  版の番号は sw.js の VERSION と同じもの。tools/bump-sw.sh が両方いっしょに
   //  書き換える（ずれると、テスターの端末に出ている版が分からなくなる）
-  const APP_VERSION = '2026-08-23-31';
+  const APP_VERSION = '2026-08-23-32';
   //  (C) は Press Start 2P に © が無く、別の字体に落ちて1文字だけ形が浮くため
   const APP_COPY = '(C) 2026 Studio M.D.Q.';
   const SETTINGS_KEYS = ['language','weather','sound','bodycolor','version','reset'];
@@ -6352,8 +6355,10 @@
     // ページ位置（前後にまだ日があることを示す）。見出しの左右に置く
     if(e){
       ctxT.font = uiFont(6); ctxT.fillStyle = ON;
-      if(diaryPage > 0)                 ctxT.fillText('<', 4*S, 7*S);
-      if(diaryPage < diaryLog.length-1) ctxT.fillText('>', (W-4)*S, 7*S);
+      //  ＜ ＞ は言語で字の大きさが変わり、高さがそろわなかった。
+      //   選択中の ▶ と同じ三角にして、どちらの言語でも同じ位置に置く
+      if(diaryPage > 0)                 pageMark(ctxT, 'left',  4*S, 7*S + 4, ON);
+      if(diaryPage < diaryLog.length-1) pageMark(ctxT, 'right', (W-4)*S, 7*S + 4, ON);
     }
     for(let x=6;x<W-6;x++) dot(ctxT, x, 17, DIM);
     // 本文（材料から組み立てた行）。ページ数(y57)に掛からないよう上下中央に置く
@@ -6518,8 +6523,8 @@
 
     // ページ位置。日記と同じ見た目にそろえる
     ctxR.font = uiFont(6); ctxR.fillStyle = NK; ctxR.textAlign = 'center';
-    if(memPage > 0)             ctxR.fillText('<', 4*S, 7*S);
-    if(memPage < MEM_PAGES-1)   ctxR.fillText('>', (W-4)*S, 7*S);
+    if(memPage > 0)             pageMark(ctxR, 'left',  4*S, 7*S + 4, NK);
+    if(memPage < MEM_PAGES-1)   pageMark(ctxR, 'right', (W-4)*S, 7*S + 4, NK);
     ctxR.fillText((memPage+1) + ' / ' + MEM_PAGES, (W*S)/2, 59*S);
     fR++;
   }

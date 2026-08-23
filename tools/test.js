@@ -2616,13 +2616,10 @@ describe('ファイル', () => {
   //  そこだけ別の字体に落ちて形が浮く。画素で三角を描いて使う
   it('選択中の印が、どの画面でも同じ ▶ で描かれている', () => {
     const src = read('invader_game.html');
-    ok(/function selMark\(ctx, x, cy, col, len\)\{/.test(src), '▶ を描く selMark が無い');
-    // 一覧で選択中を示していた '>' が残っていないこと
-    const gt = [...src.matchAll(/fillText\('>'[^)]*\)/g)].map(m => m[0]);
-    // 残ってよいのは 日記・おもいでの「次のページがある」印だけ（左の '<' と対）
-    const pageArrows = (src.match(/if\(diaryPage < diaryLog\.length-1\)[^\n]*fillText\('>'/g) || []).length
-                     + (src.match(/if\(memPage < MEM_PAGES-1\)[^\n]*fillText\('>'/g) || []).length;
-    eq(gt.length, pageArrows, `選択中を示す '>' が ${gt.length - pageArrows} か所 残っている: ${gt.join(' / ')}`);
+    ok(/function selMark\(ctx, x, cy, col, len, dir\)\{/.test(src), '▶ を描く selMark が無い');
+    // '<' '>' を字で置いているところが 1つも残っていないこと
+    const gt = [...src.matchAll(/fillText\('[<>]'[^)]*\)/g)].map(m => m[0]);
+    eq(gt.length, 0, `＜＞ を字で置いているところが残っている: ${gt.join(' / ')}`);
     // 一覧のほうは selMark を使っている
     const marks = (src.match(/if\(isSel\) selMark\(/g) || []).length;
     ok(marks >= 5, `一覧の ▶ が ${marks} か所しか無い（メニュー・設定・天気・ごはん・ゲームの5つ）`);
@@ -2641,6 +2638,13 @@ describe('ファイル', () => {
       ok(byX[i][3] < byX[i-1][3], `${i}列目が ${byX[i][3]} で 前の列(${byX[i-1][3]})より短くない。三角に見えない`);
     eq(byX[0][3], L, 'いちばん左の縦の長さ（文字と同じ高さ）:');
     eq(byX[byX.length-1][3], 1, 'いちばん右（頂点）の縦の長さ:');
+    // 左向きも作れる（日記・おもいでの「前のページがある」印）
+    const lc = [];
+    const rec2 = { set fillStyle(v){}, fillRect(x, y, w, h){ lc.push([x, y, w, h]); } };
+    api.selMark(rec2, 0, 10, '#000', L, 'left');
+    const lx = lc.slice().sort((a, b) => a[0] - b[0]);
+    eq(lx[0][3], 1, '左向きの いちばん左（頂点）の縦の長さ:');
+    eq(lx[lx.length-1][3], L, '左向きの いちばん右（底）の縦の長さ:');
     // 上下の中心が、渡した中心にそろっている。
     //  高さが奇数(7)なので、画素の格子に乗せるぶん 半画素までは ずれる
     const top = Math.min(...cells.map(c => c[1])), bot = Math.max(...cells.map(c => c[1] + c[3]));
@@ -2702,6 +2706,20 @@ describe('ファイル', () => {
     api.processGameResult();
     ok(api.pet.hunger >= 0, `おなかが ${api.pet.hunger} になった（負）`);
     eq(api.pet.hunger, 0, '遊びきったあとの おなか:');
+  });
+  //  ページ送りの印も、選択中の ▶ と同じ三角にそろえてある。
+  //  字で置いていたころは 言語で字の大きさが変わり、高さがずれていた
+  it('前後のページの印が、どちらの言語でも同じ位置に出る', () => {
+    const src = read('invader_game.html');
+    ok(/function pageMark\(ctx, dir, cx, cy, col\)\{/.test(src), 'ページ送りの印を描く pageMark が無い');
+    for(const [name, key] of [['にっき', 'diaryPage'], ['おもいで', 'memPage']]){
+      const left  = new RegExp(`if\\(${key} > 0\\)\\s*pageMark\\(ctx., 'left',`);
+      const right = new RegExp(`pageMark\\(ctx., 'right',`);
+      ok(left.test(src),  `${name}: 前のページの ◀ が無い`);
+      ok(right.test(src), `${name}: 次のページの ▶ が無い`);
+    }
+    // 位置は 言語に関係ない数だけで決まっている（フォントの大きさを見ていない）
+    ok(!/pageMark\([^)]*uiFont/.test(src), 'ページ送りの印の位置が 字の大きさに引きずられている');
   });
   it('サービスワーカーのVERSIONが日付の形をしている', () => {
     const m = read('sw.js').match(/const VERSION = '([^']+)'/);
