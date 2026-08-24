@@ -261,10 +261,10 @@ describe('ふたつの ひんし', () => {
       return r[0] && r[W-1] && gaps === 2;
     });
     ok(eyeRow, '眼窩（左右2つの抜け）が見あたらない');
-    // 歯＝いちばん下の行の、はしを除いた中に すきまがある
+    // 歯＝いちばん下の行の、はしを除いた中に すきまを空けて3本
     const teeth = g[H-1].slice(1, W-1);
-    ok(teeth.some(v => v), 'いちばん下の行に 歯が無い');
-    ok(teeth.some(v => !v), 'いちばん下の行が 塞がっていて 歯に見えない');
+    const n = teeth.join('').split('0').filter(x => x).length;
+    eq(n, 3, '歯の本数:');
   });
   it('ふたつの ひんしに、別の名前がついている', () => {
     const { api } = load();
