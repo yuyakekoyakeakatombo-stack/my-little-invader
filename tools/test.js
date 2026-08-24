@@ -238,6 +238,34 @@ describe('ふたつの ひんし', () => {
     ok(api.isWeakStarve() && api.isWeakSick(), '両方が瀕死のはず');
     eq(api.healthState(), 'weakStarve', '両方のときの表示:');
   });
+  //  ふだんの病気（汗）と同じ絵にすると、瀕死になったことが伝わらない
+  it('ひんし（びょうき）は ドクロ、ふだんの病気は 汗', () => {
+    const { api } = load();
+    const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'invader_game.html'), 'utf8');
+    ok(Array.isArray(api.ICO_SKULL), 'ドクロの絵が無い');
+    ok(JSON.stringify(api.ICO_SKULL) !== JSON.stringify(api.ICO_DROP), 'ドクロと汗が同じ絵');
+    ok(/emo\(isWeakStarve\(\) \? ICO_EXCL : ICO_SKULL\)/.test(src),
+       'ひんし（びょうき）に ドクロを出していない');
+    // ふだんの病気は これまでどおり 汗
+    ok(/\} else if \(pet\.health === 'SICK'\) \{[\s\S]{0,120}?emo\(ICO_DROP\)/.test(src),
+       'ふだんの病気の 汗が 変わってしまっている');
+  });
+  //  ドクロに見えるための形：まるい頭・左右の眼窩・下に歯
+  it('ドクロの絵が、眼窩と歯を持っている', () => {
+    const { api } = load();
+    const g = api.ICO_SKULL, H = g.length, W = g[0].length;
+    ok(W >= 5 && H >= 5, `${W}x${H} では 顔に見えない`);
+    // 眼窩＝上半分に、まわりを囲まれた 抜けが2つ
+    const eyeRow = g.slice(1, Math.ceil(H/2)).find(r => {
+      const gaps = r.slice(1, W-1).filter(v => !v).length;
+      return r[0] && r[W-1] && gaps === 2;
+    });
+    ok(eyeRow, '眼窩（左右2つの抜け）が見あたらない');
+    // 歯＝いちばん下の行の、はしを除いた中に すきまがある
+    const teeth = g[H-1].slice(1, W-1);
+    ok(teeth.some(v => v), 'いちばん下の行に 歯が無い');
+    ok(teeth.some(v => !v), 'いちばん下の行が 塞がっていて 歯に見えない');
+  });
   it('ふたつの ひんしに、別の名前がついている', () => {
     const { api } = load();
     for(const lg of ['ja', 'en']){
@@ -2917,7 +2945,7 @@ describe('ファイル', () => {
     const emo = src.slice(emoFrom, src.indexOf('isEstranged()', emoFrom));
     order(emo, 'マーク');
     //  くうふくは ！、びょうきは 汗。どちらで死にかけているかが分かるように
-    ok(/emo\(isWeakStarve\(\) \? ICO_EXCL : ICO_DROP\)/.test(emo),
+    ok(/emo\(isWeakStarve\(\) \? ICO_EXCL : ICO_SKULL\)/.test(emo),
        '瀕死のマークが くうふく／びょうき で分かれていない');
   });
   it('サービスワーカーのVERSIONが日付の形をしている', () => {
