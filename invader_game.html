@@ -1271,7 +1271,11 @@
   const LINEAGE_CARE_W = 0.45;    // 世話の重み（ゲームの偏りは最大1.0なので、世話は従）
   const LINEAGE_TH     = 0.30;    // 最大でもこれ未満なら決め手なしとみなしてインベーダー
   const LINEAGE_D_MIN  = 55;      // しつけ度がこれを超えた分だけグレイ側に効く
-  const LINEAGE_D_FULL = 90;      // ここでグレイ側の寄与が最大
+  //  甘やかし側は A_SPOIL_SCALE=30 で、1日20あれば単独で決め手になる（おやつ数回で届く）。
+  //  しつけ側をここで90にすると単独で決まる線が Dm78 になり、1日12回さそって毎回叱って
+  //  やっと5割という要求になって釣り合わない。72なら「ふつうに遊んで毎回叱る」（Dm67前後）が
+  //  ちょうど届く。いい加減に叱ると Dm は55を切って寄与ゼロのままなので、緩みすぎもしない。
+  const LINEAGE_D_FULL = 72;      // ここでグレイ側の寄与が最大
   function playBias(r){ return Math.max(0, (r - 1/3) / (2/3)); }   // 3種均等=0、1本に全振り=1
   function discTrait(){           // しつけの通り具合 0〜1（駆け込み調整が効かないよう移動平均を使う）
     const d = (pet.Dm != null) ? pet.Dm : (pet.D || 50);
@@ -5457,7 +5461,7 @@
   // 項目はキーで管理（表示ラベルは言語辞書、値は各キーで分岐）
   //  版の番号は sw.js の VERSION と同じもの。tools/bump-sw.sh が両方いっしょに
   //  書き換える（ずれると、テスターの端末に出ている版が分からなくなる）
-  const APP_VERSION = '2026-08-24-03';
+  const APP_VERSION = '2026-08-24-04';
   //  (C) は Press Start 2P に © が無く、別の字体に落ちて1文字だけ形が浮くため
   const APP_COPY = '(C) 2026 Studio M.D.Q.';
   const SETTINGS_KEYS = ['language','weather','sound','bodycolor','version','reset'];

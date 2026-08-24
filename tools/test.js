@@ -1748,6 +1748,87 @@ describe('にっきの字', () => {
   });
 });
 
+// ══ 系統わけ ══════════════════════════════════════════════
+//  ミニゲームの偏りが主、世話の傾向が従。ぶつかったらゲームが勝つ。
+//  spacewalk/甘やかし→マーシャン、abduction/しつけ→グレイ、shootingstar/どちらでもない→インベーダー
+describe('系統わけ', () => {
+  //  A/日 を狙った値にするため、birth を DAYS 日前に置いて A をその倍数で入れる
+  const DAYS = 5;
+  const setup = (api, clock, o) => pet(api, clock, Object.assign({
+    stage:'adult', lineage:'', birth: clock.now() - DAYS*86400000,
+    plays:{sw:0,ss:0,ab:0}, A:0, D:50, Dm:50 }, o));
+  const aPerDay = n => n * DAYS;
+
+  it('遊びも世話も偏りがなければインベーダー（決め手なし）', () => {
+    const { api, clock } = load();
+    setup(api, clock, { plays:{sw:5,ss:5,ab:5}, A:aPerDay(5) });
+    eq(api.pickLineage(), 'inv');
+  });
+  it('ミニゲーム3種が3系統に対称に対応する', () => {
+    const { api, clock } = load();
+    for(const [k, want] of [['sw','tako'], ['ss','inv'], ['ab','grey']]){
+      const p = {sw:0,ss:0,ab:0}; p[k] = 12;              // 全振り＝playBias 1.0
+      setup(api, clock, { plays:p });
+      eq(api.pickLineage(), want, k+' 全振り:');
+    }
+  });
+  it('均等に遊んでも、甘やかせばマーシャン', () => {
+    const { api, clock } = load();
+    const need = api.LINEAGE_TH / api.LINEAGE_CARE_W * api.A_SPOIL_SCALE;   // A/日 20
+    setup(api, clock, { plays:{sw:5,ss:5,ab:5}, A:aPerDay(need + 0.5) });
+    eq(api.pickLineage(), 'tako', '線を越えた:');
+    setup(api, clock, { plays:{sw:5,ss:5,ab:5}, A:aPerDay(need - 0.5) });
+    eq(api.pickLineage(), 'inv', '線に少し足りない:');
+  });
+  it('均等に遊んでも、しつけが通っていればグレイ', () => {
+    const { api, clock } = load();
+    const need = api.LINEAGE_D_MIN
+      + api.LINEAGE_TH / api.LINEAGE_CARE_W * (api.LINEAGE_D_FULL - api.LINEAGE_D_MIN);
+    setup(api, clock, { plays:{sw:5,ss:5,ab:5}, Dm:need + 0.5 });
+    eq(api.pickLineage(), 'grey', '線を越えた:');
+    setup(api, clock, { plays:{sw:5,ss:5,ab:5}, Dm:need - 0.5 });
+    eq(api.pickLineage(), 'inv', '線に少し足りない:');
+  });
+  it('しつけが単独で決め手になる線は、ふつうに遊んで毎回叱れば届く高さ', () => {
+    const { api } = load();
+    //  実測：1日6回さそって毎回叱ると Dm≒67、いい加減（3割）だと Dm≒47 で LINEAGE_D_MIN 未満。
+    //  ここが甘やかし側（A/日20＝おやつ数回で届く）と釣り合っていないと、
+    //  しつけルートだけ実質到達不能になる
+    const need = api.LINEAGE_D_MIN
+      + api.LINEAGE_TH / api.LINEAGE_CARE_W * (api.LINEAGE_D_FULL - api.LINEAGE_D_MIN);
+    ok(need <= 70, 'しつけの線が高すぎる: Dm' + need.toFixed(1));
+    ok(need > api.LINEAGE_D_MIN, 'しつけの線が低すぎる: Dm' + need.toFixed(1));
+  });
+  it('しつけ度が下限以下なら寄与しない', () => {
+    const { api, clock } = load();
+    setup(api, clock, {});
+    eq(api.discTrait(), 0, 'Dm50:');
+    api.pet.Dm = api.LINEAGE_D_MIN;
+    eq(api.discTrait(), 0, '下限ちょうど:');
+    api.pet.Dm = api.LINEAGE_D_FULL;
+    eq(api.discTrait(), 1, '上限:');
+  });
+  it('世話と遊びがぶつかったらゲームが勝つ', () => {
+    const { api, clock } = load();
+    //  甘やかしを最大にしても、アブダクション全振りには勝てない（0.45 < 1.0）
+    setup(api, clock, { plays:{sw:0,ss:0,ab:12}, A:aPerDay(api.A_SPOIL_SCALE) });
+    eq(api.pickLineage(), 'grey');
+  });
+  it('放置は系統に対して中立（放置してもしなくても結果が変わらない）', () => {
+    const { api, clock } = load();
+    //  放置の帰結は体型と帰還エンディングで効かせる。ここでも効かせると
+    //  「グレイ＝手を抜いた結果」になり、系統に優劣をつけない方針と衝突する。
+    //  偏りが決め手ぎりぎり（playBias 0.31）の並びを使うと、放置が少しでも効けば結果が動く
+    const NEAR = [{sw:7,ss:3,ab:3}, {sw:3,ss:3,ab:7}, {sw:3,ss:7,ab:3}, {sw:5,ss:5,ab:5}];
+    for(const p of NEAR){
+      setup(api, clock, { plays:p, A:0 });
+      const base = api.pickLineage();
+      setup(api, clock, { plays:p, A:aPerDay(-api.A_NEGLECT_SCALE) });   // 放置度100
+      eq(api.pickLineage(), base, JSON.stringify(p)+' 放置しても:');
+    }
+  });
+});
+
 // ══ 進化 ══════════════════════════════════════════════════
 //  プランプ＝大食い または 甘やかし ／ スリーク＝丁寧なケア かつ ミニゲーム制覇 ／
 //  プリックリー＝ケアが雑。どれにも当たらなければ最終形態にならず、成体のままとどまる
