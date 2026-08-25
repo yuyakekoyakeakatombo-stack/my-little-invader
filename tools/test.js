@@ -1353,6 +1353,7 @@ describe('エンディング', () => {
     ok(api.redeemed(), '立て直しの条件を満たしていること');
     api.advancePet();
     ok(api.pet.homeFlag, '帰還になること');
+    ok(api.pet.homeRedeem, '立て直しとして記録されること');
     ok(!api.pet.ufoFlag, '家出にはならないこと');
     eq(api.diaryLog[api.diaryLog.length-1].t, ['redeemed'], '日記は立て直しのもの:');
   });
@@ -1457,6 +1458,7 @@ describe('エンディング', () => {
     api.advancePet();
     ok(api.pet.homeFlag, `${api.STUCK_DAYS}日を過ぎたら迎えが来る`);
     ok(!api.pet.ufoFlag, '家出ではなく帰還であること');
+    ok(!api.pet.homeRedeem, '立て直しではなく時間切れとして記録されること');
     eq(api.pet.stage, 'adult', '成体のまま連れて行かれる:');
     //  世話はしていたのだから、黙って出ていく別れにはしない
     eq(api.diaryLog[api.diaryLog.length-1].t, ['broughtHome'], '日記は帰還のもの:');
@@ -1550,6 +1552,52 @@ describe('日記', () => {
             ok(n <= BUDGET[lg], `${tag}[${i}] ${lg}: ${n}文字（予算${BUDGET[lg]}）「${line}」`);
           }
       });
+  });
+  //  旅立ちだけが「また会おう」で終わる。育ちきった子との別れなので、
+  //  ここが無いと言い切りで終わって、他の別れと後味が変わらなくなる
+  it('旅立ちの日記は「また いつか」で終わる', () => {
+    const { api } = load();
+    api.DIARY_LINES.departed.forEach((v,i)=>{
+      ok(/また いつか/.test(v.ja[v.ja.length-1]), `departed[${i}] ja の最後が「また いつか」でない: ${v.ja[v.ja.length-1]}`);
+      ok(/AGAIN/.test(v.en[v.en.length-1]),      `departed[${i}] en の最後が再会の言葉でない: ${v.en[v.en.length-1]}`);
+    });
+    //  帰還にも再会の言葉があるので、読み分けの「いつか」は旅立ち側だけに置く
+    for(const tag of ['broughtHome','redeemed'])
+      api.DIARY_LINES[tag].forEach((v,i)=>
+        ok(!v.ja.some(l=>/また いつか/.test(l)), `${tag}[${i}] に「また いつか」が入っている`));
+  });
+  //  帰還は入口が2つあるが、演出は共通。おもいでに残る一文だけが分かれる。
+  //  ここが同じに戻ると、立て直した子にも「じかんが きた」と出てしまう
+  it('帰還の2つの入口で、おもいでの一文が変わる', () => {
+    const { api } = load();
+    const label = (redeem) => { api.pet.dead = ''; api.pet.homeRedeem = redeem;
+      api.pet.goneBy = redeem ? 'redeem' : 'home'; return api.endLabel(); };
+    const time = label(false), redeemed = label(true);
+    ok(time && redeemed, '両方に言葉があること');
+    ok(time !== redeemed, `入口で一文が変わらない: ${time}`);
+    ok(!/ひとりで/.test(time), `時間切れに「ひとりで」が入っている: ${time}`);
+    ok(!/じかん/.test(redeemed), `立て直しに「じかん」が入っている: ${redeemed}`);
+    //  演出の終わりで goneBy を決めているのは描画側。ここが homeRedeem を見ていないと、
+    //  上の分岐があっても立て直しの一文には辿り着けない
+    const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'invader_game.html'), 'utf8');
+    const line = src.split('\n').find(l => /pet\.goneBy = .*homeFlag = false/.test(l));
+    ok(line, '帰還の演出の終わりが見つからない');
+    ok(/homeRedeem/.test(line), `入口を見ずに goneBy を決めている: ${line.trim()}`);
+    ok(/'redeem'/.test(line) && /'home'/.test(line), `どちらか一方しか出していない: ${line.trim()}`);
+  });
+  it('5つの結末すべてに、おもいでの一文がある', () => {
+    const { api } = load();
+    for(const lg of ['ja','en']){
+      api.lang = lg;
+      for(const by of ['depart','home','redeem','return','invade']){
+        api.pet.dead = ''; api.pet.goneBy = by;
+        ok(api.endLabel(), `${lg}/${by} の一文が無い`);
+      }
+      for(const d of ['starve','sick']){
+        api.pet.goneBy = ''; api.pet.dead = d;
+        ok(api.endLabel(), `${lg}/${d} の一文が無い`);
+      }
+    }
   });
   //  演出のあとの静止画面は「演出の最終画面と同じ位置に同じ言葉」を置く決まり。
   //  家出の演出は言葉を出さずに終わるので、静止画面にも出してはいけない
@@ -2833,6 +2881,34 @@ describe('ファイル', () => {
     ok(at > 0 && src.indexOf('stamp(ctxR, body', at) < src.indexOf('} else if(memPage === 1)', at),
        '姿を置く処理が1ページ目の中にない');
   });
+  //  ベストだけでは「どれをよく遊んだか」が残らないので、回数も並べる。
+  //  未プレイの扱いはベストと同じ（0点と区別して --- を出す）
+  it('おもいでに あそんだ回数が3本ぶん出る', () => {
+    const { api, clock } = load();
+    pet(api, clock, { best:{sw:1200, ss:860, ab:445}, plays:{sw:12, ss:5, ab:128} });
+    eq([0,1,2].map(i => api.playText(i)), ['12','5','128'], '回数:');
+    eq([0,1,2].map(i => api.bestText(i)), ['1200','860','445'], 'ベスト:');
+    pet(api, clock, { best:{sw:0, ss:0, ab:0}, plays:{sw:0, ss:0, ab:0} });
+    eq([0,1,2].map(i => api.playText(i)), ['---','---','---'], '未プレイの回数:');
+    eq([0,1,2].map(i => api.bestText(i)), ['---','---','---'], '未プレイのベスト:');
+    //  遊んだうえで0点だった場合は 0 と出す（未プレイと区別する）
+    pet(api, clock, { best:{sw:0, ss:0, ab:0}, plays:{sw:3, ss:0, ab:0} });
+    eq(api.bestText(0), '0', '遊んで0点のベスト:');
+    eq(api.playText(0), '3', '遊んで0点の回数:');
+  });
+  it('おもいでの2列は、桁が最大でも重ならない', () => {
+    const src = read('invader_game.html');
+    const m = /const MEM_BEST_R = (\d+), MEM_PLAY_R = (\d+);/.exec(src);
+    ok(m, '列の位置が定数になっていない');
+    const bestR = +m[1], playR = +m[2];
+    //  ピクセル字体は1文字6px＝1.5ドット。ベスト4桁・回数3桁が最大
+    const bestW = 4 * 1.5, playW = 3 * 1.5, headW = 5 * 1.5;   // PLAYS が見出しの最長
+    ok(bestR < playR - playW, `ベスト(右端${bestR})と回数(左端${playR-playW})が重なる`);
+    ok(bestR < playR - headW, `ベスト(右端${bestR})と見出しPLAYS(左端${playR-headW})が重なる`);
+    //  いちばん長いゲーム名の右端（3 + 13文字×1.5 = 22.5）と、ベストの左端
+    ok(22.5 < bestR - bestW, `ゲーム名(右端22.5)とベスト(左端${bestR-bestW})が重なる`);
+    ok(playR <= 51, `回数が右の余白(51)を越える: ${playR}`);
+  });
   it('いちばん良かった点数が、選択画面と おもいで の両方に出る', () => {
     const src = read('invader_game.html');
     // 表示の決めかたは1か所。2画面で食い違わないようにしておく
@@ -2846,7 +2922,7 @@ describe('ファイル', () => {
     ok(/ctxN\.fillText\('BEST ' \+ bestText\(playSel\)/.test(seg),
        '選択画面がカーソルの位置と結びついていない');
     // おもいで：3本ぶんを並べる
-    ok(/PLAY_ITEMS\.forEach\(\(label,i\)=> memBestRow\(label, bestText\(i\), 27 \+ i\*8\)\);/.test(src),
+    ok(/PLAY_ITEMS\.forEach\(\(label,i\)=> memGameRow\(label, bestText\(i\), playText\(i\), \d+ \+ i\*8\)\);/.test(src),
        'おもいでに3本ぶんが並んでいない');
   });
   // tickMain は表示中の画面に関係なく回るので、そのままだと メニューや日記、

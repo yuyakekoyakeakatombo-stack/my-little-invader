@@ -387,11 +387,12 @@
       plump:'PLUMP', sleek:'SLEEK', prickly:'PRICKLY',
       mdays:'DAYS TOGETHER', mfeed:'MEALS', msnack:'TREATS', mclean:'TIDYING',
       mpraise:'PRAISE', mplay:'PLAYING', mmed:'MEDICINE', msick:'ILLNESS',
-      mgave:'WHAT YOU GAVE', mbest:'BEST SCORES', mlast:'HOW THEY GREW',
+      mgave:'WHAT YOU GAVE', mbest:'BEST SCORES', mgames:'MINI GAMES', mlast:'HOW THEY GREW',
       mcare:'CARE', mdisc:'MANNERS', mtemper:'NATURE',
       tlively:'LIVELY', tcalm:'CALM', tmid:'EVEN',
       endReturn:'THEY WENT SOMEWHERE', endDepart:'THEY CAME FOR THEM\nBACK TO THEIR STAR',
-      endHome:'TIME WAS UP\nTHEY WERE TAKEN BACK',
+      endHome:'TIME WAS UP\nTHEY WENT BACK HOME',
+      endRedeem:'THEY WENT HOME ON THEIR OWN',
       endInvade:'THEY CALLED A FLEET\nAND CAME FOR EARTH', endStarve:'THEY WASTED AWAY', endSick:'THEY WASTED AWAY',
     },
     ja: {
@@ -414,11 +415,12 @@
       plump:'プランプ', sleek:'スリーク', prickly:'プリックリー',
       mdays:'にち いっしょにいた', mfeed:'ごはん', msnack:'おやつ', mclean:'そうじ',
       mpraise:'ほめた', mplay:'あそんだ', mmed:'くすり', msick:'びょうき',
-      mgave:'してあげたこと', mbest:'ベストスコア', mlast:'そだちかた',
+      mgave:'してあげたこと', mbest:'ベストスコア', mgames:'ミニゲーム', mlast:'そだちかた',
       mcare:'ケア', mdisc:'しつけ', mtemper:'せいかく',
       tlively:'やんちゃ', tcalm:'おっとり', tmid:'ふつう',
       endReturn:'どこかへ いってしまった', endDepart:'おむかえが きた\nほしへ かえった',
-      endHome:'じかんが きた\nほしへ もどされた',
+      endHome:'じかんが きた\nほしへ もどった',
+      endRedeem:'ひとりで ほしへ かえった',
       endInvade:'たいぐんを よんで\nちきゅうに せめてきた', endStarve:'ちからつきた', endSick:'ちからつきた',
     },
   };
@@ -777,12 +779,14 @@
     overAcc:0,                            // 最近の食べすぎ具合（毎日減衰。病気のなりやすさに効く）
     lowBDays:0, highBDays:0, calDay:'',   // なつき度が低い／高いまま続いた日数（帰還判定・甘やかし判定）
     dead:'', ufoFlag:false,               // 死因('starve'|'sick')・帰還トリガー
-    gone:false, goneBy:'',                // 帰還/旅立ちが終わった状態。ALL RESET まで解けない
-                                          //  goneBy: 'return'=帰還 / 'depart'=旅立ち（残す言葉が変わる）
+    gone:false, goneBy:'',                // 別れが終わった状態。ALL RESET まで解けない
+                                          //  'depart'=旅立ち / 'home'=帰還(時間切れ) / 'redeem'=帰還(立て直し)
+                                          //  'return'=家出 / 'invade'=侵攻。おもいでに残る一文が変わる
     stage:'egg', lineage:'', form:'',     // 育成段階: egg→mid→larva→adult(系統)→final(形態)
     EP:0, ageMin:0, eggTargetEP:0,        // 進化ポイント/年齢(分)/NEWBORN→BABYの個体別目標EP
     finalAt:0, departFlag:false,          // 最終形態到達時刻・旅立ちエンド確定
     homeFlag:false,                       // 帰還エンド確定（時間切れ／とげとげからの立て直し）
+    homeRedeem:false,                     // その帰還が「立て直し」だったか（おもいでの一文が変わる）
     memShown:false,                       // おもいでを自動で開いたか（1回だけ）
     formWild:false,                       // 最終形態が「とげとげ」か（お迎えエンドが出なくなる）
                                           //  内部名は体型名を付け直す前のもの。セーブに載るので変えずに残してある
@@ -1580,40 +1584,36 @@
     // 別れの言葉は口調で言い分ける。並びは plain / calm / rough の順（voiceIdx と対応）
     // 家出（E3）。演出は「立ちつくして・・・のあと、自分で歩いて出ていく」なので、
     //  迎えが来た体では書かない。名残は残すが、誰のせいにもしない言いかたにする
-    farewell: [ { ja:['ひとりで いくよ','まだ ここに','いたかったな'],
-                  en:['I AM GOING ALONE.','I WANTED TO STAY','A BIT LONGER'] },
-                { ja:['ひとりで いきます','まだ ここに','いたかったです'],
-                  en:['I AM GOING ON MY OWN.','I WANTED TO STAY HERE','A LITTLE LONGER'] },
-                { ja:['もう いくよ','まだ いたかったのに','しかたないか'],
-                  en:['I AM LEAVING NOW.','I WANTED TO STAY.','NOTHING I CAN DO'] } ],
+    farewell: [ { ja:['ばいばい'],   en:['BYE BYE.'] },
+                { ja:['さようなら'], en:['GOODBYE.'] },
+                { ja:['じゃあな'],   en:['SO LONG.'] } ],
     // 帰還（時間切れ）。育ちきらなかったが、世話をされなかったわけではない。
     //  迎えが来て連れ帰られる側なので「むかえ」を使ってよい
-    broughtHome:[{ ja:['じかんが きたって','まだ おおきく','なれなかったけど'],
-                  en:['MY TIME IS UP.','I NEVER GREW UP,','BUT IT WAS GOOD'] },
-                { ja:['じかんが きたそうです','まだ おおきく','なれませんでしたが'],
-                  en:['THEY SAY MY TIME IS UP.','I NEVER GREW UP,','BUT IT WAS GOOD'] },
-                { ja:['じかんぎれ だってさ','おおきく なれなかったな','まあ いいか'],
-                  en:['MY TIME IS UP.','I NEVER GOT BIG.','WELL, NEVER MIND'] } ],
+    broughtHome:[{ ja:['もう おわかれ','もっと いっしょに','いたかった'],
+                  en:['THIS IS GOODBYE.','I WANTED TO BE','WITH YOU LONGER'] },
+                { ja:['おわかれです','また あいましょう'],
+                  en:['THIS IS FAREWELL.','LET US MEET AGAIN.'] },
+                { ja:['おわかれだ','またな'],
+                  en:['THIS IS IT.','SEE YOU AROUND.'] } ],
     // 帰還（立て直し）。とげは取れないまま。それでも迎えは来た
-    redeemed: [ { ja:['とげは とれないけど','むかえが きた','ありがとう'],
-                  en:['MY SPINES ARE STILL','HERE. THEY CAME','FOR ME. THANK YOU'] },
-                { ja:['とげは とれませんが','むかえが きました','ありがとう ございます'],
-                  en:['MY SPINES REMAIN, BUT','THEY HAVE COME FOR ME.','THANK YOU'] },
-                { ja:['とげは とれないな','むかえが きた','わるく なかったよ'],
-                  en:['THE SPINES ARE STILL','HERE. THEY CAME.','IT WAS NOT SO BAD'] } ],
+    redeemed: [ { ja:['さようなら','もう おわかれ'],
+                  en:['FAREWELL.','THIS IS GOODBYE.'] },
+                { ja:['さようなら','もう おわかれです'],
+                  en:['FAREWELL.','THIS IS GOODBYE NOW.'] },
+                { ja:['じゃあな','もう おわかれだ'],
+                  en:['SO LONG.','THIS IS GOODBYE.'] } ],
     // とげとげの家出。同じ演出だが、こちらは名残を残さず突き放す
-    farewellWild:[{ ja:['でていくよ','なにも いうことは ない','じゃあな'],
-                  en:['I AM WALKING OUT.','I HAVE NOTHING TO SAY.','SO LONG'] },
-                { ja:['でていきます','もう いうことは ありません','さようなら'],
-                  en:['I AM WALKING OUT.','I HAVE NOTHING LEFT','TO SAY. FAREWELL'] },
-                { ja:['でていく','もう いい','じゃあな'],
-                  en:['I AM WALKING OUT.','ENOUGH OF THIS.','SO LONG'] } ],
-    departed: [ { ja:['むかえが きた','もう ひとりでも','だいじょうぶ','そだててくれて ありがとう'],
-                  en:['THEY CAME FOR ME.','I CAN MANAGE NOW.','THANK YOU FOR','RAISING ME'] },
-                { ja:['むかえが きました','もう ひとりでも','だいじょうぶです','そだててくれて ありがとう'],
-                  en:['THEY HAVE COME FOR ME.','I CAN MANAGE ON MY OWN.','THANK YOU FOR','RAISING ME'] },
-                { ja:['むかえが きた','もう へいきだ','そだててくれて ありがとうな'],
-                  en:['THEY CAME FOR ME.','I AM FINE NOW.','THANKS FOR','RAISING ME'] } ],
+    farewellWild:[{ ja:['でていく','じゃあな'],       en:['I AM LEAVING.','GOODBYE.'] },
+                { ja:['でていきます','さようなら'], en:['I AM LEAVING NOW.','FAREWELL.'] },
+                { ja:['でていくぞ','じゃあな'],     en:['I AM LEAVING.','SO LONG.'] } ],
+    //  旅立ちだけが「また会おう」で終わる。帰還の「また あいましょう／またな」と
+    //  読み分けられるよう、こちらには「いつか」を入れてある
+    departed: [ { ja:['むかえが きた','もう ひとりでも','だいじょうぶ','そだててくれて ありがとう','また いつか あおう'],
+                  en:['THEY CAME FOR ME.','I CAN MANAGE NOW.','THANK YOU FOR','RAISING ME','UNTIL WE MEET AGAIN.'] },
+                { ja:['むかえが きました','もう ひとりでも','だいじょうぶです','そだててくれて ありがとう','また いつか あいましょう'],
+                  en:['THEY HAVE COME FOR ME.','I CAN MANAGE ON MY OWN.','THANK YOU FOR','RAISING ME','I HOPE WE MEET AGAIN.'] },
+                { ja:['むかえが きた','もう へいきだ','そだててくれて ありがとうな','また いつか あおう'],
+                  en:['THEY CAME FOR ME.','I AM FINE NOW.','THANKS FOR','RAISING ME','SEE YOU AGAIN SOMETIME.'] } ],
     wrath:    [ { ja:['なかまをよんだ','もう がまんできない','おわかれだ'],
                   en:['I CALLED MY KIND.','I CANNOT BEAR THIS','ANY MORE. GOODBYE'] },
                 { ja:['なかまを よびました','もう たえられません','さようなら'],
@@ -2853,7 +2853,7 @@
     //  迎えが来て連れ帰られる形で区切る
     if(pet.stage==='adult' && pet.lineageAt && !pet.ufoFlag && !pet.homeFlag && !pet.invadeFlag &&
        now - pet.lineageAt >= STUCK_DAYS*86400000){
-      pet.homeFlag = true;
+      pet.homeFlag = true; pet.homeRedeem = false;
       addDiary({ d: petDay(), n: pet.name, t: ['broughtHome'], v: [voiceIdx()], c: '', ts: Date.now(), cd: todayKey() });
     }
     // とげとげの行き先。立て直せたかどうかで、迎えが来るか、黙って出ていくかが分かれる。
@@ -2861,7 +2861,7 @@
     if(pet.stage==='final' && pet.finalAt && isWild() && !pet.ufoFlag && !pet.homeFlag && !pet.invadeFlag &&
        !invadeSigns() && now - pet.finalAt >= 14*86400000){
       if(redeemed()){
-        pet.homeFlag = true;
+        pet.homeFlag = true; pet.homeRedeem = true;
         addDiary({ d: petDay(), n: pet.name, t: ['redeemed'], v: [voiceIdx()], c: '', ts: Date.now(), cd: todayKey() });
       } else {
         pet.ufoFlag = true;
@@ -4685,7 +4685,9 @@
     fM++; homeT++;
     if(homeT >= 92 + HOME_AFTER){
       // 他のエンドと同じく、演出のあとは「いなくなったあと」で止める
-      pet.gone = true; pet.goneBy = 'home'; pet.homeFlag = false;
+      //  演出は共通だが、おもいでに残る一文は入口で変える。
+      //  時間切れは「じかんが きた」、立て直しは「ひとりで ほしへ かえった」
+      pet.gone = true; pet.goneBy = pet.homeRedeem ? 'redeem' : 'home'; pet.homeFlag = false;
       homeEnding = false; homeT = 0;
       savePet(); endedShowMemory();
     }
@@ -5510,6 +5512,12 @@
     if(!(Number.isFinite(p[k]) && p[k] > 0)) return '---';
     return String(Math.max(0, Math.round(b[k] || 0)));
   }
+  //  あそんだ回数。ベストと同じく、一度も遊んでいなければ --- を出す
+  function playText(i){
+    const k = PLAY_KEYS[i], p = pet.plays || {};
+    if(!(Number.isFinite(p[k]) && p[k] > 0)) return '---';
+    return String(Math.max(0, Math.round(p[k])));
+  }
   let playSel=0;
   let menuSel=0, fN=0;
   let menuScroll=0;   // メニューの表示開始位置（選択追従スクロール）
@@ -5542,7 +5550,7 @@
   // 項目はキーで管理（表示ラベルは言語辞書、値は各キーで分岐）
   //  版の番号は sw.js の VERSION と同じもの。tools/bump-sw.sh が両方いっしょに
   //  書き換える（ずれると、テスターの端末に出ている版が分からなくなる）
-  const APP_VERSION = '2026-08-25-01';
+  const APP_VERSION = '2026-08-25-02';
   //  (C) は Press Start 2P に © が無く、別の字体に落ちて1文字だけ形が浮くため
   const APP_COPY = '(C) 2026 Studio M.D.Q.';
   const SETTINGS_KEYS = ['language','weather','sound','bodycolor','version','reset'];
@@ -6535,6 +6543,7 @@
     if(pet.goneBy === 'invade') return T('endInvade');
     if(pet.goneBy === 'return') return T('endReturn');
     if(pet.goneBy === 'home')   return T('endHome');
+    if(pet.goneBy === 'redeem') return T('endRedeem');
     return '';
   }
   function memOpen(from){ memFrom = from || 'menu'; memPage = 0; fR = 0; showView('memory'); }
@@ -6542,6 +6551,19 @@
 
   //  ミニゲームの記録。ゲーム名は選択画面と同じ英語表記なので、
   //   言語に関わらずピクセル字体で組む（memRow は言語で字体が変わる）
+  //  ミニゲーム1本ぶんの記録。ベストと あそんだ回数 を2列に並べる。
+  //   見出し（BEST / PLAYS）と同じ右端に揃えるので、列の位置はここで一元管理する
+  const MEM_BEST_R = 39, MEM_PLAY_R = 51;
+  function memGameRow(label, best, plays, y){
+    ctxR.font = '6px "Press Start 2P"'; ctxR.fillStyle = ON;
+    ctxR.textAlign = 'left';  ctxR.fillText(label, 3*S, y*S);
+    ctxR.textAlign = 'right';
+    ctxR.fillText(best,  MEM_BEST_R*S, y*S);
+    ctxR.fillText(plays, MEM_PLAY_R*S, y*S);
+    ctxR.textAlign = 'left';                           // 幅を測る前に必ず戻す
+    const lw = ctxR.measureText(label).width / S, bw = ctxR.measureText(best).width / S;
+    for(let x = Math.floor(3 + lw) + 2; x < MEM_BEST_R - bw - 1.5; x += STAT_LEADER) dot(ctxR, x, y + 1, DIM);
+  }
   function memBestRow(label, val, y){
     ctxR.font = '6px "Press Start 2P"'; ctxR.fillStyle = ON;
     ctxR.textAlign = 'left';  ctxR.fillText(label, 3*S, y*S);
@@ -6631,10 +6653,16 @@
 
     } else if(memPage === 2){
       // 3ページ目：ミニゲームの記録。2ページ目の「あそんだ」回数の隣に置きたいが、
-      //  あちらは6行で埋まっているので、continue して独立した1ページにする
+      //  あちらは6行で埋まっているので、continue して独立した1ページにする。
+      //  ベストだけでは「どれをよく遊んだか」が残らないので、回数も並べる
       ctxR.font = uiFont(6); ctxR.fillStyle = NK; ctxR.textAlign = 'center';
-      ctxR.fillText(T('mbest'), (W*S)/2, 17*S);
-      PLAY_ITEMS.forEach((label,i)=> memBestRow(label, bestText(i), 27 + i*8));
+      ctxR.fillText(T('mgames'), (W*S)/2, 17*S);
+      //  列の見出し。ゲーム名と同じピクセル字体で置く（薄い色で字は描かない決まり）
+      ctxR.font = '6px "Press Start 2P"'; ctxR.fillStyle = NK; ctxR.textAlign = 'right';
+      ctxR.fillText('BEST',  MEM_BEST_R*S, 24*S);
+      ctxR.fillText('PLAYS', MEM_PLAY_R*S, 24*S);
+      ctxR.textAlign = 'left';
+      PLAY_ITEMS.forEach((label,i)=> memGameRow(label, bestText(i), playText(i), 32 + i*8));
 
     } else {
       // 4ページ目：どう育ったか。ここだけは隠していた値を開く

@@ -34,6 +34,7 @@ const EXPORTS = `
   pickForm, pickLineage, pickVoice, voice, voiceIdx, pTrait,
   todayKey, petDay, dayLabel, daysBetweenKeys,
   formLabel, endLabel, typeLabel, stageLabel, menuList, menuCols, MENU_RIGHT,
+  bestText, playText, PLAY_ITEMS, PLAY_KEYS, MEM_PAGES,
   APP_VERSION, APP_COPY, SETTINGS_KEYS,
   CARE_ICONS, CARE_ORDER,
   endedShowMemory, MEM_CHAR_BOT, GHOST_MEM_DELAY,
@@ -64,7 +65,7 @@ const EXPORTS = `
   DIARY_PICT, DIARY_RUNE, RUNE_KEYS, KANA_LETTER, runeOf, TAG_PICT, LV_NEW, LV_BABY, LV_CHILD, LV_ADULT, LV_DOT,
   diaryRows, diaryBaseDot, bodyRows, DBODY_TOP, DBODY_BOT, entryLevel,
   ensureAudio, playClick, AC_RETRY, get ac(){ return ac; }, setSound, get soundOn(){ return soundOn; },
-  SICK_P, SICK_DIRT_MIN, BOND_CAP, bondCapToday, RET_ESTR_DAYS, RET_GRACE_DAYS, RET_NOTOUCH_DAYS,
+  SICK_P, SICK_DIRT_MIN, BOND_CAP, RET_ESTR_DAYS, RET_GRACE_DAYS, RET_NOTOUCH_DAYS,
   STUCK_DAYS, ALLROUND, ALLROUND_SOFT, allRounderSoft, C_FORM_GOOD, C_FORM_SLEEK, C_FORM_BAD, M_FORM_BAD,
   B_PAMPER, PAMPER_DAYS, PAMPER_SNACKS, INV_M_MIN, INV_B_MAX, INV_P_MIN, INV_DAYS, WRATH_HOLD,
 };
