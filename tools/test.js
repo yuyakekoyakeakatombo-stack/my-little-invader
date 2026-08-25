@@ -1532,6 +1532,135 @@ describe('エンディング', () => {
   });
 });
 
+// ══ 世話の音とくすりの演出 ══════════════════════════════════
+describe('世話の音', () => {
+  //  playClick はボタンの手ざわり用の1音。SND は「何が起きたか」を伝える節。
+  //  鳴らす先を間違えると、良いことと良くないことの区別がつかなくなる
+  it('場面ぶんの音がそろっている', () => {
+    const { api } = load();
+    for(const k of ['med','bite','praise','anger','sad','tantrum'])
+      ok(Array.isArray(api.SND[k]) && api.SND[k].length, `${k} の音が無い`);
+  });
+  it('上がる音は良いこと、下がる音は良くないこと', () => {
+    const { api } = load();
+    const hz = k => api.SND[k].map(n => n[0]).filter(f => f > 0);
+    const up = a => a[a.length-1] > a[0], down = a => a[a.length-1] < a[0];
+    ok(up(hz('med')),    'くすりが上がっていない');
+    ok(up(hz('praise')), 'ほめるが上がっていない');
+    ok(down(hz('anger')), 'イライラが下がっていない');
+    ok(down(hz('sad')),   'しゅんが下がっていない');
+    //  わがままは低いところで揺れる（上がりも下がりもしない）
+    const t = hz('tantrum');
+    ok(Math.max(...t) < Math.min(...hz('praise')), 'わがままがほめるより高い');
+  });
+  //  下がるだけでは足りない。完全5度や長3度で落とすと「解決」して明るく聞こえるので、
+  //  良くないほうは音域そのものを低く取る。ここが崩れると、叱っても前向きに聞こえる
+  it('良くない音は、良い音より低いところで鳴る', () => {
+    const { api } = load();
+    const hz = k => api.SND[k].map(n => n[0]).filter(f => f > 0);
+    const bad  = ['anger','sad','tantrum'];
+    const good = ['med','praise'];
+    const badHi  = Math.max(...bad.flatMap(hz));
+    const goodLo = Math.min(...good.flatMap(hz));
+    ok(badHi < goodLo, `良くない音の上端(${badHi}Hz)が、良い音の下端(${goodLo}Hz)を越えている`);
+    //  いちばん低く着地するのはイライラ（いちばん強い否定）
+    const floor = k => Math.min(...hz(k));
+    ok(floor('anger') < floor('sad'), 'イライラがしゅんより上で着地している');
+    ok(floor('anger') <= Math.min(...Object.keys(api.SND).flatMap(hz)),
+       'イライラより低い音がある');
+  });
+  //  しゅんは3段でうなだれる。最後は全音だけ下げて、ため息のように落とす。
+  //  2音に戻すと、落ちきらずに途中で止まって聞こえる
+  it('しゅんは3段で落ちて、最後の一段がいちばん浅い', () => {
+    const { api } = load();
+    const hz = api.SND.sad.map(n => n[0]).filter(f => f > 0);
+    ok(hz.length >= 3, `段が足りない: ${hz.length}音`);
+    //  段ごとに必ず下がる
+    for(let i = 1; i < hz.length; i++)
+      ok(hz[i] < hz[i-1], `${i}段目で下がっていない: ${hz.join('→')}`);
+    //  最後の一段は、最初の一段より浅い（落差の比で見る）
+    const first = hz[1] / hz[0], last = hz[hz.length-1] / hz[hz.length-2];
+    ok(last > first, `最後の一段が深すぎる（ため息にならない）: ${hz.join('→')}`);
+  });
+  //  しゅんは受け入れた顔、イライラは尖った顔。同じ「下がる」でも手ざわりを分ける
+  it('しゅんは、イライラよりやわらかい', () => {
+    const { api } = load();
+    const vol = k => api.SND[k].map(n => n[2] == null ? 0.13 : n[2]);
+    ok(Math.max(...vol('sad')) < Math.max(...vol('anger')), 'しゅんの音量がイライラ以上');
+    const len = k => api.SND[k].reduce((a,n)=>a+n[1], 0);
+    ok(len('sad') > len('anger'), 'しゅんがイライラより短い（余韻が無い）');
+  });
+  //  音はボタンではなく「キャラがどう反応したか」に紐づける。
+  //  同じ SCOLD でも、しゅんとしたのか怒ったのかで鳴る音が変わる
+  it('音は仕草に紐づいている', () => {
+    const { api } = load();
+    eq(api.REACT_SND, { heart:'praise', anger:'anger', sad:'sad', refuse:'tantrum' });
+    for(const k of Object.values(api.REACT_SND))
+      ok(api.SND[k], `${k} の音が無い`);
+    //  たべる・くすりは動きに合わせて鳴らすので、ここには入れない
+    ok(!api.REACT_SND.eat && !api.REACT_SND.med, '動きに合わせる音が仕草側にも入っている');
+  });
+  it('たべる音が、皿の減りと噛み合っている', () => {
+    const { api } = load();
+    //  判定は本体の biteFrame をそのまま使う。条件を写すと、本体だけ変えたときに気づけない
+    const fire = [];
+    for(let reactT = api.EAT_T; reactT > 0; reactT--){
+      const el = api.EAT_T - reactT;
+      if(api.biteFrame(reactT)) fire.push({ el, lvl: Math.max(0, 3 - Math.floor(el/api.EAT_STEP)) });
+    }
+    eq(fire.length, 3, '鳴る回数（＝口の数）:');
+    eq(fire.map(f => f.el), [api.EAT_STEP, api.EAT_STEP*2, api.EAT_STEP*3], '鳴るコマ:');
+    eq(fire.map(f => f.lvl), [2, 1, 0], 'その時の皿:');
+    //  ひと口ぶんの音は、口の間隔（1.5秒）より短いこと
+    const bite = api.SND.bite.reduce((a,n)=>a+n[1], 0);
+    ok(bite < api.EAT_STEP / 10, `ひと口の音が長すぎて次の口に重なる: ${bite}秒`);
+  });
+  it('音が消えていない（鳴らす場所がソースにある）', () => {
+    const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'invader_game.html'), 'utf8');
+    //  仕草ぶんは setReaction が一括で鳴らす
+    ok(/const snd = REACT_SND\[type\];\s*\n\s*if\(snd\) playSnd\(snd\);/.test(src),
+       'setReaction が仕草の音を鳴らしていない');
+    //  動きに合わせる2つは、それぞれの場所で鳴らす
+    ok(/playSnd\('bite'\)/.test(src), 'ひと口の音を鳴らす場所が無い');
+    ok(/playSnd\('med'\)/.test(src),  'くすりの音を鳴らす場所が無い');
+    //  呼び出し元に散らばっていた鳴らしは、setReaction に寄せたので残っていないこと
+    for(const k of ['praise','tantrum','anger','sad'])
+      ok(!new RegExp(`playSnd\\('${k}'\\)`).test(src), `${k} が仕草の外でも鳴っている（二重に鳴る）`);
+  });
+});
+
+describe('くすりの演出', () => {
+  //  左の画面外から放物線で飛んできて、当たってから点滅する
+  it('飛来のあとに点滅が来る', () => {
+    const { api } = load();
+    eq(api.MED_T, api.MED_FLY + api.MED_BLINK, '全体の長さ:');
+    ok(api.MED_FLY > 0 && api.MED_BLINK > 0, '飛来と点滅の両方があること');
+    ok(api.MED_FROM < 0, `画面の外から飛んでこない: ${api.MED_FROM}`);
+  });
+  it('最後のコマで、ちょうど狙った場所に着く', () => {
+    const { api } = load();
+    //  本体の medPos をそのまま使う。式を写すと、本体だけ変えたときに気づけない
+    const tx = 19, ty = 54;
+    const at = t => api.medPos(t, tx, ty);
+    const last = at(api.MED_FLY - 1);
+    eq(last, { x: tx, y: ty }, '着弾点:');
+    eq(at(0), { x: api.MED_FROM, y: ty }, '飛び出す位置:');
+    //  途中はキャラの上を通る（頂点が狙った場所より高い）
+    const top = at(Math.floor((api.MED_FLY - 1) / 2));
+    ok(top.y < ty - 5, `弧が低すぎて、まっすぐ飛んで見える: 頂点 y=${top.y}`);
+    //  行きも帰りも単調（放物線が波打たない）
+    let prevY = 99;
+    for(let t = 0; t <= (api.MED_FLY - 1) / 2; t++){ const y = at(t).y;
+      ok(y <= prevY, `上がる途中で下がっている t=${t}`); prevY = y; }
+  });
+  it('薬の絵がある', () => {
+    const { api } = load();
+    ok(Array.isArray(api.MED_PILL) && api.MED_PILL.length, '絵が無い');
+    ok(api.MED_PILL.some(r => r.some(v => v)), '中身が空');
+    ok(api.MED_PILL[0].length <= 6 && api.MED_PILL.length <= 4, '飛ばすには大きすぎる');
+  });
+});
+
 // ══ 日記 ══════════════════════════════════════════════════
 describe('日記', () => {
   it('別れの言葉は3口調そろっている', () => {

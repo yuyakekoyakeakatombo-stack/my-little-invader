@@ -542,6 +542,45 @@
     g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime+0.05);
     osc.start(); osc.stop(ac.currentTime+0.05);
   }
+  // ── 世話の音 ──
+  //  playClick はボタンの手ざわり用の1音。こちらは「何が起きたか」を伝える短い節。
+  //  同じ矩形波で作って、地続きの音に聞こえるようにしてある。
+  //  音が鳴るのはボタンを押した流れの中だけなので、iOSの自動再生制限には掛からない
+  function playSeq(notes, type){
+    if(!soundOn) return;
+    ensureAudio();
+    if(!ac) return;
+    let at = ac.currentTime;
+    for(const [freq, dur, vol] of notes){
+      if(freq > 0){
+        const osc = ac.createOscillator(), g = ac.createGain();
+        osc.connect(g); g.connect(ac.destination);
+        osc.type = type || 'square';
+        osc.frequency.setValueAtTime(freq, at);
+        g.gain.setValueAtTime(vol == null ? 0.13 : vol, at);
+        //  切れ際を落として、ぶつっと止まらないようにする
+        g.gain.exponentialRampToValueAtTime(0.001, at + dur);
+        osc.start(at); osc.stop(at + dur);
+      }
+      at += dur;   // freq=0 は休符。長さだけ進める
+    }
+  }
+  //  数値は「上がる＝良いこと／下がる＝良くないこと」で揃えてある。
+  //  下がるだけでは足りない。完全5度や長3度で落とすと「解決」して明るく聞こえるので、
+  //  良くないほうは 音域そのものを低く取り、協和しない落ち方にしてある
+  const SND = {
+    med:     [[523,0.07],[659,0.07],[784,0.07],[1047,0.16]],   // 効いていく（ド・ミ・ソ・ド）
+    bite:    [[300,0.05],[210,0.05]],                          // ひと口ぶん。食事アニメの3口に合わせて3回鳴らす
+    praise:  [[784,0.08],[988,0.08],[1319,0.18]],              // うれしい（ソ・シ・ミ）
+    anger:   [[311,0.045],[220,0.05],[165,0.14]],              // イライラ（低いところへ転げ落ちる。着地はいちばん低い）
+    sad:     [[247,0.10,0.10],[196,0.12,0.10],[175,0.30,0.10]], // しゅん（3段でうなだれる。最後は全音だけ下げて、ため息のように落とす）
+    tantrum: [[220,0.09],[180,0.09],[220,0.09],[180,0.14]],     // いやいや（低く揺れる）
+  };
+  function playSnd(key){ const n = SND[key]; if(n) playSeq(n); }
+  //  仕草と音の対応。ボタンではなく「キャラがどう反応したか」で鳴らす。
+  //  同じ SCOLD でも、しゅんとしたのか怒ったのかで音が変わる
+  const REACT_SND = { heart:'praise', anger:'anger', sad:'sad', refuse:'tantrum' };
+
   function onPress(el, fn) {
     el.addEventListener('touchstart',e=>{e.preventDefault();fn();},{passive:false});
     el.addEventListener('click',fn);
@@ -3921,7 +3960,14 @@
     if(!pet.W || !pet.poopSince) return false;
     return Date.now() - pet.poopSince >= (debugMode ? 120000 : 7200000);
   }
-  const EAT_T = 60;          // 食事アニメの長さ（15tickごとに1口＝3口で空に）
+  const EAT_T = 60;          // 食事アニメの長さ（EAT_STEPごとに1口＝3口で空に）
+  const EAT_STEP = 15;       // ひと口ぶんの間隔（1.5秒）。皿の減りと音の両方がこれを見る
+  //  ひと口ぶんの音を鳴らすコマか。皿が減るのと同じ刻みにする。
+  //  ここを押した瞬間だけにすると、6秒かけて食べる絵と噛み合わない
+  function biteFrame(reactT){
+    const el = EAT_T - reactT;
+    return el >= EAT_STEP && el % EAT_STEP === 0;
+  }
   const POOP_X=[6,48,12,1];  // 汚れの表示位置（発生順。皿の位置と重ならない配置）
   const PLATE_X = 36, POOP_W = 5;                 // 皿・うんちの占有幅（皿幅はごはん11/おやつ9）
 
@@ -3966,6 +4012,30 @@
   // 仕上げに散らす小さな輝き [x, y, 出るタイミング]
   const SPARKLE_DUST = [[10,44,0.30],[26,38,0.45],[43,46,0.38],[18,51,0.55],[36,41,0.60]];
   const CLEAN_T = 36;        // 掃除アニメの長さ
+  // ── くすりの演出 ──
+  //  左の画面外から放物線でカプセルが飛んできて、キャラに当たる。
+  //  当たった瞬間から点滅して「効いた」を見せる。
+  //  当てる先はキャラの胴の中ほど（頭の上だと降ってきたように見える）
+  const MED_FLY   = 16;      // 飛んでくる時間
+  const MED_BLINK = 26;      // 当たってから点滅している時間
+  const MED_T     = MED_FLY + MED_BLINK;
+  const MED_ARC   = 14;      // 放物線の高さ（ドット）
+  const MED_FROM  = -5;      // 飛び出す x（画面外）
+  //  飛んでいるカプセル 4×3。斜めに寝かせた形にして、お世話アイコンと同じ見た目にそろえる
+  const MED_PILL = [
+    [0,1,1,1],
+    [1,1,1,1],
+    [1,1,1,0],
+  ];
+  //  t コマ目のカプセルの位置。(tx,ty) は当てる先。
+  //  MED_FLY-1 で割るので、最後に描くコマがちょうど (tx,ty) に来る。
+  //  MED_FLY で割ると 1 に届かないまま消えて、当たる手前で消えたように見える
+  function medPos(t, tx, ty){
+    const p = t / (MED_FLY - 1);                       // 0→1
+    return { x: Math.round(MED_FROM + (tx - MED_FROM) * p),
+             //  放物線。真ん中でいちばん高く、着地点でちょうど 0 に戻る
+             y: Math.round(ty - MED_ARC * 4 * p * (1 - p)) };
+  }
   let cleanSnapW = 0, cleanSnapPlate = false, cleanSnapSpoiled = false, cleanSnapPoopFly = false, cleanSnapKind = 'meal';   // 掃除開始時点の汚れの見た目スナップショット
 
   const HEADER_Y = 8;            // ヘッダーの区切り線。これより上には天体も流れ星も描かない
@@ -4176,7 +4246,12 @@
   // 今のリアクションが終わってから食べさせる皿（'meal'/'snack'）。
   //  しかってわがままが収まった時、しゅんとする様子を見せてから食事に移るために使う
   let pendingEat = null;
-  function setReaction(type, t=24, quiet=false){ reactType = type; reactT = t; reactQuiet = quiet; pendingEat = null; }
+  function setReaction(type, t=24, quiet=false){
+    reactType = type; reactT = t; reactQuiet = quiet; pendingEat = null;
+    //  たべる・くすりは、動きに合わせて鳴らすタイミングが別にあるのでここでは鳴らさない
+    const snd = REACT_SND[type];
+    if(snd) playSnd(snd);
+  }
 
   // ── 移動AI（進化段階・系統・性格で歩き方が変わる） ──
   let walkX = null, walkDir = 1, walkTimer = 0;
@@ -4400,7 +4475,7 @@
             pet.total.med++;                                       // 通算（おもいで用）
             note('cured');
             addA(A_ADJ.med); markTouch();           // くすりも同じく、ふれあいには数えない
-            setReaction('cured');
+            setReaction('med', MED_T);              // くすりが飛んできて当たり、点滅して治る
           }
         }
         else if(pet.incubAt){
@@ -4410,7 +4485,7 @@
           pet.incubAt = 0;
           pet.total.med++;                                         // 通算（おもいで用）
           addA(A_ADJ.med); markTouch();
-          setReaction('cured');
+          setReaction('med', MED_T);
         }
         else { if(pet.mood > 0) pet.mood--; addM(M_ADJ.medWell); setReaction('anger'); } // 健康時は嫌がる
         break;
@@ -5167,7 +5242,8 @@
     let eatLvl = -1;   // 食事中の残量（3→2→1→0）
     if(reactT > 0){
       if(reactType==='eat'){
-        eatLvl = Math.max(0, 3 - Math.floor((EAT_T - reactT)/15));
+        eatLvl = Math.max(0, 3 - Math.floor((EAT_T - reactT)/EAT_STEP));
+        if(biteFrame(reactT)) playSnd('bite');
         if(eatLvl > 0){
           grid = eatSprite();                                            // 目が皿の方（右）を向く
           yOff = (fM%6<3) ? -1 : 0;                                      // 食べている間は小さく揺れる
@@ -5301,8 +5377,13 @@
     const charY = MAIN_GY - grid.length;   // 屈伸で縮んだフレームでも足元を地面に据える
     if(reactT > 0 && reactType === 'eat') charX = 36 - gw - 2;   // 皿の前に来て食べる
 
-    // 進化演出：点滅＋キラキラ
+    // くすりが当たったあとの点滅。当たる前は普通に立っている
     let hideChar = false;
+    if(reactT > 0 && reactType === 'med'){
+      const t = MED_T - reactT;                       // 0→MED_T
+      if(t >= MED_FLY && Math.floor((t - MED_FLY) / 3) % 2 === 0) hideChar = true;
+    }
+    // 進化演出：点滅＋キラキラ
     if(evoT > 0){
       evoT--;
       if(evoT%6 < 3) hideChar = true;
@@ -5321,6 +5402,17 @@
         dot(ctxM, charX+xOff+m[0], charY+yOff+m[1], BG);                  // 口（閉じ線）
         if(fM%6 >= 3) dot(ctxM, charX+xOff+m[0], charY+yOff+m[1]+1, BG);  // 開いた口
       }
+    }
+
+    // ── くすり：左の画面外から放物線で飛んできて、キャラに当たる ──
+    if(reactT > 0 && reactType === 'med'){
+      const t = MED_T - reactT;
+      if(t < MED_FLY){
+        const pos = medPos(t, charX + (gw >> 1) - 1,     // 当てる先＝胴の中ほど
+                              charY + (gh >> 1) - 1);
+        stamp(ctxM, MED_PILL, pos.x, pos.y, NK);
+      }
+      if(t === MED_FLY) playSnd('med');   // 当たった瞬間。押した時に鳴らすと届く前に鳴り終わる
     }
 
     // ── 皿・汚れオブジェクト ──
@@ -5379,6 +5471,8 @@
       if(blink && showReact){
         if(reactType==='eat'||reactType==='clean')            emo(ICO_NOTE);
         else if(reactType==='heart'||reactType==='cured')     emo(ICO_HEART);
+        //  くすりは当たってからハート。飛んでいる間に出すと、当たる前に治ったように見える
+        else if(reactType==='med' && (MED_T - reactT) >= MED_FLY) emo(ICO_HEART);
         else if(reactType==='anger'||reactType==='refuse')    emo(ICO_ANGER);
         else if(reactType==='nothing'||reactType==='sad')     emo(ICO_DOTS);
         else if(reactType==='hungry')                         emo(ICO_EXCL);
@@ -5550,7 +5644,7 @@
   // 項目はキーで管理（表示ラベルは言語辞書、値は各キーで分岐）
   //  版の番号は sw.js の VERSION と同じもの。tools/bump-sw.sh が両方いっしょに
   //  書き換える（ずれると、テスターの端末に出ている版が分からなくなる）
-  const APP_VERSION = '2026-08-25-02';
+  const APP_VERSION = '2026-08-25-03';
   //  (C) は Press Start 2P に © が無く、別の字体に落ちて1文字だけ形が浮くため
   const APP_COPY = '(C) 2026 Studio M.D.Q.';
   const SETTINGS_KEYS = ['language','weather','sound','bodycolor','version','reset'];
