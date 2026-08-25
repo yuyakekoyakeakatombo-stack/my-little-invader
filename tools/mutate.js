@@ -107,8 +107,8 @@ const MUTATIONS = [
   ['古いセーブで、隠しルートで進化した子もワイルド扱いにする',
    "&& !wasHiddenRoute(p);", ';', 'caught'],
   ['与えすぎがプリックリーを上書きできてしまう（順序の入れ替え）',
-   "if(pet.C < C_FORM_BAD){ pet.formWild = true; return key + '3'; }     // プリックリー\n    if(bigEater() || pampered()) return key + '1';",
-   "if(bigEater() || pampered()) return key + '1';\n    if(pet.C < C_FORM_BAD){ pet.formWild = true; return key + '3'; }", 'caught'],
+   "if(pet.C < C_FORM_BAD || (pet.M||0) >= M_FORM_BAD){ pet.formWild = true; return key + '3'; }\n    if(bigEater() || pampered()) return key + '1';",
+   "if(bigEater() || pampered()) return key + '1';\n    if(pet.C < C_FORM_BAD || (pet.M||0) >= M_FORM_BAD){ pet.formWild = true; return key + '3'; }", 'caught'],
   ['与えすぎがプランプではなくスリークになる',
    "if(bigEater() || pampered()) return key + '1';",
    "if(bigEater() || pampered()) return key + '2';", 'caught'],
@@ -136,12 +136,87 @@ const MUTATIONS = [
   ['成体で止める判断を無視して進化させる',
    "      if(!f) return;                              // どの条件にも当たらないうちは成体のまま待つ",
    "      if(!f) { pet.form = 'i2'; }", 'caught'],
-  ['スリークの条件が片方だけで通ってしまう',
-   "if(pet.C >= C_FORM_GOOD && allRounder()) return key + '2';",
-   "if(pet.C >= C_FORM_GOOD || allRounder()) return key + '2';", 'caught'],
+  ['すらりの併用ルートが、片方だけで通ってしまう',
+   "if(pet.C >= C_FORM_GOOD && allRounderSoft()) return key + '2';",
+   "if(pet.C >= C_FORM_GOOD || allRounderSoft()) return key + '2';", 'caught'],
   ['ミニゲームの基準を下げる',
    "const ALLROUND = { sw: 600, ss: 700, ab: 400 };",
    "const ALLROUND = { sw: 1, ss: 1, ab: 1 };", 'caught'],
+  ['なつかれないままの子が、どの結末にも辿り着けなくなる',
+   "    const bad = sg.includes('notouch') || sg.includes('lowB') || sg.length >= 2;",
+   "    const bad = sg.includes('notouch') || sg.length >= 2;", 'caught'],
+  ['兆候1つで家出になってしまう（遊ばないだけで出ていく）',
+   "    const bad = sg.includes('notouch') || sg.includes('lowB') || sg.length >= 2;",
+   "    const bad = sg.length >= 1;", 'caught'],
+  ['ふれあいゼロが単独で成立しなくなる',
+   "    const bad = sg.includes('notouch') || sg.includes('lowB') || sg.length >= 2;",
+   "    const bad = sg.includes('lowB') || sg.length >= 2;", 'caught'],
+  ['恨みが最終形態に効かなくなる（構い倒しても素直に育つ）',
+   "    if(pet.C < C_FORM_BAD || (pet.M||0) >= M_FORM_BAD){ pet.formWild = true; return key + '3'; }",
+   "    if(pet.C < C_FORM_BAD){ pet.formWild = true; return key + '3'; }", 'caught'],
+  ['恨みの線が低すぎて、たまに起こしただけでとげとげになる',
+   "  const M_FORM_BAD   = 70;", "  const M_FORM_BAD   = 20;", 'caught'],
+  ['すらりの「ケアだけ」の道が無くなる',
+   "    if(pet.C >= C_FORM_SLEEK) return key + '2';                          // ケアだけで極めた",
+   "    if(false) return key + '2';                                          // ケアだけで極めた", 'caught'],
+  ['すらりの「ゲームだけ」の道が無くなる',
+   "    if(allRounder()) return key + '2';                                   // ゲームだけで極めた",
+   "    if(false) return key + '2';                                          // ゲームだけで極めた", 'caught'],
+  ['すらりの「両方そこそこ」の道が無くなる',
+   "    if(pet.C >= C_FORM_GOOD && allRounderSoft()) return key + '2';       // 両方そこそこ",
+   "    if(false) return key + '2';                                          // 両方そこそこ", 'caught'],
+  ['ゆるいほうの線が単独ルートと同じになる（併用の意味が無くなる）',
+   "  const ALLROUND_SOFT = { sw: 400, ss: 450, ab: 250 };",
+   "  const ALLROUND_SOFT = { sw: 600, ss: 700, ab: 400 };", 'caught'],
+  ['ゆるい線が3本そろわなくても通る',
+   "    return (b.sw||0) >= ALLROUND_SOFT.sw && (b.ss||0) >= ALLROUND_SOFT.ss && (b.ab||0) >= ALLROUND_SOFT.ab; }",
+   "    return (b.sw||0) >= ALLROUND_SOFT.sw || (b.ss||0) >= ALLROUND_SOFT.ss || (b.ab||0) >= ALLROUND_SOFT.ab; }", 'caught'],
+  ['育ちきらなかった子が帰還ではなく家出になる（世話はしていたのに）',
+   "      pet.homeFlag = true;\n      addDiary({ d: petDay(), n: pet.name, t: ['broughtHome'], v: [voiceIdx()], c: '', ts: Date.now(), cd: todayKey() });",
+   "      pet.ufoFlag = true;\n      addDiary({ d: petDay(), n: pet.name, t: ['farewell'], v: [voiceIdx()], c: '', ts: Date.now(), cd: todayKey() });", 'caught'],
+  ['とげとげが立て直しても帰還にならない',
+   "      if(redeemed()){", "      if(false){", 'caught'],
+  ['とげとげが立て直さなくても帰還になる',
+   "      if(redeemed()){", "      if(true){", 'caught'],
+  ['立て直しに 世話の続きが要らなくなる',
+   "    return (s.careStreak||0) >= REDEEM_DAYS && (s.M||0) < WRATH_HOLD; }",
+   "    return (s.M||0) < WRATH_HOLD; }", 'caught'],
+  ['立て直しに 恨みが薄れていることが要らなくなる',
+   "    return (s.careStreak||0) >= REDEEM_DAYS && (s.M||0) < WRATH_HOLD; }",
+   "    return (s.careStreak||0) >= REDEEM_DAYS; }", 'caught'],
+  ['とげとげにも旅立ちが来てしまう',
+   "    if(pet.stage==='final' && pet.finalAt && !pet.departFlag && !isWild() &&",
+   "    if(pet.stage==='final' && pet.finalAt && !pet.departFlag &&", 'caught'],
+  ['家出のあとの画面に GOODBYE... が戻る（だまって出ていったのに言葉が出る）',
+   "    const msg = pet.goneBy==='depart' ? 'THANK YOU!' : (pet.goneBy==='invade' ? 'GAME OVER...' : '');",
+   "    const msg = pet.goneBy==='depart' ? 'THANK YOU!' : (pet.goneBy==='return' ? 'GOODBYE...' : (pet.goneBy==='invade' ? 'GAME OVER...' : ''));", 'caught'],
+  ['家出の日記が「むかえが きた」に戻る（演出は自分で歩いて出ていくのに）',
+   "    farewell: [ { ja:['ひとりで いくよ','まだ ここに','いたかったな'],",
+   "    farewell: [ { ja:['むかえが きた','まだ ここに','いたかったな'],", 'caught'],
+  ['とげとげの家出の日記が「むかえが きた」に戻る',
+   "    farewellWild:[{ ja:['でていくよ','なにも いうことは ない','じゃあな'],",
+   "    farewellWild:[{ ja:['むかえが きた','なにも いうことは ない','じゃあな'],", 'caught'],
+  ['旅立ちの日記から「むかえ」が消える（本当に迎えが来る側なのに）',
+   "    departed: [ { ja:['むかえが きた','もう ひとりでも','だいじょうぶ','そだててくれて ありがとう'],",
+   "    departed: [ { ja:['ひとりで いくよ','もう ひとりでも','だいじょうぶ','そだててくれて ありがとう'],", 'caught'],
+  ['別れの言葉が枠からはみ出す長さになる',
+   "                  en:['I AM WALKING OUT.','ENOUGH OF THIS.','SO LONG'] } ],",
+   "                  en:['I AM WALKING OUT OF HERE FOR GOOD.','ENOUGH OF THIS.','SO LONG'] } ],", 'caught'],
+  ['睡眠妨害で しつけが減らなくなる（起こして遊ぶのが無傷になる）',
+   "          addD(-4);                                                 // 不当なしかると同じだけ しつけも損なう。",
+   "          addD(0);                                                  // 不当なしかると同じだけ しつけも損なう。", 'caught'],
+  ['睡眠妨害で なかよしが減らなくなる',
+   "          pet.B = Math.max(0, pet.B - 2);\n          addD(-4);                                                 // 不当なしかると同じだけ しつけも損なう。",
+   "          addD(-4);                                                 // 不当なしかると同じだけ しつけも損なう。", 'caught'],
+  ['睡眠妨害が 不当なしかると同じ重さになる（起こすほうが軽くなる）',
+   "          addM(M_ADJ.wokenUp);                                      //  不当なしかるの上位版という位置づけ",
+   "          addM(M_ADJ.scoldBad);                                     //  不当なしかるの上位版という位置づけ", 'caught'],
+  ['不当なしかるで しゅんとしてしまう（叱り損ねが成功に見える）',
+   "          addA(A_ADJ.scoldBad); note('scolded');\n          //  しゅん（sad）は しつけが通った時だけの反応にしてある。\n          //  身に覚えのない叱られ方には怒る（睡眠妨害と同じ）\n          setReaction('anger');",
+   "          addA(A_ADJ.scoldBad); note('scolded');\n          setReaction('sad');", 'caught'],
+  ['わがままを叱った時に 怒られてしまう（しつけが通ったのに伝わらない）',
+   "          addA(A_ADJ.scoldFair); markTouch('scold');   // しつけは甘やかしでも放置でもない（ふれあいには数える）\n          setReaction('sad');",
+   "          addA(A_ADJ.scoldFair); markTouch('scold');   // しつけは甘やかしでも放置でもない（ふれあいには数える）\n          setReaction('anger');", 'caught'],
   ['しつけの上限を90に戻す（しつけ単独ではグレイに届かなくなる）',
    "  const LINEAGE_D_FULL = 72;", "  const LINEAGE_D_FULL = 90;", 'caught'],
   ['しつけの下限をなくす（雑に叱ってもグレイに寄る）',
@@ -166,11 +241,11 @@ const MUTATIONS = [
   ['成体で止まる期限を実質なくす',
    "  const STUCK_DAYS      = 28;", "  const STUCK_DAYS      = 9999;", 'caught'],
   ['成体で止まった子に迎えが来なくなる',
-   "    if(pet.stage==='adult' && pet.lineageAt && !pet.ufoFlag && !pet.invadeFlag &&\n       now - pet.lineageAt >= STUCK_DAYS*86400000){",
+   "    if(pet.stage==='adult' && pet.lineageAt && !pet.ufoFlag && !pet.homeFlag && !pet.invadeFlag &&\n       now - pet.lineageAt >= STUCK_DAYS*86400000){",
    "    if(false){", 'caught'],
   ['成体の期限が最終形態の子にも効いてしまう',
-   "if(pet.stage==='adult' && pet.lineageAt && !pet.ufoFlag && !pet.invadeFlag &&",
-   "if(pet.lineageAt && !pet.ufoFlag && !pet.invadeFlag &&", 'caught'],
+   "if(pet.stage==='adult' && pet.lineageAt && !pet.ufoFlag && !pet.homeFlag && !pet.invadeFlag &&",
+   "if(pet.lineageAt && !pet.ufoFlag && !pet.homeFlag && !pet.invadeFlag &&", 'caught'],
   ['古いセーブの判定に、いまの基準を使ってしまう',
    "      return (b.sw||0) >= 250 && (b.ss||0) >= 100 && (b.ab||0) >= 400; }",
    "      return allRounder(q); }", 'caught'],
@@ -790,11 +865,14 @@ const MUTATIONS = [
 ];
 
 const orig = fs.readFileSync(GAME, 'utf8');
-let caught = 0, missed = [], unexpected = [];
+let caught = 0, missed = [], unexpected = [], stale = [];
 try {
   process.stdout.write('突然変異チェック（本体をわざと壊して、テストが落ちるかを見る）\n\n');
   for(const [name, from, to, expect] of MUTATIONS){
+    // 本体を直すと from が古くなり、この変異は黙って死ぬ。見逃しと違って
+    //  「✗」が出ないので気づきにくい。最後にまとめて出し、終了コードにも効かせる
     if(orig.split(from).length - 1 !== 1){
+      stale.push(name);
       console.log(`  ？ 対象が1か所に定まらない  ${name}`); continue;
     }
     fs.writeFileSync(GAME, orig.replace(from, to));
@@ -815,4 +893,8 @@ console.log('\n本体は元に戻した');
 const total = MUTATIONS.filter(m => m[3] === 'caught').length;
 console.log(`検出 ${caught} / ${total}`);
 if(missed.length) console.log('見逃し: ' + missed.join(' , '));
-process.exit(missed.length ? 1 : 0);
+if(stale.length){
+  console.log(`\n空振り ${stale.length}件（本体が変わって from が古い。直すか消すこと）:`);
+  for(const n of stale) console.log('  - ' + n);
+}
+process.exit((missed.length || stale.length) ? 1 : 0);

@@ -141,7 +141,7 @@ describe('ふれあい', () => {
 
 // ══ 病気とその日の扱い ════════════════════════════════════
 // ══ ねているあいだの くすり ══════════════════════════════
-//   起こさないと飲ませられないと、しかって起こす（＝理不尽なしかる）しか
+//   起こさないと飲ませられないと、しかって起こす（＝睡眠妨害）しか
 //   手が無くなる。具合が悪いのに 罰を受ける形になってしまう
 describe('ねているあいだの くすり', () => {
   const night = new Date(2026, 5, 15, 2, 0, 0).getTime();
@@ -178,7 +178,7 @@ describe('ねているあいだの くすり', () => {
     api.doCare('MED');
     ok(api.effectiveAsleep(), 'くすりで 起こしてしまっている');
     eq(api.pet.mood, before.mood, 'くすりのあとの きげん:');
-    eq(api.pet.scoldBadCount || 0, before.scold, '理不尽なしかるに数えられている:');
+    eq(api.pet.scoldBadCount || 0, before.scold, 'しかるの失敗に数えられている:');
   });
   //  寝ている子は わがままを言えない。拒まれると 起こすしか手が無くなる
   it('寝ている子は、くすりを拒まない', () => {
@@ -946,13 +946,50 @@ describe('生活リズム', () => {
     clock.advance(10 * 60000);
     ok(api.effectiveAsleep(), '10分後には寝ている');
   });
-  it('ふつうの夜の睡眠を起こすのは理不尽なしかるのまま', () => {
+  it('ふつうの夜の睡眠を起こすのは睡眠妨害のまま', () => {
     const { api, clock } = load();
     clock.setTime(3, 0);
     pet(api, clock, { stage:'adult', lineage:'inv', P:0, wokeUntil:0, scoldBadCount:0 });
     eq(api.sleepKind(new Date(clock.now())), 'night');
     api.doCare('SCOLD');
-    eq(api.pet.scoldBadCount, 1, '理不尽として数える:');
+    eq(api.pet.scoldBadCount, 1, 'しかるの失敗として数える:');
+  });
+  //  睡眠妨害は「不当なしかるの上位版」。不当なしかるが取るものは全部取ったうえで、
+  //  PとMがさらに重い。ここでDとBが免除に戻ると、寝ている子を起こして遊ぶのが
+  //  系統・進化のうえで無傷の操作になってしまう
+  it('睡眠妨害は、不当なしかるが取るものを全部取ったうえで さらに重い', () => {
+    const { api, clock } = load();
+    const scold = wantAsleep => {
+      let hour = null;
+      const seed = h => { clock.setTime(h, 0);
+        pet(api, clock, { stage:'adult', lineage:'inv', wokeUntil:0, tantrumAt:0,
+          B:50, C:50, D:50, Dm:50, P:0, M:0, A:0 }); };
+      for(let h=0; h<24; h++){ seed(h); if(api.effectiveAsleep() === wantAsleep){ hour = h; break; } }
+      ok(hour !== null, (wantAsleep?'寝ている':'起きている')+'時刻が見つかること');
+      seed(hour);
+      const b = { B:api.pet.B, D:api.pet.D, P:api.pet.P, M:api.pet.M, mood:api.pet.mood };
+      api.doCare('SCOLD');
+      return { B:api.pet.B-b.B, D:api.pet.D-b.D, P:api.pet.P-b.P, M:api.pet.M-b.M, mood:api.pet.mood-b.mood };
+    };
+    const woken = scold(true), unfair = scold(false);
+    for(const k of ['B','D','mood']) eq(woken[k], unfair[k], k+' は不当なしかると同じ:');
+    ok(woken.P > unfair.P, `性格Pは睡眠妨害のほうが重い: ${woken.P} vs ${unfair.P}`);
+    ok(woken.M > unfair.M, `恨みMは睡眠妨害のほうが重い: ${woken.M} vs ${unfair.M}`);
+    ok(woken.D < 0 && woken.B < 0, `しつけ・なかよしがちゃんと減ること: D${woken.D} B${woken.B}`);
+  });
+  //  しゅん（sad）は「しつけが通った」合図。身に覚えのない叱られ方には怒る。
+  //  ここが sad に戻ると、プレイヤーには失敗が成功に見えてしまう
+  it('しゅんとするのは、しつけが通った時だけ', () => {
+    const { api, clock } = load();
+    const at = (h, o) => { clock.setTime(h, 0);
+      pet(api, clock, Object.assign({ stage:'adult', lineage:'inv', wokeUntil:0, tantrumAt:0, P:0 }, o));
+      api.doCare('SCOLD'); return api.reactType; };
+    // 通った側：わがままを叱る／夜更かしを正す
+    eq(at(15, { tantrumAt: clock.now() }), 'sad', 'わがままを叱る:');
+    eq(at(1,  { P:60 }), 'sad', '夜更かしを正す:');
+    // 失敗した側：睡眠妨害／不当なしかる
+    eq(at(3,  {}), 'anger', '睡眠妨害:');
+    eq(at(15, {}), 'anger', '不当なしかる:');
   });
 });
 
@@ -1262,7 +1299,7 @@ describe('エンディング', () => {
     ok(!sg.includes('notouch') && sg.length < 2, `兆候が帰還の線に届かないこと（実際 [${sg}]）`);
   });
   // 放置だけではPが下がる（構えば構うほど落ち着く）ので、昼夜逆転の条件に届かない。
-  //  侵攻は「夜に起こす・理不尽にしかる・夜更かしさせる」を重ねた時だけ
+  //  侵攻は「睡眠妨害・不当なしかる・夜更かしさせる」を重ねた時だけ
   it('プリックリーになっても、放置だけなら侵攻は確定しない', () => {
     const { api, clock } = load();
     pet(api, clock, { stage:'final', lineage:'inv', form:'i3', formWild:true,
@@ -1285,6 +1322,122 @@ describe('エンディング', () => {
     ok(!api.pet.departFlag, '旅立ちは出ない');
     ok(api.pet.ufoFlag, 'かわりに静かな帰還で幕が下りる');
   });
+  //  住み分け：家出は「世話をしなかった」結果だけに残す。
+  //  育ちきらなかった子・立て直した子は、迎えが来る帰還で受ける
+  it('家出と帰還の住み分け', () => {
+    const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'invader_game.html'), 'utf8');
+    //  家出（ufoFlag）を立てるのは、疎遠が続いた時と、とげとげのまま立て直せなかった時だけ
+    const ufo = [...src.matchAll(/pet\.ufoFlag = true;/g)].length;
+    eq(ufo, 2, '家出の入口の数:');
+    //  帰還（homeFlag）は、時間切れと立て直しの2つ
+    const home = [...src.matchAll(/pet\.homeFlag = true;/g)].length;
+    eq(home, 2, '帰還の入口の数:');
+    //  それぞれの日記が対応していること
+    for(const [flag, tags] of [['ufoFlag', ['farewell','farewellWild']],
+                               ['homeFlag', ['broughtHome','redeemed']]])
+      for(const t of tags)
+        ok(src.includes(`t: ['${t}']`), `${flag} 側の日記 ${t} が無い`);
+  });
+  //  とげとげの行き先は3つ。立て直せば帰還、そのままなら家出、
+  //  恨みを溜めたまま放置すれば侵攻。姿は変えられないが行き先は変えられる
+  const wildPet = (api, clock, over) => pet(api, clock, Object.assign({
+    stage:'final', lineage:'inv', form:'i3', formWild:true, health:'GOOD',
+    finalAt: clock.now() - 15*86400000, lastTick: clock.now() - 120000,
+    larvaAt: clock.now() - 40*86400000, snapL:{praise:0,bad:0,plays:0},
+    praiseCount:99, touchCount:3, plays:{sw:30,ss:30,ab:30},
+    B:70, C:80, M:0, P:0, careStreak:0 }, over));
+
+  it('とげとげでも、立て直せば迎えが来る', () => {
+    const { api, clock } = load();
+    wildPet(api, clock, { careStreak: api.REDEEM_DAYS, M: api.WRATH_HOLD - 1 });
+    ok(api.redeemed(), '立て直しの条件を満たしていること');
+    api.advancePet();
+    ok(api.pet.homeFlag, '帰還になること');
+    ok(!api.pet.ufoFlag, '家出にはならないこと');
+    eq(api.diaryLog[api.diaryLog.length-1].t, ['redeemed'], '日記は立て直しのもの:');
+  });
+  it('とげとげのまま立て直さなければ、黙って出ていく', () => {
+    const { api, clock } = load();
+    wildPet(api, clock, { careStreak: api.REDEEM_DAYS - 1, M: api.WRATH_HOLD - 1 });
+    ok(!api.redeemed(), '立て直しには足りないこと');
+    api.advancePet();
+    ok(api.pet.ufoFlag, '家出になること');
+    ok(!api.pet.homeFlag, '帰還にはならないこと');
+    eq(api.diaryLog[api.diaryLog.length-1].t, ['farewellWild'], '日記は家出のもの:');
+  });
+  it('立て直しは、世話を続けることと恨みを薄れさせることの両方が要る', () => {
+    const { api, clock } = load();
+    wildPet(api, clock, {});
+    const q = api.pet;
+    q.careStreak = api.REDEEM_DAYS;     q.M = api.WRATH_HOLD;
+    ok(!api.redeemed(), '恨みが残っていれば立て直しではない');
+    q.careStreak = api.REDEEM_DAYS - 1; q.M = 0;
+    ok(!api.redeemed(), '世話の続きが足りなければ立て直しではない');
+    q.careStreak = api.REDEEM_DAYS;     q.M = api.WRATH_HOLD - 1;
+    ok(api.redeemed(), '両方そろえば立て直し');
+  });
+  //  とげとげに旅立ちは来ない。立て直しても、行き先は帰還どまり
+  it('とげとげには旅立ちが来ない', () => {
+    const { api, clock } = load();
+    wildPet(api, clock, { careStreak: api.REDEEM_DAYS, M: 0, B: 100 });
+    api.advancePet();
+    ok(!api.pet.departFlag, '旅立ちは開かないこと');
+    ok(api.pet.homeFlag, '帰還のほうになること');
+  });
+  //  行き止まり対策：最終形態のとげとげ以外には期限が無いので、なつかれないまま
+  //  固まると どの結末にも辿り着けなくなる。lowB を単独で成立させて受ける
+  it('なつかれないまま固まった子にも、いつかは結末が来る', () => {
+    const { api, clock } = load();
+    //  ごはんも掃除もしている（notouch は立たない）が、なかよしだけが低いまま
+    pet(api, clock, { stage:'final', lineage:'inv', form:'i1', formWild:false, health:'GOOD',
+                      B:5, lowBDays:5, C:80, M:0, praiseCount:99, touchCount:3,
+                      plays:{sw:30,ss:30,ab:30}, snapL:{praise:0,bad:0,plays:0},
+                      noTouchDays:0, estrangedDays:0,
+                      larvaAt: clock.now() - 40*86400000, finalAt: clock.now() - 20*86400000 });
+    eq(api.returnSigns(), ['lowB'], '立つ兆候はこれだけ:');
+    for(let d=0; d<api.RET_ESTR_DAYS; d++) api.checkReturn();
+    ok(api.pet.ufoFlag, `なつかれないままなら ${api.RET_ESTR_DAYS}日で家出になること`);
+  });
+  //  ごはんは与えているが、ほかは何もしない。丁寧に育てた履歴があると
+  //  ほめる／遊ぶの通算は足りているので、立つ兆候は notouch だけになる
+  it('ふれあいゼロが続けば、それだけで家出になる', () => {
+    const { api, clock } = load();
+    pet(api, clock, { stage:'final', lineage:'inv', form:'i1', formWild:false, health:'GOOD',
+                      B:80, lowBDays:0, C:80, M:0, praiseCount:99, touchCount:0,
+                      plays:{sw:30,ss:30,ab:30}, snapL:{praise:0,bad:0,plays:0},
+                      noTouchDays: api.RET_NOTOUCH_DAYS, estrangedDays:0,
+                      larvaAt: clock.now() - 40*86400000, finalAt: clock.now() - 20*86400000 });
+    eq(api.returnSigns(), ['notouch'], '立つ兆候はこれだけ:');
+    for(let d=0; d<api.RET_ESTR_DAYS; d++) api.checkReturn();
+    ok(api.pet.ufoFlag, `ふれあいゼロなら ${api.RET_ESTR_DAYS}日で家出になること`);
+  });
+  it('兆候が1つでも、ふれあいもなつきも足りていれば家出にはならない', () => {
+    const { api, clock } = load();
+    //  「遊んでいない」だけの子。ふれあいはあり、なつかれてもいる
+    pet(api, clock, { stage:'adult', lineage:'inv', B:80, lowBDays:0, C:80, M:0,
+                      praiseCount:99, touchCount:3, plays:{sw:0,ss:0,ab:0},
+                      snapL:{praise:0,bad:0,plays:0}, noTouchDays:0, estrangedDays:0,
+                      larvaAt: clock.now() - 40*86400000 });
+    eq(api.returnSigns(), ['play'], '立つ兆候はこれだけ:');
+    for(let d=0; d<api.RET_ESTR_DAYS + 2; d++) api.checkReturn();
+    ok(!api.pet.ufoFlag, '1つだけでは家出にならないこと');
+  });
+  //  成体の期限（STUCK_DAYS）は「最終形態に届かないまま止まった子」のための区切り。
+  //  最終形態まで来た子には、それぞれの行き先があるので効かせてはいけない
+  it('成体の期限は、最終形態まで来た子には効かない', () => {
+    const { api, clock } = load();
+    pet(api, clock, { stage:'final', lineage:'inv', form:'i2', formWild:false, health:'GOOD',
+                      B:30,                                   // 旅立ちの線には届かせない
+                      C:80, M:0, praiseCount:99, touchCount:3, plays:{sw:30,ss:30,ab:30},
+                      snapL:{praise:0,bad:0,plays:0}, larvaAt: clock.now() - 60*86400000,
+                      finalAt:  clock.now() - 20*86400000,
+                      lineageAt: clock.now() - (api.STUCK_DAYS + 5)*86400000,
+                      lastTick: clock.now() - 120000 });
+    api.advancePet();
+    ok(!api.pet.homeFlag, '成体の期限で連れて行かれないこと');
+    ok(!api.pet.ufoFlag,  '家出にもならないこと');
+    ok(!api.pet.departFlag, '旅立ちの条件（なかよし）にも届いていないこと');
+  });
   it('成体のまま長くとどまった子には、やがて迎えが来る', () => {
     const { api, clock } = load();
     // 世話は行き届いていて放置の兆候も無いが、最終形態の条件に届いていない子
@@ -1302,8 +1455,11 @@ describe('エンディング', () => {
     api.pet.lineageAt = clock.now() - (api.STUCK_DAYS + 1)*86400000;
     api.pet.lastTick  = clock.now() - 120000;
     api.advancePet();
-    ok(api.pet.ufoFlag, `${api.STUCK_DAYS}日を過ぎたら迎えが来る`);
+    ok(api.pet.homeFlag, `${api.STUCK_DAYS}日を過ぎたら迎えが来る`);
+    ok(!api.pet.ufoFlag, '家出ではなく帰還であること');
     eq(api.pet.stage, 'adult', '成体のまま連れて行かれる:');
+    //  世話はしていたのだから、黙って出ていく別れにはしない
+    eq(api.diaryLog[api.diaryLog.length-1].t, ['broughtHome'], '日記は帰還のもの:');
   });
   // 21日だったころ、「週に1日だけ休む」人の甘やかしは成立と期限が同じ日になり、
   //  間に合わなかった。なかよしは1日に3までしか伸びず、休んだ日は5下がるので、
@@ -1380,6 +1536,42 @@ describe('日記', () => {
     const { api, clock } = load();
     for(const tag of ['farewell','farewellWild','departed','wrath'])
       eq(api.DIARY_LINES[tag].length, 3, `${tag}:`);
+  });
+  //  実物の字幅はNodeでは測れないので、すでに出荷ずみの最長行を予算にする。
+  //  LCDに収まることが確認できている長さなので、これを超えなければはみ出さない
+  it('別れの言葉が、これまでの最長行より長くならない', () => {
+    const { api } = load();
+    const BUDGET = { ja: 14, en: 23 };
+    for(const tag of ['farewell','farewellWild','departed','wrath'])
+      api.DIARY_LINES[tag].forEach((v, i) => {
+        for(const lg of ['ja','en'])
+          for(const line of (v[lg] || [])){
+            const n = [...line].length;
+            ok(n <= BUDGET[lg], `${tag}[${i}] ${lg}: ${n}文字（予算${BUDGET[lg]}）「${line}」`);
+          }
+      });
+  });
+  //  演出のあとの静止画面は「演出の最終画面と同じ位置に同じ言葉」を置く決まり。
+  //  家出の演出は言葉を出さずに終わるので、静止画面にも出してはいけない
+  it('家出のあとの画面に、別れの言葉が残らない', () => {
+    const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'invader_game.html'), 'utf8');
+    const line = src.split('\n').find(l => l.includes('GAME OVER...') && l.includes('THANK YOU!'));
+    ok(line, '静止画面のメッセージを組む行が見つかること');
+    ok(!/goneBy\s*===\s*'return'/.test(line), `家出に言葉が付いている: ${line.trim()}`);
+    ok(line.includes("'depart'") && line.includes("'invade'"), '旅立ち・侵攻の言葉は残っていること');
+  });
+  //  家出の演出は「自分で歩いて出ていく」（drawUfoEnding にUFOは出ない）。
+  //  日記が「むかえが きた」だと、画面で起きていることと食い違う
+  it('家出の日記は、迎えが来た体で書かれていない', () => {
+    const { api } = load();
+    for(const tag of ['farewell','farewellWild'])
+      api.DIARY_LINES[tag].forEach((v, i) => {
+        ok(!v.ja.some(l => l.includes('むかえ')), `${tag}[${i}] ja に「むかえ」が入っている`);
+        ok(!v.en.some(l => /CAME FOR/i.test(l)), `${tag}[${i}] en に CAME FOR が入っている`);
+      });
+    //  逆に、旅立ち（E4）は本当に迎えが来るので、そちらには残っていること
+    ok(api.DIARY_LINES.departed.every(v => v.ja.some(l => l.includes('むかえ'))),
+       '旅立ちの日記から「むかえ」が消えている');
   });
   it('ひとりごとは全部が3口調ぶんそろっている', () => {
     const { api, clock } = load();
@@ -1859,24 +2051,57 @@ describe('進化', () => {
     eq(api.pickForm(), 'i1');
     eq(api.pet.formWild, false);
   });
-  it('ノーマルは、ケアが丁寧かつミニゲーム制覇の両方が要る', () => {
+  //  すらりへの道は3つ。「ケアだけ」「ゲームだけ」「両方そこそこ」
+  //  ケアは足りていても、構い倒して恨みを溜めた子は素直には育たない
+  it('ケアが高くても、恨みが溜まっていればとげとげ', () => {
     const { api, clock } = load();
-    const BEST = { sw:600, ss:700, ab:400 };
-    setup(api, clock, { C:85, best:BEST });
-    eq(api.pickForm(), 'i2', '両方そろえば:');
-    setup(api, clock, { C:85, best:{sw:0,ss:0,ab:0} });
-    eq(api.pickForm(), '', 'ケアだけでは足りない:');
-    setup(api, clock, { C:55, best:BEST });
-    eq(api.pickForm(), '', 'ミニゲームだけでも足りない:');
+    const NONE = { sw:0, ss:0, ab:0 };
+    setup(api, clock, { C:99, M:api.M_FORM_BAD, best:NONE });
+    eq(api.pickForm(), 'i3', '恨みが線に届いた:');
+    eq(api.pet.formWild, true, '印も残ること:');
+    setup(api, clock, { C:99, M:api.M_FORM_BAD - 1, best:NONE });
+    eq(api.pickForm(), 'i2', '恨みがあと1なら、ケアどおり すらり:');
   });
-  it('ミニゲームの基準は3本すべてを越えること', () => {
+  it('恨みの線は、たまに起こす程度では届かない高さ', () => {
+    const { api } = load();
+    //  睡眠妨害1回で+9、きちんと世話をした日は-9。3日に1回起こす程度なら
+    //  差し引き0で溜まらない（実測でもDm相当の位置に留まる）。
+    //  毎日のように起こし続けた場合だけ届くよう、8回ぶんより上に置く
+    ok(api.M_FORM_BAD > api.M_ADJ.wokenUp * 7, `線が低すぎる: ${api.M_FORM_BAD}`);
+    ok(api.M_FORM_BAD < 100, `線が上限に張り付いている: ${api.M_FORM_BAD}`);
+  });
+  it('すらりには3つの道があり、どれか1つ満たせば足りる', () => {
     const { api, clock } = load();
-    eq(api.ALLROUND, { sw:600, ss:700, ab:400 });
-    for(const k of ['sw','ss','ab']){
-      const b = Object.assign({}, api.ALLROUND); b[k] -= 1;   // 1本だけ届いていない
-      setup(api, clock, { C:85, best:b });
-      eq(api.pickForm(), '', k+' が届かない:');
-    }
+    const NONE = { sw:0, ss:0, ab:0 };
+    setup(api, clock, { C:api.C_FORM_SLEEK, best:NONE });
+    eq(api.pickForm(), 'i2', 'ケアだけで極めた:');
+    setup(api, clock, { C:api.C_FORM_BAD, best:api.ALLROUND });
+    eq(api.pickForm(), 'i2', 'ゲームだけで極めた:');
+    setup(api, clock, { C:api.C_FORM_GOOD, best:api.ALLROUND_SOFT });
+    eq(api.pickForm(), 'i2', '両方そこそこ:');
+  });
+  it('すらりの3つの道は、どれも一歩手前では届かない', () => {
+    const { api, clock } = load();
+    const NONE = { sw:0, ss:0, ab:0 };
+    setup(api, clock, { C:api.C_FORM_SLEEK - 1, best:NONE });
+    eq(api.pickForm(), '', 'ケアがあと1:');
+    setup(api, clock, { C:api.C_FORM_GOOD - 1, best:api.ALLROUND_SOFT });
+    eq(api.pickForm(), '', '両方そこそこのケアがあと1:');
+    // ゲーム単独・併用とも、3本すべてを越えることが要る
+    for(const [nm, C, base] of [['単独', api.C_FORM_BAD, api.ALLROUND],
+                                ['併用', api.C_FORM_GOOD, api.ALLROUND_SOFT]])
+      for(const k of ['sw','ss','ab']){
+        const b = Object.assign({}, base); b[k] -= 1;
+        setup(api, clock, { C, best:b });
+        eq(api.pickForm(), '', `${nm}: ${k} があと1:`);
+      }
+  });
+  it('ゆるいほうの線は、単独ルートより必ず低い', () => {
+    const { api } = load();
+    for(const k of ['sw','ss','ab'])
+      ok(api.ALLROUND_SOFT[k] < api.ALLROUND[k],
+         `${k}: ゆるい線(${api.ALLROUND_SOFT[k]})が単独(${api.ALLROUND[k]})より低くない`);
+    ok(api.C_FORM_GOOD < api.C_FORM_SLEEK, 'ケアの線が逆転している');
   });
   it('どれにも当たらなければ最終形態にならない', () => {
     const { api, clock } = load();

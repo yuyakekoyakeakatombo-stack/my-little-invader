@@ -19,9 +19,10 @@ const EXPORTS = `
   get pet(){ return pet; }, set pet(v){ pet = v; },
   defaultPet, savePet, migratePet, loadPet, readSave,
   SAVE_KEY, SAVE_BAK, SAVE_BAD, get saveRecovered(){ return saveRecovered; }, wasHiddenRoute, bigEater, allRounder, pampered, SAVE_V, MIGRATIONS,
-  closeOneDay, checkReturn, checkInvade, returnSigns, invadeSigns, wrathful, isWild,
+  closeOneDay, checkReturn, checkInvade, returnSigns, invadeSigns, wrathful, isWild, redeemed, REDEEM_DAYS,
   gainB, bondCapToday, markTouch, bondDrop, dailyCareScore,
   doCare, careDisabled, onDisabledCare, advancePet, maybeEvolve, rollTantrum, tantrumStageMul, processGameResult, PLAY_HUNGER_MIN,
+  get reactType(){ return reactType; },
   discTrait, playBias, careStyle, daysSince, D_SMOOTH,
   LINEAGE_D_MIN, LINEAGE_D_FULL, LINEAGE_TH, LINEAGE_CARE_W, A_SPOIL_SCALE, A_NEGLECT_SCALE,
   get menuSel(){ return menuSel; }, set menuSel(v){ menuSel = v; },
@@ -63,8 +64,9 @@ const EXPORTS = `
   DIARY_PICT, DIARY_RUNE, RUNE_KEYS, KANA_LETTER, runeOf, TAG_PICT, LV_NEW, LV_BABY, LV_CHILD, LV_ADULT, LV_DOT,
   diaryRows, diaryBaseDot, bodyRows, DBODY_TOP, DBODY_BOT, entryLevel,
   ensureAudio, playClick, AC_RETRY, get ac(){ return ac; }, setSound, get soundOn(){ return soundOn; },
-  SICK_P, SICK_DIRT_MIN, BOND_CAP, RET_ESTR_DAYS, RET_GRACE_DAYS,
-  STUCK_DAYS, ALLROUND, B_PAMPER, PAMPER_DAYS, PAMPER_SNACKS, INV_M_MIN, INV_B_MAX, INV_P_MIN, INV_DAYS, WRATH_HOLD,
+  SICK_P, SICK_DIRT_MIN, BOND_CAP, bondCapToday, RET_ESTR_DAYS, RET_GRACE_DAYS, RET_NOTOUCH_DAYS,
+  STUCK_DAYS, ALLROUND, ALLROUND_SOFT, allRounderSoft, C_FORM_GOOD, C_FORM_SLEEK, C_FORM_BAD, M_FORM_BAD,
+  B_PAMPER, PAMPER_DAYS, PAMPER_SNACKS, INV_M_MIN, INV_B_MAX, INV_P_MIN, INV_DAYS, WRATH_HOLD,
 };
 `;
 

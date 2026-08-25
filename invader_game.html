@@ -391,6 +391,7 @@
       mcare:'CARE', mdisc:'MANNERS', mtemper:'NATURE',
       tlively:'LIVELY', tcalm:'CALM', tmid:'EVEN',
       endReturn:'THEY WENT SOMEWHERE', endDepart:'THEY CAME FOR THEM\nBACK TO THEIR STAR',
+      endHome:'TIME WAS UP\nTHEY WERE TAKEN BACK',
       endInvade:'THEY CALLED A FLEET\nAND CAME FOR EARTH', endStarve:'THEY WASTED AWAY', endSick:'THEY WASTED AWAY',
     },
     ja: {
@@ -417,6 +418,7 @@
       mcare:'ケア', mdisc:'しつけ', mtemper:'せいかく',
       tlively:'やんちゃ', tcalm:'おっとり', tmid:'ふつう',
       endReturn:'どこかへ いってしまった', endDepart:'おむかえが きた\nほしへ かえった',
+      endHome:'じかんが きた\nほしへ もどされた',
       endInvade:'たいぐんを よんで\nちきゅうに せめてきた', endStarve:'ちからつきた', endSick:'ちからつきた',
     },
   };
@@ -780,6 +782,7 @@
     stage:'egg', lineage:'', form:'',     // 育成段階: egg→mid→larva→adult(系統)→final(形態)
     EP:0, ageMin:0, eggTargetEP:0,        // 進化ポイント/年齢(分)/NEWBORN→BABYの個体別目標EP
     finalAt:0, departFlag:false,          // 最終形態到達時刻・旅立ちエンド確定
+    homeFlag:false,                       // 帰還エンド確定（時間切れ／とげとげからの立て直し）
     memShown:false,                       // おもいでを自動で開いたか（1回だけ）
     formWild:false,                       // 最終形態が「とげとげ」か（お迎えエンドが出なくなる）
                                           //  内部名は体型名を付け直す前のもの。セーブに載るので変えずに残してある
@@ -791,7 +794,7 @@
     tantrumAt:0, tantrumType:'',          // わがまま拒否中（Stage2まで。正当なしかるで解消）
     // ── かまい度システム（甘やかし↔放置。進化分岐と帰還判定に使う）──
     A:0,                                  // かまい度の累積（＋甘やかし／−放置）
-    praiseCount:0, scoldBadCount:0,       // ほめた回数／理不尽・睡眠妨害のしかる回数
+    praiseCount:0, scoldBadCount:0,       // ほめた回数／しかるの失敗（睡眠妨害＋不当なしかる）の回数
     plays:{sw:0,ss:0,ab:0},               // ミニゲームのプレイ回数（進化の傾向づけ）
     touchedToday:false, touchCount:0,      // 今日だれか来たか／ふれあいの種類数
     touchKinds:{},                        // 今日すでに数えたふれあいの種類
@@ -906,6 +909,7 @@
 
   // UFO帰還エンディング：トリガー確定後、次回起動時に発火（企画書§8 E3）
   let ufoEnding = !!(pet.ufoFlag && !pet.dead), ufoT = 0;
+  let homeEnding = !!(pet.homeFlag && !pet.dead), homeT = 0;   // 帰還エンド
   // 疎遠期：なつき度<20が3日以上続くと反応が消える（帰還の前兆・挽回可能）
   // 疎遠期：帰還の兆候が続いている状態。キャラが反応しなくなり、プレイヤーへの警告になる
   function isEstranged(){ return (pet.estrangedDays||0) >= 1 || (pet.lowBDays >= 3 && pet.B < 20); }
@@ -942,7 +946,7 @@
     play:       +1,
     scoldFair:   0,               // 正当なしつけ（わがまま中）は甘やかしでも放置でもない
     tantrumIgnored: +4,           // わがままを叱らずに時間で流した＝甘やかし
-    scoldBad:   -3,               // 理不尽なしかる／寝ているのを起こすしかる
+    scoldBad:   -3,               // しかるの失敗。睡眠妨害・不当なしかるの両方に効く
     noTouchDay: -8,               // ふれあいゼロの日
     starveHour: -1,               // 空腹MAXの放置（1時間ごと）
     dirtHour:   -1,               // 汚れの放置（1時間ごと）
@@ -958,7 +962,7 @@
   const P_ADJ = {
     nightPlay:  +2,   // 夜更かしして遊ばせた
     wokenUp:    +2,   // 寝ているのを起こした
-    scoldBad:   +1,   // 理不尽なしかる（落ち着かなくなる）
+    scoldBad:   +1,   // 不当なしかる（落ち着かなくなる）。睡眠妨害は wokenUp のほう
     tantrumIgnored: +2, // わがままを叱らず流した（つけあがる）
     noTouchDay: +1,   // 放っておかれた日
     nightCare:  +2,   // 夜ふけに世話をした（生活リズムが後ろへ引っぱられる。1時間に1回まで）
@@ -972,7 +976,7 @@
   //  ここに入れると2つのエンディングの区別がつかなくなる。
   //  ちゃんと世話をした日は目減りするので、うっかり数回しかった程度では溜まらない。
   const M_ADJ = {
-    scoldBad:  +6,   // 理不尽なしかる
+    scoldBad:  +6,   // 不当なしかる。睡眠妨害は wokenUp のほうで、そちらが重い
     wokenUp:   +9,   // 寝ているのを起こす（しかるの中でもいちばん重い）
     medWell:   +6,   // 健康なのにくすりを飲ませる
     starveHour:+2,   // 空腹MAXのまま1時間ほうっておく
@@ -1041,7 +1045,7 @@
   const RET_ESTR_DAYS   = 3;      // 疎遠期がこの日数続くと帰還
   const RET_PRAISE_RATE = 0.1;    // ほめる回数／日 がこれ未満で兆候（10日に1回未満＝極端に少ない）
   const RET_PLAY_RATE   = 0.1;    // ミニゲーム回数／日 がこれ未満で兆候（10日に1回未満）
-  const RET_SCOLD_RATE  = 2.0;    // 理不尽なしかる／日 がこれ超で兆候
+  const RET_SCOLD_RATE  = 2.0;    // しかるの失敗／日 がこれ超で兆候
   const RET_NOTOUCH_DAYS= 5;      // ふれあいゼロがこの日数続くと兆候
 
   function addA(n){ pet.A = Math.max(-9999, Math.min(9999, (pet.A||0) + n)); }
@@ -1158,7 +1162,7 @@
     if((pet.noTouchDays||0) >= RET_NOTOUCH_DAYS)       sg.push('notouch'); // ごはんしか与えていない日が続く
     if(praise < days * RET_PRAISE_RATE)                sg.push('praise');  // ほめる回数が極端に少ない
     if(plays  < days * RET_PLAY_RATE)                  sg.push('play');    // 遊ぶ回数が極端に少ない
-    if(bad > days * RET_SCOLD_RATE && bad > praise*3)  sg.push('scold');   // 理不尽なしかるが多すぎる
+    if(bad > days * RET_SCOLD_RATE && bad > praise*3)  sg.push('scold');   // しかるの失敗が多すぎる
     if(pet.lowBDays >= 5)                              sg.push('lowB');    // なつき度が低いまま続いた
     return sg;
   }
@@ -1193,9 +1197,9 @@
     } else pet.wrathDays = 0;                          // 持ち直したら解除（E3と同じ作法）
   }
 
-  // 兆候が重なった時だけ疎遠期に入り、続けば帰還が確定する（途中で持ち直せば解除）。
-  //  1項目だけ欠けている程度（例：よく褒めるがゲームはしない）では帰還させない。
-  //  ただし「ふれあいゼロが続く」は単独でも明確な放置なので成立させる。
+  // 兆候が重なった時だけ疎遠期に入り、続けば家出が確定する（途中で持ち直せば解除）。
+  //  1項目だけ欠けている程度（例：よく褒めるがゲームはしない）では家出させない。
+  //  ただし「ふれあいゼロが続く」と「なつかれないまま」は、単独でも明確なので成立させる。
   function checkReturn(){
     if(pet.dead || pet.gone || pet.ufoFlag || pet.invadeFlag) return;
     // いじめられている子は出て行かない。最終形態に届くまでE3を止めることで、
@@ -1204,7 +1208,11 @@
     if(wrathful() && pet.stage !== 'final') return;
     if(invadeSigns()) return;                          // 侵攻の条件がそろっている間はE3を出さない
     const sg = returnSigns();
-    const bad = sg.includes('notouch') || sg.length >= 2;
+    //  なつかれないまま（lowB）を単独で成立させるのは、行き止まりを塞ぐため。
+    //  とげとげには14日、成体には28日の区切りがあるが、最終形態のとげとげ以外には
+    //  それが無い。なかよしが旅立ちの線(60)に届かないまま固まると、旅立ちも侵攻も
+    //  帰還も来ず、どの結末にも辿り着けなくなる。ここで受ける
+    const bad = sg.includes('notouch') || sg.includes('lowB') || sg.length >= 2;
     if(bad){
       pet.estrangedDays = (pet.estrangedDays||0) + 1;
       if(pet.estrangedDays >= RET_ESTR_DAYS){
@@ -1313,6 +1321,11 @@
   const ALLROUND = { sw: 600, ss: 700, ab: 400 };
   function allRounder(q){ const s = q || pet, b = s.best || {};
     return (b.sw||0) >= ALLROUND.sw && (b.ss||0) >= ALLROUND.ss && (b.ab||0) >= ALLROUND.ab; }
+  //  ケアと組み合わせる場合の、ゆるいほうの線（単独ルートのおよそ2/3）。
+  //  ゲームは得意でないが丁寧に育てた人にも「すらり」を開くための道
+  const ALLROUND_SOFT = { sw: 400, ss: 450, ab: 250 };
+  function allRounderSoft(q){ const s = q || pet, b = s.best || {};
+    return (b.sw||0) >= ALLROUND_SOFT.sw && (b.ss||0) >= ALLROUND_SOFT.ss && (b.ab||0) >= ALLROUND_SOFT.ab; }
   // どれにも当たらなければ最終形態にならず、成体のままとどまる。
   //  中途半端な育て方では、その先の姿を見せない、という切り分け
   //
@@ -1323,9 +1336,15 @@
   function pickForm(){
     const key = (pet.lineage==='grey' ? 'g' : pet.lineage==='tako' ? 't' : 'i');
     pet.formWild = false;
-    if(pet.C < C_FORM_BAD){ pet.formWild = true; return key + '3'; }     // プリックリー
+    // とげとげ：世話が雑だった子と、ケアは足りていても構い倒して恨みを溜めた子。
+    //  どちらも「素直には育たなかった」形として同じ姿になる
+    if(pet.C < C_FORM_BAD || (pet.M||0) >= M_FORM_BAD){ pet.formWild = true; return key + '3'; }
     if(bigEater() || pampered()) return key + '1';                       // プランプ
-    if(pet.C >= C_FORM_GOOD && allRounder()) return key + '2';           // スリーク（両方必要）
+    // すらりへは3つの道がある。ケアだけ・ゲームだけ・その中間。
+    //  「どちらか一方を極める」か「両方をそこそこ」で届く形にしてある
+    if(pet.C >= C_FORM_SLEEK) return key + '2';                          // ケアだけで極めた
+    if(allRounder()) return key + '2';                                   // ゲームだけで極めた
+    if(pet.C >= C_FORM_GOOD && allRounderSoft()) return key + '2';       // 両方そこそこ
     return '';                                                          // まだ最終形態にならない
   }
   // ── 日記の口調 ──
@@ -1359,6 +1378,12 @@
 
   // とげとげ＝荒れた見た目に育った子。ここに来たらもう「お迎え（旅立ち）」は来ない
   function isWild(){ return !!pet.formWild; }
+  //  とげとげからの立て直し。姿はもう変えられないが、行き先は変えられる。
+  //  「きちんと世話をした日」を続け、溜めた恨みを薄れさせたかで見る。
+  //  恨みはきちんと世話をした日に1日-9で薄れるので、どちらも同じ「続けたか」を測っている
+  const REDEEM_DAYS = 7;
+  function redeemed(q){ const s = q || pet;
+    return (s.careStreak||0) >= REDEEM_DAYS && (s.M||0) < WRATH_HOLD; }
   function maybeEvolve(){
     if(pet.dead || pet.gone || !pet.name) return;
     if(effectiveAsleep()) return;                 // 進化は起きている時（起床時）に起こる
@@ -1553,18 +1578,36 @@
     //  farewell＝帰還（E3）：育ちきる前に連れ戻される。名残と、言えなかった気もち
     //  departed＝旅立ち（E4）：育ちきって送り出される。ひとり立ちの報告と感謝
     // 別れの言葉は口調で言い分ける。並びは plain / calm / rough の順（voiceIdx と対応）
-    farewell: [ { ja:['むかえが きた','まだ ここに','いたかったな'],
-                  en:['THEY CAME FOR ME.','I WANTED TO STAY','A BIT LONGER'] },
-                { ja:['むかえが きました','まだ ここに','いたかったです'],
-                  en:['THEY HAVE COME FOR ME.','I WANTED TO STAY HERE','A LITTLE LONGER'] },
-                { ja:['むかえが きた','まだ いたかったのに','しかたないか'],
-                  en:['THEY CAME FOR ME.','I WANTED TO STAY.','NOTHING I CAN DO'] } ],
-    farewellWild:[{ ja:['むかえが きた','なにも いうことは ない','じゃあな'],
-                  en:['THEY CAME FOR ME.','I HAVE NOTHING TO SAY.','SO LONG'] },
-                { ja:['むかえが きました','もう いうことは ありません','さようなら'],
-                  en:['THEY HAVE COME FOR ME.','I HAVE NOTHING LEFT','TO SAY. FAREWELL'] },
-                { ja:['むかえが きた','もう いい','じゃあな'],
-                  en:['THEY CAME FOR ME.','ENOUGH OF THIS.','SO LONG'] } ],
+    // 家出（E3）。演出は「立ちつくして・・・のあと、自分で歩いて出ていく」なので、
+    //  迎えが来た体では書かない。名残は残すが、誰のせいにもしない言いかたにする
+    farewell: [ { ja:['ひとりで いくよ','まだ ここに','いたかったな'],
+                  en:['I AM GOING ALONE.','I WANTED TO STAY','A BIT LONGER'] },
+                { ja:['ひとりで いきます','まだ ここに','いたかったです'],
+                  en:['I AM GOING ON MY OWN.','I WANTED TO STAY HERE','A LITTLE LONGER'] },
+                { ja:['もう いくよ','まだ いたかったのに','しかたないか'],
+                  en:['I AM LEAVING NOW.','I WANTED TO STAY.','NOTHING I CAN DO'] } ],
+    // 帰還（時間切れ）。育ちきらなかったが、世話をされなかったわけではない。
+    //  迎えが来て連れ帰られる側なので「むかえ」を使ってよい
+    broughtHome:[{ ja:['じかんが きたって','まだ おおきく','なれなかったけど'],
+                  en:['MY TIME IS UP.','I NEVER GREW UP,','BUT IT WAS GOOD'] },
+                { ja:['じかんが きたそうです','まだ おおきく','なれませんでしたが'],
+                  en:['THEY SAY MY TIME IS UP.','I NEVER GREW UP,','BUT IT WAS GOOD'] },
+                { ja:['じかんぎれ だってさ','おおきく なれなかったな','まあ いいか'],
+                  en:['MY TIME IS UP.','I NEVER GOT BIG.','WELL, NEVER MIND'] } ],
+    // 帰還（立て直し）。とげは取れないまま。それでも迎えは来た
+    redeemed: [ { ja:['とげは とれないけど','むかえが きた','ありがとう'],
+                  en:['MY SPINES ARE STILL','HERE. THEY CAME','FOR ME. THANK YOU'] },
+                { ja:['とげは とれませんが','むかえが きました','ありがとう ございます'],
+                  en:['MY SPINES REMAIN, BUT','THEY HAVE COME FOR ME.','THANK YOU'] },
+                { ja:['とげは とれないな','むかえが きた','わるく なかったよ'],
+                  en:['THE SPINES ARE STILL','HERE. THEY CAME.','IT WAS NOT SO BAD'] } ],
+    // とげとげの家出。同じ演出だが、こちらは名残を残さず突き放す
+    farewellWild:[{ ja:['でていくよ','なにも いうことは ない','じゃあな'],
+                  en:['I AM WALKING OUT.','I HAVE NOTHING TO SAY.','SO LONG'] },
+                { ja:['でていきます','もう いうことは ありません','さようなら'],
+                  en:['I AM WALKING OUT.','I HAVE NOTHING LEFT','TO SAY. FAREWELL'] },
+                { ja:['でていく','もう いい','じゃあな'],
+                  en:['I AM WALKING OUT.','ENOUGH OF THIS.','SO LONG'] } ],
     departed: [ { ja:['むかえが きた','もう ひとりでも','だいじょうぶ','そだててくれて ありがとう'],
                   en:['THEY CAME FOR ME.','I CAN MANAGE NOW.','THANK YOU FOR','RAISING ME'] },
                 { ja:['むかえが きました','もう ひとりでも','だいじょうぶです','そだててくれて ありがとう'],
@@ -1927,7 +1970,7 @@
   };
   DIARY_CLOSE.lively = DIARY_CLOSE.rough;   // 旧セーブ互換（以前この枠は 'lively' という名前だった）
   // 印象の強い順。上から拾って載せる
-  const DIARY_PRIORITY = ['wrath','farewell','farewellWild','departed','evolved','sick','cured','hungry','lonely','woken',
+  const DIARY_PRIORITY = ['wrath','farewell','farewellWild','broughtHome','redeemed','departed','evolved','sick','cured','hungry','lonely','woken',
                           'rhythmDay','rhythmNight','scolded','dirty',
                           'snackMany','tantrum','cleaned','praised','playSw','playSs','playAb',
                           'snack','fed','noPlay','rain','snow','clear','slept'];
@@ -2413,8 +2456,13 @@
   // C（ケア充実度）：世話の「丁寧さ」を毎日0〜100で採点し、移動平均で持つ。
   //  かまい度A（どれだけ構ったか）とは別の軸で、体型＝最終形態を決める。
   // ════════════════════════════════════════
-  const C_FORM_GOOD = 70;   // ケアが丁寧といえる線（ミニゲーム制覇と両方そろえば「すらり」）
-  const C_FORM_BAD  = 40;   // これ未満なら「とげとげ」（荒れた見た目）
+  const C_FORM_GOOD  = 70;  // ケアが丁寧といえる線（ゆるいスコアと両方そろえば「すらり」）
+  const C_FORM_SLEEK = 90;  // ここまで丁寧なら、ミニゲーム抜きでも「すらり」
+  const C_FORM_BAD   = 40;  // これ未満なら「とげとげ」（荒れた見た目）
+  //  ケアが高くても、恨みを溜めるほど構い倒した子は素直には育たない。
+  //  睡眠妨害を重ねると1日+9で積み上がる（きちんと世話をした日だけ-9で薄れる）ので、
+  //  ここに届くのは「毎日のように起こし続けた」場合だけ。たまに起こす程度では届かない
+  const M_FORM_BAD   = 70;
   const C_SMOOTH    = 0.3;  // その日の点数を取り込む割合（移動平均）
   function dailyCareScore(d){
     let v = 100;
@@ -2643,7 +2691,7 @@
   function advancePet(){
     if(!pet.name || !pet.lastTick) return;
     const now = Date.now();
-    if(pet.dead || pet.gone || ufoEnding || departEnding || invadeEnding || inMiniGame){ pet.lastTick = now; return; }   // 死亡・帰還後・エンディング後・ミニゲーム中は進行停止
+    if(pet.dead || pet.gone || ufoEnding || homeEnding || departEnding || invadeEnding || inMiniGame){ pet.lastTick = now; return; }   // 死亡・帰還後・エンディング後・ミニゲーム中は進行停止
     let elapsed = now - pet.lastTick;
     if(elapsed < 0){ rewindClock(-elapsed); return; }   // 時計が戻された
     if(elapsed < 60000) return;                    // 1分未満は持ち越し
@@ -2799,21 +2847,26 @@
       pet.nightPlayToday = false; pet.nightCareToday = false;
     }
     // 旅立ちエンド（E4）：最終形態から14日・なつき度60以上・健康
-    // 育ちきらないまま成体でとどまり続けた子（E3）。
+    // 帰還（時間切れ）：育ちきらないまま成体でとどまり続けた子。
     //  中途半端な育て方では最終形態にならない仕組みにしたので、そのままだと
-    //  物語が終わらなくなる。「育ちきる前に連れ戻される」という帰還の元の意味どおり、
-    //  ここで迎えが来る
-    if(pet.stage==='adult' && pet.lineageAt && !pet.ufoFlag && !pet.invadeFlag &&
+    //  物語が終わらなくなる。世話をしなかったわけではないので家出にはせず、
+    //  迎えが来て連れ帰られる形で区切る
+    if(pet.stage==='adult' && pet.lineageAt && !pet.ufoFlag && !pet.homeFlag && !pet.invadeFlag &&
        now - pet.lineageAt >= STUCK_DAYS*86400000){
-      pet.ufoFlag = true;
-      addDiary({ d: petDay(), n: pet.name, t: ['farewell'], v: [voiceIdx()], c: '', ts: Date.now(), cd: todayKey() });
+      pet.homeFlag = true;
+      addDiary({ d: petDay(), n: pet.name, t: ['broughtHome'], v: [voiceIdx()], c: '', ts: Date.now(), cd: todayKey() });
     }
-    // とげとげの幕引き（E3）：お迎え（E4）が来ない子にも、必ずどこかで区切りをつける。
-    //  侵攻（E5）の条件に届かなかった子は、お迎えと同じ時期に、静かに連れ戻される
-    if(pet.stage==='final' && pet.finalAt && isWild() && !pet.ufoFlag && !pet.invadeFlag &&
+    // とげとげの行き先。立て直せたかどうかで、迎えが来るか、黙って出ていくかが分かれる。
+    //  立て直しの判定を先に置くので、間に合った子は帰還になる
+    if(pet.stage==='final' && pet.finalAt && isWild() && !pet.ufoFlag && !pet.homeFlag && !pet.invadeFlag &&
        !invadeSigns() && now - pet.finalAt >= 14*86400000){
-      pet.ufoFlag = true;
-      addDiary({ d: petDay(), n: pet.name, t: ['farewellWild'], v: [voiceIdx()], c: '', ts: Date.now(), cd: todayKey() });
+      if(redeemed()){
+        pet.homeFlag = true;
+        addDiary({ d: petDay(), n: pet.name, t: ['redeemed'], v: [voiceIdx()], c: '', ts: Date.now(), cd: todayKey() });
+      } else {
+        pet.ufoFlag = true;
+        addDiary({ d: petDay(), n: pet.name, t: ['farewellWild'], v: [voiceIdx()], c: '', ts: Date.now(), cd: todayKey() });
+      }
     }
     //  とげとげに育った子には来ない。あとからどれだけ世話を頑張っても、この道は閉じている
     if(pet.stage==='final' && pet.finalAt && !pet.departFlag && !isWild() &&
@@ -4071,13 +4124,13 @@
   //  押せないことが見て分かるようにする（実行側の条件と食い違わないよう、判定はここに集約）
   function careDisabled(act){
     if(!pet.name) return true;                             // 命名前はすべて不可
-    if(pet.dead || pet.gone || ufoEnding || departEnding || invadeEnding) return true;   // おばけ・エンディング後
+    if(pet.dead || pet.gone || ufoEnding || homeEnding || departEnding || invadeEnding) return true;   // おばけ・エンディング後
     const asleep = effectiveAsleep();
     switch(act){
       case 'FEED':  return plateOnScreen();                // 皿が残っているあいだは出せない
       case 'CLEAN': return !(pet.W > 0 || pet.plateAt || pet.plateSpoiled);   // 片づけるものが無い
       // 就寝中は押せない。ただし くすりが要る子は別。
-      //  起こさないと飲ませられないと、しかって起こす（＝理不尽なしかる）しか
+      //  起こさないと飲ませられないと、しかって起こす（＝睡眠妨害）しか
       //  手が無くなる。具合が悪いのに罰を受ける形になってしまう
       case 'MED':   return asleep && !needsMed();           // 健康な子に飲ませて嫌がられるのは有効な操作
       case 'PET':   return asleep;                         // 寝ているあいだは無反応
@@ -4265,7 +4318,7 @@
     // 薄く描いて「押せない」と見せているものは、実際にも効かないようにする。
     //  以前はここに判定が無く、無効表示のくすりを押すときげんが下がっていた
     if(careDisabled(act)) return;
-    if(pet.dead || pet.gone || ufoEnding || departEnding || invadeEnding || !pet.name) return;  // おばけ・帰還後・エンディング後・命名前は世話不可
+    if(pet.dead || pet.gone || ufoEnding || homeEnding || departEnding || invadeEnding || !pet.name) return;  // おばけ・帰還後・エンディング後・命名前は世話不可
     if((act==='FEED' || act==='SNACK') && plateOnScreen()) return;  // 皿が残っている間は出せない
     const asleep = effectiveAsleep();
     switch(act){
@@ -4374,7 +4427,7 @@
       case 'SCOLD':
         if(asleep && sleepKind(new Date()) === 'owl'){
           // 昼夜逆転で昼間に寝ている：起こして正すのが正しい世話。
-          //  夜の睡眠や昼寝を起こすのとは区別する（そちらは下の理不尽なしかる）
+          //  夜の睡眠や昼寝を起こすのとは区別する（そちらは下の睡眠妨害）
           pet.rhythmUntil = untilRhythmEnd();                     // 今夜は本来の時間に寝る
           pet.wokeUntil = 0;                                        // シフトが外れるので、この時間はもう起きている扱い
           addP(P_ADJ.scoldRhythm);                                  // 夜型が少し戻る
@@ -4382,12 +4435,14 @@
           addA(A_ADJ.scoldFair); markTouch('scold');
           note('rhythmDay');
           setReaction('sad');                                       // 起きて「・・・」
-        } else if(asleep){                                          // 起こしてしまう
+        } else if(asleep){                                          // 睡眠妨害：起こしてしまう
           pet.wokeUntil = Date.now() + (debugMode ? 30000 : 600000);
           pet.mood = Math.max(0, pet.mood - 2);
-          addP(P_ADJ.wokenUp);                                      // 睡眠を邪魔されて落ち着かなくなる
-          addM(M_ADJ.wokenUp);
-          pet.scoldBadCount = (pet.scoldBadCount||0) + 1;            // 寝ているのを起こす＝理不尽なしかる
+          pet.B = Math.max(0, pet.B - 2);
+          addD(-4);                                                 // 不当なしかると同じだけ しつけも損なう。
+          addP(P_ADJ.wokenUp);                                      //  寝ているのを起こすのは PとM が重いぶん、
+          addM(M_ADJ.wokenUp);                                      //  不当なしかるの上位版という位置づけ
+          pet.scoldBadCount = (pet.scoldBadCount||0) + 1;            // 睡眠妨害。しかるの失敗として数える
           note('woken');
           addA(A_ADJ.scoldBad);
           setReaction('anger');
@@ -4417,7 +4472,9 @@
           addM(M_ADJ.scoldBad);
           pet.scoldBadCount = (pet.scoldBadCount||0) + 1;
           addA(A_ADJ.scoldBad); note('scolded');
-          setReaction('sad');
+          //  しゅん（sad）は しつけが通った時だけの反応にしてある。
+          //  身に覚えのない叱られ方には怒る（睡眠妨害と同じ）
+          setReaction('anger');
         }
         break;
     }
@@ -4614,6 +4671,26 @@
     }
   }
 
+  // ── 帰還エンディング：単機のUFOが迎えに来て、連れて帰る ──
+  //  育ちきる前に時間切れになった子と、とげとげから立て直した子。どちらも
+  //  「世話をしなかったわけではない」ので、家出ではなく迎えが来る形で区切る。
+  //  drawPickup をそのまま使う（侵攻エンドの前半と同じ絵）。言葉は残さない
+  const HOME_AFTER = 16;                       // UFOが去りきってから終わるまでの間
+  function drawHomeEnding(BG, DM, NK){
+    if(homeT < 92){ drawPickup(homeT, BG, DM, NK); homeT++; fM++; return; }
+    ctxM.fillStyle = BG; ctxM.fillRect(0,0,W*S,H*S);
+    for(let x=0;x<W;x++) dot(ctxM,x,MAIN_GY,NK);
+    for(let x=0;x<W;x+=3) dot(ctxM,x,MAIN_GY-1,DM);
+    STARS_M.forEach(([x,y],i)=>dot(ctxM,x,y+10,(fM+i*9)%28<20?DM:BG));
+    fM++; homeT++;
+    if(homeT >= 92 + HOME_AFTER){
+      // 他のエンドと同じく、演出のあとは「いなくなったあと」で止める
+      pet.gone = true; pet.goneBy = 'home'; pet.homeFlag = false;
+      homeEnding = false; homeT = 0;
+      savePet(); endedShowMemory();
+    }
+  }
+
   // ── 家出エンディング（E3・世話不足）：だまって出ていく ──
   //  旅立ち（E4）も迎えが来る形だったので、二つの別れの印象が似てしまっていた。
   //  こちらは迎えを出さない。その場で「・・・」を3回だけ見せて、あとは
@@ -4729,7 +4806,9 @@
     // 演出で出した言葉を、リセットするまで残す。位置は演出の最終画面と同じ。
     //  点滅はさせない。もう変化しない画面だと分かるように、静かに置いておく
     //  （旅立ちのハートも、消えてしまわないよう点滅を止めて残す）
-    const msg = pet.goneBy==='depart' ? 'THANK YOU!' : (pet.goneBy==='return' ? 'GOODBYE...' : (pet.goneBy==='invade' ? 'GAME OVER...' : ''));
+    //  家出（return）だけは言葉を残さない。だまって出ていく別れなので、
+    //  演出でも最後に何も出していない。ここで出すと演出と食い違う
+    const msg = pet.goneBy==='depart' ? 'THANK YOU!' : (pet.goneBy==='invade' ? 'GAME OVER...' : '');
     if(msg) drawEndMessage(msg, NK, pet.goneBy==='depart');
     for(let x=0;x<W;x++) dot(ctxM,x,MAIN_GY,NK);
     for(let x=0;x<W;x+=3) dot(ctxM,x,MAIN_GY-1,DM);
@@ -5029,11 +5108,13 @@
     if(scene !== 'main' || miniFrame || manualFrame) return;
     const col = getColors();
     const BG  = col.bg, DM = col.dim, NK = col.on;
+    if(pet.homeFlag && !homeEnding && !pet.dead){ homeEnding = true; homeT = 0; }          // 帰還の日
     if(pet.departFlag && !departEnding && !pet.dead){ departEnding = true; departT = 0; }  // 旅立ちの日
     if(pet.invadeFlag && !invadeEnding && !pet.dead){ invadeEnding = true; invadeT = 0; invadeGoneAt = 0; }  // 侵攻の日
     if(departEnding){ drawDepartEnding(BG, DM, NK); return; }  // 旅立ちエンディング再生中
     if(invadeEnding){ drawInvadeEnding(BG, DM, NK); return; }  // 侵攻エンディング再生中
-    if(ufoEnding){ drawUfoEnding(BG, DM, NK); return; }   // 帰還エンディング再生中
+    if(homeEnding){ drawHomeEnding(BG, DM, NK); return; } // 帰還エンディング再生中
+    if(ufoEnding){ drawUfoEnding(BG, DM, NK); return; }   // 家出エンディング再生中
     if(pet.dead){ drawGhost(BG, DM, NK); return; }        // おばけ状態
     if(pet.gone){ drawGone(BG, DM, NK); return; }         // 帰還したあと（主のいない庭）
     // 到着演出（新規ゲーム開始時）。終わったあとの一拍も、この中で最後のコマのまま止める
@@ -5346,7 +5427,7 @@
   //  playClick より手前で止める。エンディングは10秒あまり続き、終わると
   //  おもいでが開くので、操作できない時間が残り続けることはない
   function cutscenePlaying(){
-    return ufoEnding || departEnding || invadeEnding
+    return ufoEnding || homeEnding || departEnding || invadeEnding
         || (pet.dead && !pet.memShown)    // 魂が抜けていくあいだ（見たあとの漂う姿は操作できる）
         || arriveT >= 0                   // 到着演出（もともとA・十字だけ塞いでいた）
         || nameOpenT >= 0;                // 到着のあと、命名画面が開くまでの一拍
@@ -5461,7 +5542,7 @@
   // 項目はキーで管理（表示ラベルは言語辞書、値は各キーで分岐）
   //  版の番号は sw.js の VERSION と同じもの。tools/bump-sw.sh が両方いっしょに
   //  書き換える（ずれると、テスターの端末に出ている版が分からなくなる）
-  const APP_VERSION = '2026-08-24-04';
+  const APP_VERSION = '2026-08-25-01';
   //  (C) は Press Start 2P に © が無く、別の字体に落ちて1文字だけ形が浮くため
   const APP_COPY = '(C) 2026 Studio M.D.Q.';
   const SETTINGS_KEYS = ['language','weather','sound','bodycolor','version','reset'];
@@ -5907,7 +5988,7 @@
           try{ [SAVE_KEY, SAVE_BAK, SAVE_BAD].forEach(k => localStorage.removeItem(k)); }catch(e){}
           clearDiary();                    // 日記が消えるのはこのリセットの時だけ
           pet = defaultPet(); nameBuf=''; nameCur=0; onSlots=false;
-          ufoEnding = false; ufoT = 0; departEnding = false; departT = 0; invadeEnding = false; invadeT = 0; invadeGoneAt = 0; evoT = 0;
+          ufoEnding = false; ufoT = 0; homeEnding = false; homeT = 0; departEnding = false; departT = 0; invadeEnding = false; invadeT = 0; invadeGoneAt = 0; evoT = 0;
           // オープニングは最初から流し直す。openingDone と titleWait も戻さないと、
           //  一度再生済みのフラグが残ったままで、UFOが降りてくる場面を飛ばして
           //  いきなりタイトルと選択肢が出てしまう
@@ -6453,6 +6534,7 @@
     if(pet.goneBy === 'depart') return T('endDepart');
     if(pet.goneBy === 'invade') return T('endInvade');
     if(pet.goneBy === 'return') return T('endReturn');
+    if(pet.goneBy === 'home')   return T('endHome');
     return '';
   }
   function memOpen(from){ memFrom = from || 'menu'; memPage = 0; fR = 0; showView('memory'); }
