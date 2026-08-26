@@ -1532,6 +1532,243 @@ describe('エンディング', () => {
   });
 });
 
+// ══ 天気 ══════════════════════════════════════════════════
+describe('天気', () => {
+  //  見た目は8通りだが、ゲームへの効きかたは4通りのまま。
+  //  薄曇りは「雲は出るが、キャラへの影響は晴れと同じ」
+  const KINDS = ['clear','thin','cloudy','rain','rainHeavy','storm','snow','snowHeavy'];
+
+  it('WMOコードの強度を拾っている', () => {
+    const { api } = load();
+    const want = {
+      0:'clear', 1:'clear', 2:'thin', 3:'cloudy', 45:'cloudy', 48:'cloudy',
+      51:'rain', 53:'rain', 61:'rain', 63:'rain', 80:'rain', 81:'rain',
+      55:'rainHeavy', 65:'rainHeavy', 82:'rainHeavy',
+      95:'storm', 96:'storm', 99:'storm',
+      71:'snow', 73:'snow', 77:'snow', 85:'snow', 56:'snow', 57:'snow', 66:'snow', 67:'snow',
+      75:'snowHeavy', 86:'snowHeavy',
+    };
+    for(const [code, w] of Object.entries(want))
+      eq(api.codeToWeather(+code), w, `コード${code}:`);
+  });
+  it('見た目8通りが、ゲームでは4通りに畳まれる', () => {
+    const { api } = load();
+    for(const k of KINDS) ok(api.WEATHER_BASE[k], `${k} の扱いが決まっていない`);
+    eq(new Set(Object.values(api.WEATHER_BASE)).size, 4, 'ゲーム側の種類:');
+    //  雨・大雨・嵐は同じ扱い（影響度は変えない）
+    eq(api.weatherBase('rainHeavy'), api.weatherBase('rain'), '大雨:');
+    eq(api.weatherBase('storm'),     api.weatherBase('rain'), '嵐:');
+    eq(api.weatherBase('snowHeavy'), api.weatherBase('snow'), '大雪:');
+  });
+  it('薄曇りは晴れ扱い', () => {
+    const { api } = load();
+    eq(api.weatherBase('thin'), 'clear', '薄曇りの扱い:');
+    api.weather = 'thin';
+    eq(api.isBadWeather(), false, '薄曇りが悪天候になっている:');
+    api.weather = 'cloudy';
+    eq(api.weatherBase(), 'cloudy', '曇りは曇りのまま:');
+  });
+  it('悪天候は雨と雪だけ', () => {
+    const { api } = load();
+    const bad = KINDS.filter(k => { api.weather = k; return api.isBadWeather(); });
+    eq(bad, ['rain','rainHeavy','storm','snow','snowHeavy'], '悪天候になるもの:');
+  });
+  //  強度は 本数・速さ・線の長さ で描き分ける。ここが同じだと見分けがつかない
+  it('雨は3段、雪は2段で濃さが変わる', () => {
+    const { api } = load();
+    const R = api.RAIN_STYLE, S = api.SNOW_STYLE;
+    eq(Object.keys(R), ['rain','rainHeavy','storm'], '雨の段:');
+    eq(Object.keys(S), ['snow','snowHeavy'], '雪の段:');
+    //  雨→大雨→嵐 で、本数も速さも増える
+    ok(R.rain.n < R.rainHeavy.n && R.rainHeavy.n < R.storm.n,
+       `本数が増えていない: ${R.rain.n},${R.rainHeavy.n},${R.storm.n}`);
+    ok(R.rain.spd < R.rainHeavy.spd && R.rainHeavy.spd < R.storm.spd,
+       `速さが増えていない: ${R.rain.spd},${R.rainHeavy.spd},${R.storm.spd}`);
+    //  横なぐりは嵐だけ
+    eq(R.rain.slant, 0, '雨に傾きが付いている:');
+    eq(R.rainHeavy.slant, 0, '大雨に傾きが付いている:');
+    ok(R.storm.slant > 0, '嵐に傾きが付いていない');
+    //  用意してある粒の数が足りているか（足りないと嵐で薄くなる）
+    ok(api.RAIN_MAX >= R.storm.n, `雨粒の用意が足りない: ${api.RAIN_MAX} < ${R.storm.n}`);
+    ok(api.SNOW_MAX >= S.snowHeavy.n, `雪粒の用意が足りない: ${api.SNOW_MAX} < ${S.snowHeavy.n}`);
+    ok(S.snow.n < S.snowHeavy.n, `雪→大雪 で粒が増えていない: ${S.snow.n},${S.snowHeavy.n}`);
+  });
+  //  晴れた昼だけ、ときどき鳥が横切る。夜の流れ星・曇りの夜のUFOと対になる出来事
+  it('鳥は晴れた昼だけ飛ぶ', () => {
+    const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'invader_game.html'), 'utf8');
+    //  太陽を出す枝（＝晴れか薄曇りの昼）の中で、さらに晴れに絞って呼んでいること
+    const at = src.indexOf("stamp(ctxM, SUN,");
+    ok(at > 0, '太陽を描く場所が見つからない');
+    const seg = src.slice(at, at + 300);
+    ok(/if \(weather === 'clear'\) updateBirds\(DM\);/.test(seg),
+       '鳥が晴れの昼に結びついていない');
+    //  夜の枝（timeOfDay==='night' から 太陽の枝の手前まで）には入っていないこと
+    const nightAt = src.indexOf("} else if (timeOfDay==='night') {");
+    ok(nightAt > 0 && nightAt < at, '夜の枝が見つからない');
+    ok(!/updateBirds/.test(src.slice(nightAt, at)), '夜にも鳥が飛んでいる');
+    //  呼んでいるのは1か所だけ
+    eq((src.match(/updateBirds\(/g) || []).length, 2, '鳥を呼ぶ場所（定義1＋呼び出し1）:');
+  });
+  it('鳥は2羽で、はばたく', () => {
+    const { api } = load();
+    eq(api.BIRD_GAP.length, 2, '羽の数:');
+    //  2羽が重ならない。翼を広げた幅より離れていること
+    const w = api.BIRD_UP[0].length;
+    ok(Math.abs(api.BIRD_GAP[1][0] - api.BIRD_GAP[0][0]) >= w, '2羽が重なる');
+    ok(JSON.stringify(api.BIRD_UP) !== JSON.stringify(api.BIRD_DOWN), 'はばたきの2コマが同じ');
+    ok(api.BIRD_SPEED > 0, '鳥が進まない');
+  });
+  //  3×2 の「へ」の字だと点にしか見えなかった。
+  //  胴を固定して翼の先だけ上下させると、羽ばたきとして読める
+  //   手前は片翼2ドット、遠ざかったら1ドット。どちらも同じ決まりで組む
+  const birdPair = (up, dn, wing, lbl) => {
+    eq(up.length, dn.length, `${lbl} コマの高さ:`);
+    ok(up.length >= 3, `${lbl} 段が足りない（翼を振る余地がない）: ${up.length}`);
+    ok(up[0].length >= wing * 2 + 1, `${lbl} 幅が足りない（翼が広がらない）: ${up[0].length}`);
+    //  まん中が胴。2コマで動かないこと
+    const mid = (up.length - 1) >> 1;
+    eq(up[mid], dn[mid], `${lbl} 胴の段（動いてしまっている）:`);
+    ok(up[mid].some(v => v), `${lbl} 胴が空`);
+    //  翼の先は、上げた時は胴より上・下げた時は胴より下
+    ok(up[mid-1].some(v => v) && !up[mid+1].some(v => v), `${lbl} 翼を上げた形になっていない`);
+    ok(dn[mid+1].some(v => v) && !dn[mid-1].some(v => v), `${lbl} 翼を下げた形になっていない`);
+    //  胴は1ドット
+    eq(up[mid].filter(v => v).length, 1, `${lbl} 胴のドット数:`);
+    //  翼は片側 wing ドット。段をまたいで斜めに置く（横一列だと棒に見える）
+    const half = (up[0].length - 1) >> 1;
+    const side = (rows, from, to) => rows.reduce((a, r) => a + r.slice(from, to).filter(v => v).length, 0);
+    const wingRows = up.slice(0, mid);
+    eq(side(wingRows, 0, half), wing, `${lbl} 左の翼のドット数:`);
+    eq(side(wingRows, half + 1, up[0].length), wing, `${lbl} 右の翼のドット数:`);
+    //  同じ段に2つ並んでいたら水平＝棒。段が分かれていること
+    for(const r of wingRows){
+      ok(r.slice(0, half).filter(v => v).length <= 1, `${lbl} 左の翼が水平に並んでいる: ${r.join('')}`);
+      ok(r.slice(half + 1).filter(v => v).length <= 1, `${lbl} 右の翼が水平に並んでいる: ${r.join('')}`);
+    }
+    //  外へ行くほど上（胴から離れるほど高い）
+    if(wing >= 2){
+      const tipX = up[0].findIndex(v => v), innerX = up[1].findIndex(v => v);
+      ok(tipX < innerX, `${lbl} 翼の先が内側より外にない: 先${tipX} 内${innerX}`);
+    }
+  };
+  it('鳥は胴を動かさず、翼だけ振る', () => {
+    const { api } = load();
+    birdPair(api.BIRD_UP, api.BIRD_DOWN, 2, '手前');
+  });
+
+  //  画面の半分を過ぎたら翼を1ドット減らして、遠ざかっていくように見せる。
+  //  小さくしても胴の位置は動かさない（縮んだ拍子に跳ねたら、飛び方が変わって見える）
+  it('鳥は後半、翼が1ドット減って小さくなる', () => {
+    const { api } = load();
+    birdPair(api.BIRD_FAR_UP, api.BIRD_FAR_DOWN, 1, '遠く');
+    const dots = g => g.reduce((a, r) => a + r.filter(v => v).length, 0);
+    ok(dots(api.BIRD_FAR_UP) < dots(api.BIRD_UP),
+       `遠くの鳥(${dots(api.BIRD_FAR_UP)})が手前(${dots(api.BIRD_UP)})より小さくない`);
+    //  切り替えは画面を横切る途中で起きること
+    ok(api.BIRD_FAR_X > 0 && api.BIRD_FAR_X < 1, `切り替え位置がおかしい: ${api.BIRD_FAR_X}`);
+    //  遠近・はばたきの4通りとも、ずれを足した胴の位置が同じ
+    const bodyAt = (far, t) => {
+      const s = api.birdSprite(t, far);
+      const row = (s.spr.length - 1) >> 1;
+      return [s.dx + s.spr[row].findIndex(v => v), s.dy + row].join(',');
+    };
+    const at = [bodyAt(false, 0), bodyAt(false, api.BIRD_FLAP), bodyAt(true, 0), bodyAt(true, api.BIRD_FLAP)];
+    eq(new Set(at).size, 1, `胴の位置がそろっていない [${at.join(' / ')}] 種類:`);
+    //  実際に位置で切り替えていること
+    const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'invader_game.html'), 'utf8');
+    const at2 = src.indexOf('function updateBirds');
+    const bodySrc = src.slice(at2, src.indexOf('\n  }', at2));
+    ok(/birds\.x\s*<\s*W\s*\*\s*BIRD_FAR_X/.test(bodySrc), '遠近を鳥の位置で切り替えていない');
+  });
+
+  //  薄曇りは天体が見える。曇りは天体を隠すので、雲は薄曇りより多い
+  it('天体が見えるのは 晴れ と 薄曇り だけ', () => {
+    const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'invader_game.html'), 'utf8');
+    ok(/const skyOpen = \(weather === 'clear' \|\| weather === 'thin'\);/.test(src),
+       '天体を出す条件が 晴れ・薄曇り になっていない');
+    const { api } = load();
+    ok(api.CLOUD_THIN < api.CLOUD_N,
+       `薄曇りの雲(${api.CLOUD_THIN})が曇り(${api.CLOUD_N})以上ある`);
+    ok(api.CLOUD_THIN > 0, '薄曇りに雲が無い');
+  });
+});
+
+// ══ 地面の花 ══════════════════════════════════════════════
+describe('地面の花', () => {
+  //  最終形態まで来ると育成画面の変化が止まるので、そのあとも日々が動いていると分かるように、
+  //  20日目から5日かけて少しずつ咲かせる
+  it('20日目から咲きはじめ、5日でそろう', () => {
+    const { api } = load();
+    const N = api.FLOWERS.length;
+    //  最終形態は通算17日ごろ。そこまでは進化そのものが画面の変化なので、
+    //  花はそのあとから咲かせる。ここを早めると、育っている最中に咲いてしまう
+    ok(api.FLOWER_DAY >= 18, `咲きはじめが早すぎる: DAY${api.FLOWER_DAY}`);
+    ok(api.FLOWER_SPAN >= 3, `咲きそろうのが急すぎる: ${api.FLOWER_SPAN}日`);
+    eq(api.flowerCount(api.FLOWER_DAY - 1), 0, '前日はまだ咲かない:');
+    ok(api.flowerCount(api.FLOWER_DAY) > 0, '20日目に咲きはじめていない');
+    eq(api.flowerCount(api.FLOWER_DAY + api.FLOWER_SPAN - 1), N, '5日目で咲きそろう:');
+    eq(api.flowerCount(api.FLOWER_DAY + 20), N, 'そのあとも増えも減りもしない:');
+  });
+  it('本数は減らずに増えていく', () => {
+    const { api } = load();
+    let prev = 0;
+    for(let d = api.FLOWER_DAY - 2; d <= api.FLOWER_DAY + api.FLOWER_SPAN + 2; d++){
+      const n = api.flowerCount(d);
+      ok(n >= prev, `DAY${d} で減っている: ${prev}→${n}`);
+      prev = n;
+    }
+  });
+  //  皿は大きくて出ている時間も長いので、そこに咲かせると隠れっぱなしになる
+  it('花は皿の帯を避け、画面にも収まる', () => {
+    const { api } = load();
+    const w = api.FLOWER_SPR[0][0].length;
+    for(const [x] of api.FLOWERS){
+      ok(!(x < api.PLATE_X + 11 && x + w > api.PLATE_X), `x=${x} が皿の帯と重なる`);
+      ok(x >= 0 && x + w <= 54, `x=${x} が画面からはみ出す`);
+    }
+    //  花どうしがくっつかない
+    const xs = api.FLOWERS.map(f => f[0]).sort((a,b)=>a-b);
+    for(let i=1;i<xs.length;i++)
+      ok(xs[i] - xs[i-1] >= w, `x=${xs[i-1]} と x=${xs[i]} がくっついている`);
+  });
+  //  「全部同じ高さ」だと並木のように見えるので、育ち具合で背丈を変える。
+  //  まだ咲いていない双葉はいちばん低い
+  it('花は3種あり、背丈がばらけている', () => {
+    const { api } = load();
+    eq(api.FLOWER_SPR.length, 3, '花の種類:');
+    const h = api.FLOWER_SPR.map(g => g.length);
+    ok(h[0] < h[1] && h[1] < h[2], `双葉 < つぼみ < 咲いた花 になっていない: ${h.join(',')}`);
+    //  庭に置いた並びでも、高さが1種類に偏っていないこと
+    const used = new Set(api.FLOWERS.map(([, k]) => api.FLOWER_SPR[k].length));
+    eq(used.size, 3, '庭に出ている背丈の種類:');
+    //  どの種類も同じ幅（位置の計算を1つで済ませるため）
+    for(const g of api.FLOWER_SPR) eq(g[0].length, api.FLOWER_SPR[0][0].length, '幅:');
+  });
+  //  十字（.#./###/.#.）はプラス記号に見えて花に読めなかった。
+  //  咲いた花は中心を空けて、花びらの輪にしてある
+  it('咲いた花は、中心が空いている', () => {
+    const { api } = load();
+    const bloom = api.FLOWER_SPR[2];
+    eq(bloom[1], [1,0,1], '花びらの段（中心が空いていない）:');
+    //  茎は1本。下2段が縦一列であること
+    for(const row of bloom.slice(-2)) eq(row, [0,1,0], '茎の段:');
+  });
+  it('咲く順は左から順ではない（端から埋まって見えないように）', () => {
+    const { api } = load();
+    const xs = api.FLOWERS.map(f => f[0]);
+    const sorted = [...xs].sort((a,b)=>a-b);
+    ok(JSON.stringify(xs) !== JSON.stringify(sorted), '左から順に咲いている');
+  });
+  //  花は背景。キャラや皿より先に描くので、歩くと花の前を通る
+  it('花は背景として、キャラより先に描かれる', () => {
+    const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'invader_game.html'), 'utf8');
+    const flower = src.indexOf('drawFlowers(DM);');
+    const chara  = src.indexOf('// ── キャラクター（段階別スプライト');
+    ok(flower > 0 && chara > 0, '描画の場所が見つからない');
+    ok(flower < chara, '花がキャラより後に描かれている（キャラを覆ってしまう）');
+  });
+});
+
 // ══ 立ち位置 ══════════════════════════════════════════════
 describe('立ち位置', () => {
   //  うんち・皿の上に重ならないよう、重なっていたら最寄りの空きへ寄っていく。
@@ -1621,20 +1858,14 @@ describe('世話の音', () => {
     ok(floor('anger') <= Math.min(...Object.keys(api.SND).flatMap(hz)),
        'イライラより低い音がある');
   });
-  //  そうじは、汚れが消えるたびに鳴る。散らかっているほど賑やかになる
-  it('キラキラは、汚れが消える数だけ鳴る', () => {
+  //  そうじは、汚れの数によらず1回だけ。仕草に紐づけて頭で鳴らす
+  it('キラキラは、そうじ1回につき1回だけ鳴る', () => {
     const { api } = load();
-    //  消える瞬間（gone）は描画側の式。ここでは本体の sparkleStart に渡して数える
-    const fires = n => {
-      let c = 0;
-      for(let reactT = api.CLEAN_T; reactT > 0; reactT--)
-        for(let k = 0; k < n; k++){
-          const gone = 0.12 + k * 0.5 / Math.max(1, n);
-          if((api.CLEAN_T - reactT) / api.CLEAN_T >= gone && api.sparkleStart(reactT, gone)) c++;
-        }
-      return c;
-    };
-    for(const n of [1, 2, 3, 5]) eq(fires(n), n, `汚れ${n}個のとき:`);
+    eq(api.REACT_SND.clean, 'sparkle', 'そうじの仕草に紐づいていない:');
+    const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'invader_game.html'), 'utf8');
+    //  汚れごとに鳴らす作りが残っていないこと（数だけ鳴ると うるさくなる）
+    eq((src.match(/playSnd\('sparkle'\)/g) || []).length, 0,
+       '汚れごとに鳴らす場所が残っている:');
   });
   it('キラキラは、いちばん高いところで鳴る', () => {
     const { api } = load();
@@ -1642,10 +1873,22 @@ describe('世話の音', () => {
     const top = Math.max(...hz('sparkle'));
     for(const k of Object.keys(api.SND))
       if(k !== 'sparkle') ok(Math.max(...hz(k)) < top, `${k} がキラキラより高い`);
-    //  汚れの数だけ重なるので、ひと粒は短く控えめに
-    ok(api.SND.sparkle.reduce((a,n)=>a+n[1], 0) < 0.15, 'ひと粒が長すぎて重なる');
-    ok(Math.max(...api.SND.sparkle.map(n => n[2] == null ? 0.13 : n[2])) < 0.13,
-       'ひと粒の音量が下げられていない');
+  });
+  //  「キラキラキランッ」。見た目のキラキラは3秒ほど続くので、
+  //  単発の点ではなく、ひと続きのフレーズにしてある
+  it('キラキラは、ひと続きのフレーズになっている', () => {
+    const { api } = load();
+    const v = api.SND.sparkle;
+    const len = v.reduce((a,n)=>a+n[1], 0);
+    ok(len > 0.6, `短すぎて点に聞こえる: ${len.toFixed(2)}秒`);
+    ok(len < 2.0, `長すぎて掃除より延びる: ${len.toFixed(2)}秒`);
+    //  休符で区切って「キラ・キラ・キラン」と3つに分かれていること
+    const rests = v.filter(n => n[0] === 0).length;
+    ok(rests >= 2, `区切りが足りない（キラキラキランに聞こえない）: 休符${rests}個`);
+    //  最後の一音がいちばん長く伸びる（「ンッ」）
+    const last = v[v.length-1];
+    ok(last[0] > 0, '最後が休符で終わっている');
+    ok(last[1] === Math.max(...v.map(n=>n[1])), `最後が伸びていない: ${last[1]}秒`);
   });
   //  しゅんは3段でうなだれる。最後は全音だけ下げて、ため息のように落とす。
   //  2音に戻すと、落ちきらずに途中で止まって聞こえる
@@ -1672,7 +1915,7 @@ describe('世話の音', () => {
   //  同じ SCOLD でも、しゅんとしたのか怒ったのかで鳴る音が変わる
   it('音は仕草に紐づいている', () => {
     const { api } = load();
-    eq(api.REACT_SND, { heart:'praise', anger:'anger', sad:'sad', refuse:'tantrum' });
+    eq(api.REACT_SND, { heart:'praise', anger:'anger', sad:'sad', refuse:'tantrum', clean:'sparkle' });
     for(const k of Object.values(api.REACT_SND))
       ok(api.SND[k], `${k} の音が無い`);
     //  たべる・くすりは動きに合わせて鳴らすので、ここには入れない
@@ -1696,18 +1939,16 @@ describe('世話の音', () => {
   it('音が消えていない（鳴らす場所がソースにある）', () => {
     const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'invader_game.html'), 'utf8');
     //  仕草ぶんは setReaction が一括で鳴らす
-    ok(/const snd = REACT_SND\[type\];\s*\n\s*if\(snd\) playSnd\(snd\);/.test(src),
+    ok(/const snd = quiet \? null : REACT_SND\[type\];\s*\n\s*if\(snd\) playSnd\(snd\);/.test(src),
        'setReaction が仕草の音を鳴らしていない');
     //  動きに合わせる3つは、それぞれの場所で鳴らす
     ok(/playSnd\('bite'\)/.test(src), 'ひと口の音を鳴らす場所が無い');
     ok(/playSnd\('med'\)/.test(src),  'くすりの音を鳴らす場所が無い');
-    //  そうじは、静かに片づける時（寝ている子・拒んだ皿を下げただけ）は鳴らさない。
-    //  ♪を出さない場面なのに音だけ鳴ると、静かに片づけた意味がなくなる
-    const line = src.split('\n').find(l => /playSnd\('sparkle'\)/.test(l));
-    ok(line, 'キラキラを鳴らす場所が無い');
-    ok(/!reactQuiet/.test(line), `静かに片づける時も鳴ってしまう: ${line.trim()}`);
+    //  静かに片づける／静かに食べる場面（quiet）では、♪と同じく音も出さない
+    ok(/const snd = quiet \? null : REACT_SND\[type\];/.test(src),
+       '静かにしたい場面でも音が鳴ってしまう');
     //  呼び出し元に散らばっていた鳴らしは、setReaction に寄せたので残っていないこと
-    for(const k of ['praise','tantrum','anger','sad'])
+    for(const k of ['praise','tantrum','anger','sad','sparkle'])
       ok(!new RegExp(`playSnd\\('${k}'\\)`).test(src), `${k} が仕草の外でも鳴っている（二重に鳴る）`);
   });
 });
