@@ -570,6 +570,7 @@
   //  良くないほうは 音域そのものを低く取り、協和しない落ち方にしてある
   const SND = {
     med:     [[523,0.07],[659,0.07],[784,0.07],[1047,0.16]],   // 効いていく（ド・ミ・ソ・ド）
+    sparkle: [[1568,0.03,0.09],[1976,0.07,0.09]],              // キラキラ。汚れが消えるたびに鳴るので、短く控えめに
     bite:    [[300,0.05],[210,0.05]],                          // ひと口ぶん。食事アニメの3口に合わせて3回鳴らす
     praise:  [[784,0.08],[988,0.08],[1319,0.18]],              // うれしい（ソ・シ・ミ）
     anger:   [[311,0.045],[220,0.05],[165,0.14]],              // イライラ（低いところへ転げ落ちる。着地はいちばん低い）
@@ -3978,6 +3979,20 @@
     for(let i=0;i<pet.W && i<POOP_X.length;i++) spans.push([POOP_X[i], POOP_X[i] + POOP_W]);
     return spans;
   }
+  // 重なっているなら、最寄りの自由区間へ徐々に押し出す。
+  //  歩行の中に置くと、止まっている子（睡眠・病気・演出中）が解決されないので外に出してある
+  function pushOutOfObjects(gw){
+    const segs = freeSegments(gw);
+    if(!segs.length) return;
+    if(segs.some(([a,b]) => walkX >= a && walkX <= b)) return;   // もう重なっていない
+    const near = segs.reduce((best,s)=>{
+      const d  = walkX < s[0]  ? s[0]-walkX  : walkX-s[1];
+      const bd = walkX < best[0]? best[0]-walkX: walkX-best[1];
+      return d < bd ? s : best;
+    });
+    const target = walkX < near[0] ? near[0] : near[1];
+    walkX += Math.sign(target - walkX) * Math.min(0.8, Math.abs(target - walkX));
+  }
   // 幅gwのキャラ左端xを置ける自由区間（画面内・障害物を除く）
   function freeSegments(gw){
     const spans = objectSpans().slice().sort((a,b)=>a[0]-b[0]);
@@ -4012,6 +4027,11 @@
   // 仕上げに散らす小さな輝き [x, y, 出るタイミング]
   const SPARKLE_DUST = [[10,44,0.30],[26,38,0.45],[43,46,0.38],[18,51,0.55],[36,41,0.60]];
   const CLEAN_T = 36;        // 掃除アニメの長さ
+  //  汚れが消えた最初のコマか。gone（消える瞬間）は描画側で出したものを受け取るので、
+  //  式が二重にならない。汚れの数だけ鳴るので、散らかっているほど賑やかになる
+  function sparkleStart(reactT, gone){
+    return (CLEAN_T - reactT - 1) / CLEAN_T < gone;
+  }
   // ── くすりの演出 ──
   //  左の画面外から放物線でカプセルが飛んできて、キャラに当たる。
   //  当たった瞬間から点滅して「効いた」を見せる。
@@ -5352,26 +5372,20 @@
           walkX += walkDir * prof.speed * wSpd;
         }
       }
-      // 画面端＋オブジェクト（皿・うんち）を壁として扱い、重なりを回避
+      // 画面端＋オブジェクト（皿・うんち）を壁として扱う。歩いている時のバウンド
       const segs = freeSegments(gw);
-      if(segs.length){
-        let seg = segs.find(([a,b]) => walkX >= a && walkX <= b);
-        if(seg){
-          if(walkX <= seg[0]){ walkX = seg[0]; walkDir = 1; }   // 区間の左端でバウンド
-          if(walkX >= seg[1]){ walkX = seg[1]; walkDir = -1; }  // 右端でバウンド
-        } else {
-          // 障害物に被っている（オブジェクトが足元に出た等）→ 最寄りの自由区間へ徐々に押し出す
-          const near = segs.reduce((best,s)=>{
-            const d  = walkX < s[0]  ? s[0]-walkX  : walkX-s[1];
-            const bd = walkX < best[0]? best[0]-walkX: walkX-best[1];
-            return d < bd ? s : best;
-          });
-          const target = walkX < near[0] ? near[0] : near[1];
-          walkX += Math.sign(target - walkX) * Math.min(0.8, Math.abs(target - walkX));
-        }
+      const seg = segs.find(([a,b]) => walkX >= a && walkX <= b);
+      if(seg){
+        if(walkX <= seg[0]){ walkX = seg[0]; walkDir = 1; }   // 区間の左端でバウンド
+        if(walkX >= seg[1]){ walkX = seg[1]; walkDir = -1; }  // 右端でバウンド
       }
       }   // ← モゾモゾ中でなければ歩行
     }
+
+    // 障害物との重なりを解く。歩いている時だけでなく、止まっている時も走らせる。
+    //  睡眠中・病気・瀕死・演出中は上の歩行を通らないので、ここが無いと
+    //  足元にうんちが出たまま重なって、そのまま寝てしまう
+    pushOutOfObjects(gw);
 
     let charX = Math.round(walkX);
     const charY = MAIN_GY - grid.length;   // 屈伸で縮んだフレームでも足元を地面に据える
@@ -5448,6 +5462,8 @@
             drawFoodPlate(plateX, MAIN_GY-1, 3, NK, DM, cleanSnapKind);
           }
         } else {
+          //  拒んだ皿を下げただけ・睡眠中は静かに片づける（♪も出していない）
+          if(!reactQuiet && sparkleStart(reactT, gone)) playSnd('sparkle');
           drawSparkle(it.cx, MAIN_GY-4, (prog-gone)/0.4, NK, DM);   // 消えた跡でキラキラ
         }
       });
@@ -5644,7 +5660,7 @@
   // 項目はキーで管理（表示ラベルは言語辞書、値は各キーで分岐）
   //  版の番号は sw.js の VERSION と同じもの。tools/bump-sw.sh が両方いっしょに
   //  書き換える（ずれると、テスターの端末に出ている版が分からなくなる）
-  const APP_VERSION = '2026-08-25-03';
+  const APP_VERSION = '2026-08-26-01';
   //  (C) は Press Start 2P に © が無く、別の字体に落ちて1文字だけ形が浮くため
   const APP_COPY = '(C) 2026 Studio M.D.Q.';
   const SETTINGS_KEYS = ['language','weather','sound','bodycolor','version','reset'];

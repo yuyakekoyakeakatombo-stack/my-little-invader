@@ -1532,13 +1532,65 @@ describe('エンディング', () => {
   });
 });
 
+// ══ 立ち位置 ══════════════════════════════════════════════
+describe('立ち位置', () => {
+  //  うんち・皿の上に重ならないよう、重なっていたら最寄りの空きへ寄っていく。
+  //  この押し出しは歩行の中に置いてはいけない。睡眠中・病気・瀕死・演出中は
+  //  歩行を通らないので、足元にうんちが出たまま重なって寝てしまう
+  const overlap = (api, gw) => {
+    const x = Math.round(api.walkX);
+    return api.objectSpans().some(([a,b]) => x < b && x + gw > a);
+  };
+  it('重なっていたら、止まっていても押し出される', () => {
+    const { api, clock } = load();
+    pet(api, clock, { stage:'final', lineage:'inv', form:'i2', W:2, poopSince: clock.now() });
+    const gw = api.charSprites().rest[0].length;
+    api.walkX = api.POOP_X[0];                    // うんちの真上に立たせる
+    ok(overlap(api, gw), '重なった状態が作れていること');
+    for(let k=0; k<60 && overlap(api, gw); k++) api.pushOutOfObjects(gw);
+    ok(!overlap(api, gw), `押し出されない（x=${api.walkX}）`);
+  });
+  it('重なっていなければ動かさない', () => {
+    const { api, clock } = load();
+    pet(api, clock, { stage:'final', lineage:'inv', form:'i2', W:2, poopSince: clock.now() });
+    const gw = api.charSprites().rest[0].length;
+    const seg = api.freeSegments(gw)[0];
+    api.walkX = seg[0] + 1;
+    const before = api.walkX;
+    for(let k=0;k<10;k++) api.pushOutOfObjects(gw);
+    eq(api.walkX, before, '空いているのに動いた:');
+  });
+  it('押し出しは一気に飛ばず、少しずつ寄る', () => {
+    const { api, clock } = load();
+    pet(api, clock, { stage:'final', lineage:'inv', form:'i2', W:2, poopSince: clock.now() });
+    const gw = api.charSprites().rest[0].length;
+    api.walkX = api.POOP_X[0];
+    const first = api.walkX;
+    api.pushOutOfObjects(gw);
+    const step = Math.abs(api.walkX - first);
+    ok(step > 0, '1コマで動いていない');
+    ok(step <= 1, `1コマで飛びすぎ（${step}ドット）。瞬間移動して見える`);
+  });
+  //  歩行の中に戻すと、止まっている子で効かなくなる。ここが今回の不具合だった
+  it('押し出しは、歩行の外で呼ばれている', () => {
+    const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'invader_game.html'), 'utf8');
+    const at = src.indexOf('const moving = !(asleep');
+    ok(at > 0, '移動の可否を決める場所が見つからない');
+    const call = src.indexOf('pushOutOfObjects(gw);', at);
+    ok(call > 0, '押し出しが呼ばれていない');
+    //  if(moving){ … } の閉じより後で呼ばれていること
+    const closes = src.indexOf('// ← モゾモゾ中でなければ歩行', at);
+    ok(closes > 0 && call > closes, '押し出しが歩行の中にある（止まっている子で効かない）');
+  });
+});
+
 // ══ 世話の音とくすりの演出 ══════════════════════════════════
 describe('世話の音', () => {
   //  playClick はボタンの手ざわり用の1音。SND は「何が起きたか」を伝える節。
   //  鳴らす先を間違えると、良いことと良くないことの区別がつかなくなる
   it('場面ぶんの音がそろっている', () => {
     const { api } = load();
-    for(const k of ['med','bite','praise','anger','sad','tantrum'])
+    for(const k of ['med','bite','praise','anger','sad','tantrum','sparkle'])
       ok(Array.isArray(api.SND[k]) && api.SND[k].length, `${k} の音が無い`);
   });
   it('上がる音は良いこと、下がる音は良くないこと', () => {
@@ -1559,7 +1611,7 @@ describe('世話の音', () => {
     const { api } = load();
     const hz = k => api.SND[k].map(n => n[0]).filter(f => f > 0);
     const bad  = ['anger','sad','tantrum'];
-    const good = ['med','praise'];
+    const good = ['med','praise','sparkle'];
     const badHi  = Math.max(...bad.flatMap(hz));
     const goodLo = Math.min(...good.flatMap(hz));
     ok(badHi < goodLo, `良くない音の上端(${badHi}Hz)が、良い音の下端(${goodLo}Hz)を越えている`);
@@ -1568,6 +1620,32 @@ describe('世話の音', () => {
     ok(floor('anger') < floor('sad'), 'イライラがしゅんより上で着地している');
     ok(floor('anger') <= Math.min(...Object.keys(api.SND).flatMap(hz)),
        'イライラより低い音がある');
+  });
+  //  そうじは、汚れが消えるたびに鳴る。散らかっているほど賑やかになる
+  it('キラキラは、汚れが消える数だけ鳴る', () => {
+    const { api } = load();
+    //  消える瞬間（gone）は描画側の式。ここでは本体の sparkleStart に渡して数える
+    const fires = n => {
+      let c = 0;
+      for(let reactT = api.CLEAN_T; reactT > 0; reactT--)
+        for(let k = 0; k < n; k++){
+          const gone = 0.12 + k * 0.5 / Math.max(1, n);
+          if((api.CLEAN_T - reactT) / api.CLEAN_T >= gone && api.sparkleStart(reactT, gone)) c++;
+        }
+      return c;
+    };
+    for(const n of [1, 2, 3, 5]) eq(fires(n), n, `汚れ${n}個のとき:`);
+  });
+  it('キラキラは、いちばん高いところで鳴る', () => {
+    const { api } = load();
+    const hz = k => api.SND[k].map(n => n[0]).filter(f => f > 0);
+    const top = Math.max(...hz('sparkle'));
+    for(const k of Object.keys(api.SND))
+      if(k !== 'sparkle') ok(Math.max(...hz(k)) < top, `${k} がキラキラより高い`);
+    //  汚れの数だけ重なるので、ひと粒は短く控えめに
+    ok(api.SND.sparkle.reduce((a,n)=>a+n[1], 0) < 0.15, 'ひと粒が長すぎて重なる');
+    ok(Math.max(...api.SND.sparkle.map(n => n[2] == null ? 0.13 : n[2])) < 0.13,
+       'ひと粒の音量が下げられていない');
   });
   //  しゅんは3段でうなだれる。最後は全音だけ下げて、ため息のように落とす。
   //  2音に戻すと、落ちきらずに途中で止まって聞こえる
@@ -1620,9 +1698,14 @@ describe('世話の音', () => {
     //  仕草ぶんは setReaction が一括で鳴らす
     ok(/const snd = REACT_SND\[type\];\s*\n\s*if\(snd\) playSnd\(snd\);/.test(src),
        'setReaction が仕草の音を鳴らしていない');
-    //  動きに合わせる2つは、それぞれの場所で鳴らす
+    //  動きに合わせる3つは、それぞれの場所で鳴らす
     ok(/playSnd\('bite'\)/.test(src), 'ひと口の音を鳴らす場所が無い');
     ok(/playSnd\('med'\)/.test(src),  'くすりの音を鳴らす場所が無い');
+    //  そうじは、静かに片づける時（寝ている子・拒んだ皿を下げただけ）は鳴らさない。
+    //  ♪を出さない場面なのに音だけ鳴ると、静かに片づけた意味がなくなる
+    const line = src.split('\n').find(l => /playSnd\('sparkle'\)/.test(l));
+    ok(line, 'キラキラを鳴らす場所が無い');
+    ok(/!reactQuiet/.test(line), `静かに片づける時も鳴ってしまう: ${line.trim()}`);
     //  呼び出し元に散らばっていた鳴らしは、setReaction に寄せたので残っていないこと
     for(const k of ['praise','tantrum','anger','sad'])
       ok(!new RegExp(`playSnd\\('${k}'\\)`).test(src), `${k} が仕草の外でも鳴っている（二重に鳴る）`);
