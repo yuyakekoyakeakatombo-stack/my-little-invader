@@ -34,7 +34,7 @@ const EXPORTS = `
   pushOutOfObjects, freeSegments, objectSpans, POOP_X, POOP_W, PLATE_X,
   codeToWeather, weatherBase, WEATHER_BASE, isBadWeather, CLOUD_N, CLOUD_THIN, RAIN_STYLE, SNOW_STYLE, RAIN_MAX, SNOW_MAX, DEBUG_STATES,
   FLOWER_DAY, FLOWER_SPAN, FLOWERS, flowerCount, FLOWER_SPR,
-  S4_SPR, S4_SLEEP, S4_SHUT, S3_SHUT, G_LIE, CLAMP_SLIDE, eyeRows, sickSprite, charSprites, S3_SPR, S3_SLEEP, lie, withRows, BIRD_UP, BIRD_DOWN, BIRD_FAR_UP, BIRD_FAR_DOWN, BIRD_FAR_X, birdSprite, BIRD_FLAP, BIRD_SPEED, BIRD_GAP, SHOOT_CHANCE,
+  pickTopics, warmCands, DIARY_ROUTINE, lastWritten, warmth, warmLevel, WARM_WINDOW, WARM_KINDS, WARM_LINE, DIARY_LINES, DIARY_MUSINGS, DIARY_CLOSE, DIARY_PRIORITY, DIARY_NOREPEAT_DAYS, DIARY_MUSING_RATE, diaryStyle, buildDiary, pickMusing, S4_SPR, S4_SLEEP, S4_SHUT, S3_SHUT, G_LIE, CLAMP_SLIDE, eyeRows, sickSprite, charSprites, S3_SPR, S3_SLEEP, lie, withRows, BIRD_UP, BIRD_DOWN, BIRD_FAR_UP, BIRD_FAR_DOWN, BIRD_FAR_X, birdSprite, BIRD_FLAP, BIRD_SPEED, BIRD_GAP, SHOOT_CHANCE,
   get weather(){ return weather; }, set weather(v){ weather = v; },
   get weatherFetched(){ return weatherFetched; }, set weatherFetched(v){ weatherFetched = v; },
   sleepConfig, isAsleep, birthPet, ARRIVE_AWAKE_MS, rewindClock, PET_TIMES, sleepKind, stayingUpLate, effectiveAsleep, owlShift,

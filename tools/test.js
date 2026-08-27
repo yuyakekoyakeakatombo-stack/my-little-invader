@@ -1986,6 +1986,249 @@ describe('くすりの演出', () => {
 });
 
 // ══ 日記 ══════════════════════════════════════════════════
+describe('日記の重複', () => {
+  //  育成は30日ほど。その間ずっと、同じ言い回しが二度出ないようにしたい。
+  //  30日で書かれる文は、1日4話題＋結び＝最大150本。これが下限で、
+  //  用意したのはその倍。ただし配り方を誤ると、一部のタグに負担が集中して破綻する
+  const ROUTINE = ['fed','cleaned','dirty','noPlay','slept','praised','snack',
+                   'playSw','playSs','playAb','clear','rain','snow'];
+  const WARM_MIN = 24;              // 毎日出るタグが30日で採られる最大回数
+  it('毎日出うるタグは、必要数の倍を持っている', () => {
+    const { api } = load();
+    for(const t of ROUTINE){
+      const set = api.DIARY_LINES[t];
+      ok(set, `${t} の文面が無い`);
+      ok(set.length >= WARM_MIN * 2, `${t} が ${set.length}本（必要 ${WARM_MIN*2}本）`);
+      //  どの親密度でも、単独で30日ぶんまかなえること。
+      //   段階つきの文しか無いと、段階が変わらない子で候補が尽きる
+      const any = set.filter(v => v.w == null).length;
+      ok(any >= WARM_MIN, `${t} の共通ぶんが ${any}本（必要 ${WARM_MIN}本）`);
+      for(const w of [0,1,2]){
+        const n = set.filter(v => v.w === w).length;
+        ok(n >= 4, `${t} の親密度${w}が ${n}本しか無い`);
+      }
+    }
+  });
+  //  結びは ひとりごとが出なかった日に書く。ひとりごとが一度も出ない30日でも
+  //  重複しないよう、30日ぶん持たせる
+  it('結びは、ひとりごとが一度も出なくても30日もつ', () => {
+    const { api } = load();
+    for(const vo of ['plain','calm','rough']){
+      const set = api.DIARY_CLOSE[vo];
+      const any = set.filter(v => v.w == null).length;
+      const each = [0,1,2].map(w => set.filter(v => v.w === w).length);
+      ok(any + Math.min(...each) >= 30,
+         `${vo}: どの親密度でも選べるのが ${any + Math.min(...each)}本（必要30本）`);
+    }
+  });
+  //  ひとりごとは天気と成長段階でしぼられる。しぼられた先でも足りていること
+  it('ひとりごとは、どの天気でも30日ぶんの候補がある', () => {
+    const { api } = load();
+    const M = api.DIARY_MUSINGS;
+    const NEED = 18;                // 30日 × 出る確率60%
+    for(const wk of ['clear','cloudy','rain','snow'])
+      for(const st of ['young','grown'])
+        for(const warm of [0,1,2]){
+          const s = { clear:0, cloudy:0, rain:0, snow:0, young:0, grown:0, bond:50, trait:0, warm };
+          s[wk] = 1; s[st] = 1;
+          const n = Object.keys(M).filter(k => M[k].when(s)).length;
+          ok(n >= NEED, `${wk}/${st}/親密度${warm}: 候補が ${n}種（必要${NEED}種）`);
+        }
+  });
+  //  ふだんの話題を優先度の上から採ると、最低限の世話では毎日おなじ顔ぶれが並ぶ。
+  //  久しく書いていないものから採ること、同着は散らすこと
+  it('ふだんの話題は持ち回りになる', () => {
+    const { api, clock } = load();
+    api.pet.stage = 'adult'; api.pet.lineage = 'grey'; api.pet.EP = 4;
+    api.pet.birth = clock.now(); api.diaryLog.length = 0;
+    const count = {};
+    for(let day = 1; day <= 30; day++){
+      const e = api.buildDiary({ fed:1, cleaned:1, dirty:1, noPlay:1, clear:1, slept:1, solo:'' }, day, 'd'+day);
+      if(e){ api.diaryLog.push(e); (e.t||[]).forEach(t => count[t] = (count[t]||0) + 1); }
+      clock.advanceDays(1);
+    }
+    const n = Object.values(count);
+    ok(Object.keys(count).length >= 5, `採られたタグが ${Object.keys(count).length}種しかない`);
+    ok(Math.max(...n) <= 24, `1つのタグが30日で ${Math.max(...n)}回 採られている`);
+  });
+  //  実物の字幅は Node では測れないので、すでに出荷ずみの最長行を予算にする。
+  //  画面のフォントは大文字しか持たないので、英文に小文字が混じると字が欠ける
+  it('増やした文面が、幅の予算と字種を守っている', () => {
+    const { api } = load();
+    const BUDGET = { ja: 15, en: 24 };
+    const seen = {};
+    const chk = (name, v) => {
+      for(const lg of ['ja','en'])
+        for(const l of (v[lg] || [])){
+          ok([...l].length <= BUDGET[lg], `${name} ${lg}: ${[...l].length}字「${l}」`);
+          if(lg === 'en') ok(!/[a-z]/.test(l), `${name} en に小文字「${l}」`);
+        }
+      //  同じ文が二重に入っていると、候補が実質減る
+      const k = name.split('[')[0] + '|' + (v.ja || []).join('/');
+      ok(!seen[k], `${name} が ${seen[k]} と同じ文`);
+      seen[k] = name;
+    };
+    for(const [t, arr] of Object.entries(api.DIARY_LINES)) arr.forEach((v, i) => chk(`LINES.${t}[${i}]`, v));
+    for(const [t, arr] of Object.entries(api.DIARY_CLOSE)) arr.forEach((v, i) => chk(`CLOSE.${t}[${i}]`, v));
+    for(const [k, m] of Object.entries(api.DIARY_MUSINGS))
+      for(const vo of ['plain','calm','rough'])
+        chk(`MUSING.${k}.${vo}`, { ja: m.ja[vo], en: m.en[vo] });
+  });
+  //  持ち回りにするのは ふだんの話題だけ。進化・病気・別れのような報せるべき
+  //  出来事まで混ぜると、書ける数が少ない日に押し出されて消える
+  it('報せるべき出来事は、ふだんの話題より先に書く', () => {
+    const { api, clock } = load();
+    api.pet.stage = 'adult'; api.pet.lineage = 'grey'; api.pet.EP = 4;
+    api.pet.birth = clock.now(); api.diaryLog.length = 0;
+    //  ふだんの話題を先に何日か書いて、持ち回りの順番を作っておく
+    for(let day = 1; day <= 6; day++){
+      const e = api.buildDiary({ fed:1, cleaned:1, dirty:1, noPlay:1, clear:1, slept:1, solo:'' }, day, 'd'+day);
+      if(e) api.diaryLog.push(e);
+      clock.advanceDays(1);
+    }
+    for(const big of ['evolved','sick','cured','wrath','woken','tantrum']){
+      const d = { fed:1, cleaned:1, dirty:1, noPlay:1, clear:1, slept:1, solo:'' };
+      d[big] = 1;
+      for(let n = 1; n <= 4; n++){
+        const picked = api.pickTopics(d, n);
+        ok(picked.includes(big), `書ける数が${n}のとき ${big} が落ちる: ${picked.join(',')}`);
+      }
+    }
+  });
+  //  はじめの日記は、まだ何も書いていないので全タグが同着になる。
+  //  同着を優先度順で解くと、どの子も1日目は おなじ話題から始まってしまう
+  it('はじめの日記の話題が、いつも同じにならない', () => {
+    const seen = new Set();
+    for(let i = 0; i < 40; i++){
+      const { api, clock } = load();
+      api.pet.stage = 'adult'; api.pet.lineage = 'grey'; api.pet.EP = 4;
+      api.pet.birth = clock.now(); api.diaryLog.length = 0;
+      const e = api.buildDiary({ fed:1, cleaned:1, dirty:1, noPlay:1, clear:1, slept:1, solo:'' }, 1, 'd1');
+      if(e) e.t.forEach(t => seen.add(t));
+    }
+    ok(seen.size >= 3, `はじめの話題が ${seen.size}種しか出ない: ${[...seen].join(',')}`);
+  });
+  //  親密度に合わない言い回しが選ばれると、関係の変化が文面に出ない
+  it('その親密度の言い回ししか選ばない', () => {
+    const { api, clock } = load();
+    api.pet.stage = 'adult'; api.pet.lineage = 'grey'; api.pet.EP = 4;
+    api.pet.B = 50; api.pet.birth = clock.now();
+    for(const lv of [0, 1, 2]){
+      api.pet.touchLog = Array(api.WARM_WINDOW).fill([0, 1, 3][lv]);
+      eq(api.warmLevel(), lv, `想定した段階にならない（${lv}）:`);
+      api.diaryLog.length = 0;
+      const wrongBody = [], wrongClose = [];
+      for(let day = 1; day <= 25; day++){
+        const e = api.buildDiary({ fed:1, cleaned:1, praised:1, clear:1, slept:1, solo:'' }, day, 'd'+day);
+        if(!e) continue;
+        api.diaryLog.push(e);
+        e.t.forEach((t, i) => {
+          const w = api.DIARY_LINES[t][e.v[i]].w;
+          if(w != null && w !== lv) wrongBody.push(`${t}[${e.v[i]}] は段階${w}`);
+        });
+        if(e.c){
+          const w = api.DIARY_CLOSE[e.c][e.cv].w;
+          if(w != null && w !== lv) wrongClose.push(`${e.c}[${e.cv}] は段階${w}`);
+        }
+      }
+      eq(wrongBody.length, 0, `段階${lv} で よその段階の本文が出た（${wrongBody[0] || ''}）:`);
+      eq(wrongClose.length, 0, `段階${lv} で よその段階の結びが出た（${wrongClose[0] || ''}）:`);
+    }
+  });
+  //  ひとりごとの条件にも親密度を渡していないと、うちとけた子に
+  //  「だれも こなかった」のような ひとりごとが出続ける
+  it('ひとりごとも親密度で出しわける', () => {
+    const { api, clock } = load();
+    api.pet.stage = 'adult'; api.pet.lineage = 'grey'; api.pet.EP = 4;
+    api.pet.B = 50; api.pet.birth = clock.now(); api.weatherFetched = true;
+    const only = lv => Object.keys(api.DIARY_MUSINGS).filter(k => {
+      const s = { clear:1, cloudy:0, rain:0, snow:0, young:0, grown:1, bond:50, trait:0, warm:lv };
+      const other = [0,1,2].filter(w => w !== lv)
+        .some(w => api.DIARY_MUSINGS[k].when({ ...s, warm:w }));
+      return api.DIARY_MUSINGS[k].when(s) && !other;
+    });
+    for(const lv of [0, 1, 2]) ok(only(lv).length > 0, `段階${lv} だけの ひとりごとが無い`);
+    //  実際に選ばれるのが その段階のものだけであること
+    for(const lv of [0, 1, 2]){
+      api.pet.touchLog = Array(api.WARM_WINDOW).fill([0, 1, 3][lv]);
+      const wrong = [];
+      for(let i = 0; i < 120; i++){
+        const k = api.pickMusing();
+        if(!k) continue;
+        for(const other of [0,1,2].filter(w => w !== lv))
+          if(only(other).includes(k)) wrong.push(`${k}（段階${other}用）`);
+      }
+      eq(wrong.length, 0, `段階${lv} で よその段階の ひとりごとが出た（${wrong[0] || ''}）:`);
+    }
+  });
+  //  重複を避ける窓が短いと、育成の途中で同じ文が戻ってくる
+  it('同じ言い回しを避ける窓が、育成期間ぶんある', () => {
+    const { api } = load();
+    ok(api.DIARY_NOREPEAT_DAYS >= 30, `窓が ${api.DIARY_NOREPEAT_DAYS}日しかない`);
+  });
+});
+
+describe('親密度', () => {
+  //  ごはん・そうじは生かすための世話。ふれあい（ほめる・遊ぶ・くすり）だけを数える
+  it('ごはんとそうじだけでは、親密度は上がらない', () => {
+    const { api } = load();
+    api.pet.B = 50; api.pet.touchLog = Array(api.WARM_WINDOW).fill(0);
+    eq(api.warmLevel(), 0, 'ふれあい0での段階:');
+    api.pet.touchLog = Array(api.WARM_WINDOW).fill(3);
+    ok(api.warmLevel() > 0, 'ふれあいを増やしても段階が上がらない');
+  });
+  //  1日の締めで積むところも見る。上の検査は warmth() に直に値を入れているので、
+  //  「何を積んでいるか」が入れ替わっても気づけない
+  it('1日の締めで積むのは、ふれあいの回数だけ', () => {
+    const { api } = load();
+    api.pet.touchLog = [];
+    //  ごはんもそうじもしたが、ふれあい（ほめる・遊ぶ・くすり）は0回の日
+    api.closeOneDay({ fed:1, cleaned:1, clear:1, slept:1 }, 0, false);
+    eq(api.pet.touchLog, [0], 'ごはんとそうじだけの日に積んだ値:');
+    api.closeOneDay({ fed:1, cleaned:1 }, 2, false);
+    eq(api.pet.touchLog, [0, 2], 'ふれあい2回の日まで積んだ値:');
+  });
+  it('直近の関わり方で段階が変わる', () => {
+    const { api } = load();
+    api.pet.B = 50;
+    const lv = t => { api.pet.touchLog = Array(api.WARM_WINDOW).fill(t); return api.warmLevel(); };
+    ok(lv(0) < lv(2), `ふれあい0(${lv(0)}) と 2(${lv(2)}) で段階が同じ`);
+    ok(lv(2) <= lv(3), '関わりを増やしたのに段階が下がる');
+    eq(lv(3), 2, 'よく関わったときの段階:');
+  });
+  //  なかよし度は貯金なので動きが鈍い。直近の窓のほうが強く効くこと
+  it('なかよしが高くても、関わらなくなれば よそよそしい側へ戻る', () => {
+    const { api } = load();
+    api.pet.B = 90; api.pet.touchLog = Array(api.WARM_WINDOW).fill(3);
+    const near = api.warmth();
+    api.pet.touchLog = Array(api.WARM_WINDOW).fill(0);
+    ok(api.warmth() < near * 0.6, `離れても親密度が ${api.warmth().toFixed(2)} のまま`);
+  });
+  it('窓は直近ぶんだけ残す', () => {
+    const { api } = load();
+    ok(api.WARM_WINDOW >= 3 && api.WARM_WINDOW <= 14, `窓が ${api.WARM_WINDOW}日`);
+    const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'invader_game.html'), 'utf8');
+    ok(/pet\.touchLog\.splice\(0, pet\.touchLog\.length - WARM_WINDOW\)/.test(src),
+       '古いぶんを捨てていない（際限なく貯まる）');
+  });
+  //  段階が変わったら、書かれる文も変わること
+  it('段階が変わると、選ばれる言い回しも変わる', () => {
+    const { api } = load();
+    api.pet.B = 50;
+    const seen = [0,1,2].map(t => {
+      api.pet.touchLog = Array(api.WARM_WINDOW).fill([0,1,3][t]);
+      return new Set(api.warmCands(api.DIARY_LINES.fed)
+        .filter(i => api.DIARY_LINES.fed[i].w != null));
+    });
+    for(let a = 0; a < 3; a++)
+      for(let b = a + 1; b < 3; b++){
+        const both = [...seen[a]].filter(i => seen[b].has(i));
+        eq(both.length, 0, `段階${a}と${b}で同じ文が候補になっている:`);
+      }
+    for(const s of seen) ok(s.size > 0, 'ある段階で専用の文が1つも無い');
+  });
+});
+
 describe('日記', () => {
   it('別れの言葉は3口調そろっている', () => {
     const { api, clock } = load();
