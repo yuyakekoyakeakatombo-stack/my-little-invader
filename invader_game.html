@@ -3652,22 +3652,102 @@
       [0,0,0,0,1,1,0,1,1,0,0,0,0],[0,0,0,1,0,0,0,0,0,1,0,0,0],[0,0,1,1,0,0,0,0,0,1,1,0,0],
     ],
   };
-  const S3_SLEEP = {
-    grey: lie(withRows(S3_SPR.grey, [[3,[1,0,0,1,1,1,0,0,1]]]), 2),
-    tako: lie(withRows(S3_SPR.tako, [[5,[1,1,0,0,1,1,1,0,0,1,1]]]), 2),
-    inv: lie(withRows(S3_SPR.inv, [[4,[0,1,1,1,0,0,1,0,0,1,1,1,0]]]), 2),
+  //  グレイは人型なので、仰向けを横から見た姿にする（原画から起こしたもの）。
+  //   頭を左に置き、細い首・胴・足を右へ。顔も横を向くので、とじた目は たて線の穴になる。
+  //   立ち姿から目の段を差し替えて作る他の系統とちがい、これは別絵。
+  //   そのため 病気の姿や 目を動かす処理には使えない（そちらは SHUT を見ること）
+  const G_LIE = {
+    grey: [                     // 成体グレイ  11×8
+      [0,0,1,1,1,1,0,0,0,0,0],
+      [0,1,1,1,1,1,1,0,0,0,0],
+      [1,1,1,1,0,1,1,0,0,0,0],
+      [1,1,1,1,0,1,1,0,0,0,0],
+      [1,1,1,1,1,1,1,0,0,0,0],
+      [1,1,1,1,1,1,1,1,1,0,0],
+      [1,1,1,1,1,1,1,1,1,0,1],
+      [0,1,1,1,1,1,0,1,1,1,1],
+    ],
+    g1: [                     // プランプ  14×10
+      [0,0,0,1,1,1,1,0,0,0,0,0,0,0],
+      [0,0,1,1,1,1,1,1,0,0,0,0,0,0],
+      [0,1,1,1,1,1,1,1,1,0,0,0,0,0],
+      [0,1,1,1,1,1,0,1,1,0,0,0,0,0],
+      [1,1,1,1,1,1,0,1,1,0,0,0,0,0],
+      [0,1,1,1,1,1,1,1,1,0,0,0,0,0],
+      [1,1,1,1,1,1,1,1,1,0,0,0,0,0],
+      [0,1,1,1,1,1,1,1,1,1,1,1,0,0],
+      [0,1,1,1,1,1,1,1,1,1,1,1,0,1],
+      [0,0,1,1,1,1,1,1,0,1,1,1,1,1],
+    ],
+    g2: [                     // スリーク  13×9
+      [0,0,0,1,1,1,0,0,0,0,0,0,0],
+      [0,0,1,1,1,1,1,0,0,0,0,0,0],
+      [0,1,1,1,1,1,1,1,0,0,0,0,0],
+      [0,1,1,1,1,0,1,1,0,0,0,0,0],
+      [1,1,1,1,1,0,1,1,0,0,0,0,0],
+      [0,1,1,1,1,1,1,1,0,0,0,0,0],
+      [1,1,1,1,1,1,1,1,0,1,1,0,0],
+      [0,1,1,1,1,1,1,1,1,1,1,0,1],
+      [0,0,1,1,1,1,1,0,0,1,1,1,1],
+    ],
+    g3: [                     // プリックリー  13×10
+      [0,0,1,1,1,1,0,0,0,0,0,0,0],
+      [0,1,1,1,1,1,1,0,0,0,0,0,0],
+      [1,1,1,1,1,1,1,0,0,0,0,0,0],
+      [1,1,1,1,0,1,1,0,0,0,0,0,0],
+      [1,1,1,1,0,1,1,0,0,0,0,0,0],
+      [1,1,1,1,0,1,1,0,0,0,0,0,0],
+      [1,1,1,1,1,1,1,0,1,1,0,0,0],
+      [1,1,1,1,1,1,1,1,1,1,1,0,1],
+      [1,1,1,1,1,1,1,1,1,1,1,1,1],
+      [0,1,1,1,1,1,0,1,1,1,1,0,1],
+    ],
   };
+  const CLAMP_SLIDE = 0.6;   // 体の幅が変わった時、1コマで寄せられる量（ドット）
+
+  //  とじた目の段。1ドットの目の穴を横に広げて、閉じ線にする
+  const S3_EYES = {
+    grey: [[3,[1,0,0,1,1,1,0,0,1]]],
+    tako: [[5,[1,1,0,0,1,1,1,0,0,1,1]]],
+    inv:  [[4,[0,1,1,1,0,0,1,0,0,1,1,1,0]]],
+  };
+  // 目を閉じた正面の姿。立ち姿の目の段だけを差し替えたもの。
+  //  病気の姿と 目を左右に動かす処理が、立ち姿と見比べて「目のある段」を割り出すのに使う。
+  //  グレイの寝姿は横向きの別絵なので、そちらからは割り出せない
+  const S3_SHUT = {};
+  for(const k in S3_EYES) S3_SHUT[k] = withRows(S3_SPR[k], S3_EYES[k]);
+  const S3_SLEEP = {
+    grey: G_LIE.grey,                       // 成体グレイは仰向け
+    tako: lie(S3_SHUT.tako, 2),
+    inv:  lie(S3_SHUT.inv, 2),
+  };
+  const S4_EYES = {
+    g1: [[4,[1,1,1,1,1,1,1,1,1,1,1]],
+         [5,[1,1,0,0,1,1,1,0,0,1,1]]],      // 1ドットの目を横に広げて閉じ線に
+    g2: [[4,[1,1,1,1,1,1,1,1,1,1,1]]],
+    g3: [[3,[1,1,1,1,1,1,1,1,1,1,1]]],
+    t1: [[5,[0,1,0,0,1,1,1,1,1,0,0,1,0]]],
+    t2: [[5,[0,0,1,1,1,0,0,1,0,0,1,1,1,0,0]]],
+    t3: [[3,[0,0,0,1,0,0,0,0,0,0,0,1,0,0,0]]],
+    i1: [[5,[0,0,1,1,0,0,1,1,1,0,0,1,1,0,0]]],
+    i2: [[5,[0,0,1,1,0,0,1,1,1,0,0,1,1,0,0]]],
+    i3: [[4,[1,1,1,1,1,1,1,1,1,1,1,1,1]]],
+  };
+  const S4_SHUT = {};                       // 目を閉じた正面の姿（S3_SHUT と同じ役目）
+  for(const k in S4_EYES) S4_SHUT[k] = withRows(S4_SPR[k], S4_EYES[k]);
+  //  タコ・インベーダーは人型ではないので、横たわらせると何の形か読めない。
+  //   足を体の下に畳むだけにする。2段では足先が残って立って見えたので、もう1段落とす
+  //   （タコ系は足がそのまま見た目の芯なので、畳む量は1段ぶん控えめ）
   const S4_SLEEP = {
-    g1: lie(withRows(S4_SPR.g1, [[4,[1,1,1,1,1,1,1,1,1,1,1]],
-                                 [5,[1,1,0,0,1,1,1,0,0,1,1]]]), 2),   // 1ドットの目を横に広げて閉じ線に
-    g2: lie(withRows(S4_SPR.g2, [[4,[1,1,1,1,1,1,1,1,1,1,1]]]), 2),
-    g3: lie(withRows(S4_SPR.g3, [[3,[1,1,1,1,1,1,1,1,1,1,1]]]), 2),
-    t1: lie(withRows(S4_SPR.t1, [[5,[0,1,0,0,1,1,1,1,1,0,0,1,0]]]), 1),
-    t2: lie(withRows(S4_SPR.t2, [[5,[0,0,1,1,1,0,0,1,0,0,1,1,1,0,0]]]), 1),
-    t3: lie(withRows(S4_SPR.t3, [[3,[0,0,0,1,0,0,0,0,0,0,0,1,0,0,0]]]), 2),
-    i1: lie(withRows(S4_SPR.i1, [[5,[0,0,1,1,0,0,1,1,1,0,0,1,1,0,0]]]), 2),
-    i2: lie(withRows(S4_SPR.i2, [[5,[0,0,1,1,0,0,1,1,1,0,0,1,1,0,0]]]), 2),
-    i3: lie(withRows(S4_SPR.i3, [[4,[1,1,1,1,1,1,1,1,1,1,1,1,1]]]), 2),
+    g1: G_LIE.g1,                           // グレイ3種は仰向け
+    g2: G_LIE.g2,
+    g3: G_LIE.g3,
+    t1: lie(S4_SHUT.t1, 2),
+    t2: lie(S4_SHUT.t2, 2),
+    t3: lie(S4_SHUT.t3, 3),
+    i1: lie(S4_SHUT.i1, 3),
+    i2: lie(S4_SHUT.i2, 3),
+    i3: lie(S4_SHUT.i3, 3),
   };
 
   // ── 食事中の顔：目を1ドット皿側（右）にずらし、口の穴をパクパク開閉 ──
@@ -3706,10 +3786,11 @@
   //  両者を見比べて「変わっている段」＝目のある段が分かる
   function eyeRows(sp){
     const rows = [];
-    const n = Math.min(sp.sleep.length, sp.rest.length);
+    const shut = sp.shut || sp.sleep;                  // 寝姿ではなく 正面の閉眼と見比べる
+    const n = Math.min(shut.length, sp.rest.length);
     for(let y=0; y<n; y++){
-      if(sp.rest[y].length === sp.sleep[y].length &&
-         sp.rest[y].some((v,x)=>v !== sp.sleep[y][x])) rows.push(y);
+      if(sp.rest[y].length === shut[y].length &&
+         sp.rest[y].some((v,x)=>v !== shut[y][x])) rows.push(y);
     }
     return rows;
   }
@@ -3748,26 +3829,25 @@
     return out;
   }
   function sickSprite(sp){
-    const repl = [];
-    const n = Math.min(sp.sleep.length, sp.rest.length);
-    for(let y=0; y<n; y++){
-      if(sp.rest[y].length === sp.sleep[y].length &&
-         sp.rest[y].some((v,x)=>v !== sp.sleep[y][x])) repl.push([y, sp.sleep[y]]);
-    }
+    const shut = sp.shut || sp.sleep;                  // 同上。グレイの寝姿は横向きなので使えない
+    const repl = eyeRows(sp).map(y => [y, shut[y]]);
     return repl.length ? withRows(sp.rest, repl) : sp.rest;
   }
 
   // 現在の段階のスプライトセット {a:通常, b:アニメ, rest:休息/丸まり(開眼), sleep:就寝(閉眼)}
   function charSprites(){
     switch(pet.stage){
-      case 'egg':   return {a:EGG_A, b:EGG_B, rest:EGG_A, sleep:EGG_SLEEP};
-      case 'mid':   return {a:MID_A, b:MID_B, rest:MID_A, sleep:MID_SLEEP};
-      case 'larva': return {a:LARVA_A, b:LARVA_B, rest:LARVA_RAIN, sleep:LARVA_SLEEP};
+      case 'egg':   return {a:EGG_A, b:EGG_B, rest:EGG_A, sleep:EGG_SLEEP, shut:EGG_SLEEP};
+      case 'mid':   return {a:MID_A, b:MID_B, rest:MID_A, sleep:MID_SLEEP, shut:MID_SLEEP};
+      case 'larva': return {a:LARVA_A, b:LARVA_B, rest:LARVA_RAIN, sleep:LARVA_SLEEP, shut:LARVA_SLEEP};
       case 'adult': { const L = pet.lineage, s = S3_SPR[L] || S3_SPR.grey;
-                      return {a:s, b:(S3_SPR_B[L] || s), rest:s, sleep:S3_SLEEP[L] || S3_SLEEP.grey}; }
+                      return {a:s, b:(S3_SPR_B[L] || s), rest:s, sleep:S3_SLEEP[L] || S3_SLEEP.grey,
+                              shut:S3_SHUT[L] || S3_SHUT.grey}; }
       default:      { const f = S4_SPR[pet.form];
-                      return f ? {a:f, b:(S4_SPR_B[pet.form] || f), rest:f, sleep:S4_SLEEP[pet.form]}
-                               : {a:S3_SPR.grey, b:S3_SPR_B.grey, rest:S3_SPR.grey, sleep:S3_SLEEP.grey}; }
+                      return f ? {a:f, b:(S4_SPR_B[pet.form] || f), rest:f, sleep:S4_SLEEP[pet.form],
+                                  shut:S4_SHUT[pet.form]}
+                               : {a:S3_SPR.grey, b:S3_SPR_B.grey, rest:S3_SPR.grey, sleep:S3_SLEEP.grey,
+                                  shut:S3_SHUT.grey}; }
     }
   }
   // STAGE：成長段階（うまれたて〜最終系）
@@ -5438,7 +5518,11 @@
     // 起動時の立ち位置。なかよしが低い子は、開いた時点でもう端にいる
     //  （中央から歩かせると、端に着くまで何分もかかって伝わらない）
     if(walkX === null) walkX = (bondLow() > 0.6) ? minX : Math.floor((W - gw)/2);
-    walkX = Math.max(minX, Math.min(maxX, walkX));   // 進化でサイズが変わった時のクランプ
+    // 進化や 寝姿で 体の幅が変わった時のクランプ。
+    //  グレイの寝姿は立ち姿より7ドット広いので、端で寝ると まとめて押し戻される。
+    //  一度に動かすと瞬間移動に見えるので、少しずつ寄せて 横になる動きに見せる
+    const lim = Math.max(minX, Math.min(maxX, walkX));
+    if(lim !== walkX) walkX += Math.sign(lim - walkX) * Math.min(CLAMP_SLIDE, Math.abs(lim - walkX));
     const moving = !(asleep || isWeak() || pet.health==='SICK' || reactT>0 || evoT>0);
     let airOff = 0;   // ジャンプ/浮遊の上方向オフセット
     if(moving){
@@ -5817,7 +5901,7 @@
   // 項目はキーで管理（表示ラベルは言語辞書、値は各キーで分岐）
   //  版の番号は sw.js の VERSION と同じもの。tools/bump-sw.sh が両方いっしょに
   //  書き換える（ずれると、テスターの端末に出ている版が分からなくなる）
-  const APP_VERSION = '2026-08-26-02';
+  const APP_VERSION = '2026-08-27-01';
   //  (C) は Press Start 2P に © が無く、別の字体に落ちて1文字だけ形が浮くため
   const APP_COPY = '(C) 2026 Studio M.D.Q.';
   const SETTINGS_KEYS = ['language','weather','sound','bodycolor','version','reset'];

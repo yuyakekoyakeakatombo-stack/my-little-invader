@@ -2525,6 +2525,123 @@ describe('系統わけ', () => {
 // ══ 進化 ══════════════════════════════════════════════════
 //  プランプ＝大食い または 甘やかし ／ スリーク＝丁寧なケア かつ ミニゲーム制覇 ／
 //  プリックリー＝ケアが雑。どれにも当たらなければ最終形態にならず、成体のままとどまる
+describe('寝姿', () => {
+  //  タコ・インベーダーは人型ではないので、横たわらせると何の形か読めない。
+  //  足を体の下に畳むだけにする。2段では足先が残って立って見えたので、もう1段落とす
+  //   （タコ系は足がそのまま見た目の芯なので、畳む量を1段ぶん控えめ）
+  const TUCK = { t1:2, t2:2, t3:3, i1:3, i2:3, i3:3 };
+  it('タコとインベーダーは 足を畳んで寝る', () => {
+    const { api } = load();
+    for(const [k, n] of Object.entries(TUCK)){
+      const a = api.S4_SPR[k], z = api.S4_SLEEP[k];
+      ok(a && z, `${k} のスプライトが無い`);
+      eq(a.length - z.length, n, `${k} 畳んだ段数:`);
+      ok(a.length - z.length >= 2, `${k} 足が伸びたまま`);
+      //  幅は変わらない。畳むのは下の段だけで、体を作り直しているわけではない
+      eq(z[0].length, a[0].length, `${k} 寝姿の幅:`);
+      //  上から順に、起きている姿と同じ段が残っていること（目の閉じ線だけが違う）
+      const eyes = z.filter((r, y) => JSON.stringify(r) !== JSON.stringify(a[y])).length;
+      ok(eyes >= 1 && eyes <= 2, `${k} 目の描き替えが ${eyes}段ある`);
+    }
+  });
+
+  //  グレイは人型なので、仰向けを横から見た姿を別に描いている（原画から起こしたもの）。
+  //  顔も横を向くので、とじた目は たて線の穴になる
+  it('グレイは 仰向けで寝る', () => {
+    const { api } = load();
+    const pair = { grey: [api.S3_SPR.grey, api.S3_SLEEP.grey],
+                   g1: [api.S4_SPR.g1, api.S4_SLEEP.g1],
+                   g2: [api.S4_SPR.g2, api.S4_SLEEP.g2],
+                   g3: [api.S4_SPR.g3, api.S4_SLEEP.g3] };
+    for(const [k, [a, z]] of Object.entries(pair)){
+      eq(z, api.G_LIE[k], `${k} が横たわり姿を使っていない:`);
+      //  立ち姿は縦長、寝姿は横長。向きが入れ替わるのが「横になる」ということ
+      ok(a.length > a[0].length, `${k} の立ち姿が縦長でない: ${a[0].length}×${a.length}`);
+      ok(z[0].length > z.length, `${k} の寝姿が横長でない: ${z[0].length}×${z.length}`);
+      ok(z.length <= a.length, `${k} 寝たら背が高くなった: ${a.length}段 → ${z.length}段`);
+      ok(z[0].length >= a[0].length, `${k} 寝たら幅が狭くなった: ${a[0].length} → ${z[0].length}`);
+      ok(z[0].length <= 20, `${k} 寝姿が広すぎる（画面と歩ける幅を圧迫する）: ${z[0].length}`);
+
+      //  とじた目は たて線。立ち姿の よこ線を90度まわしたもので、
+      //  これが無い＝顔だけ正面を向いたままということ。
+      //   まわりを ぐるりと塗りに囲まれた たて2ドット以上の穴を さがす。
+      //   左右も見ないと、触覚のあいだの すきまを 目と数えてしまう
+      const eyes = [];
+      for(let x = 1; x < z[0].length - 1; x++){
+        let run = 0;
+        for(let y = 0; y < z.length; y++){
+          if(!z[y][x]){ run++; continue; }
+          const y0 = y - run;
+          if(run >= 2 && y0 - 1 >= 0 && z[y0 - 1][x] &&
+             z.slice(y0, y).every(r => r[x - 1] && r[x + 1])) eyes.push([x, run]);
+          run = 0;
+        }
+      }
+      ok(eyes.length >= 1, `${k} たて線のとじた目が無い（顔が正面を向いたまま）`);
+
+      //  体を縦にすっぱり切っている列。足首のすきま1本までは許すが、
+      //  頭と胴のあいだで切れていたら、生きものが2匹に見える
+      const cols = z[0].length, gaps = [];
+      for(let x = 1; x < cols - 1; x++){
+        if(z.every(r => !r[x]) &&
+           z.some(r => r.slice(0, x).some(v => v)) &&
+           z.some(r => r.slice(x + 1).some(v => v))) gaps.push(x);
+      }
+      ok(gaps.length <= 1, `${k} 体が ${gaps.length + 1}つに切れている: ${gaps.join(',')}列目`);
+      if(gaps.length) ok(gaps[0] >= cols * 0.7,
+        `${k} 頭と胴のあいだで体が切れている: ${gaps[0]}列目（幅${cols}）`);
+    }
+    //  4種が同じ絵になっていないこと
+    const seen = Object.keys(pair).map(k => JSON.stringify(api.G_LIE[k]));
+    eq(new Set(seen).size, 4, 'グレイ4種で違う絵になっている数:');
+  });
+
+  //  グレイの寝姿は立ち姿から作れない別絵なので、
+  //  病気の姿と 目を左右に動かす処理が 寝姿を見に行くと、体が入れ替わって壊れる
+  it('病気の姿は 寝姿ではなく 正面のとじ目から作る', () => {
+    const { api } = load();
+    const cases = [['final','g1'],['final','g2'],['final','g3'],['final','i2'],['final','t1'],
+                   ['adult','grey'],['adult','tako'],['adult','inv'],['larva',null]];
+    for(const [stage, key] of cases){
+      api.pet.stage = stage;
+      if(stage === 'final') api.pet.form = key; else if(key) api.pet.lineage = key;
+      const sp = api.charSprites();
+      const rows = api.eyeRows(sp);
+      ok(rows.length >= 1, `${stage}/${key} で目の段が見つからない`);
+      const sick = api.sickSprite(sp);
+      ok(JSON.stringify(sick) !== JSON.stringify(sp.rest),
+         `${stage}/${key} の病気の姿が 立ち姿のまま（目が閉じていない）`);
+      //  差し替えた段も 立ち姿と同じ幅であること（横向きの絵が混ざっていない）
+      eq(sick.length, sp.rest.length, `${stage}/${key} 病気の姿の段数:`);
+      for(const r of sick) eq(r.length, sp.rest[0].length, `${stage}/${key} 病気の姿の幅:`);
+    }
+  });
+
+  //  グレイの寝姿は立ち姿より7ドット広い。端で寝ると画面からはみ出すので押し戻されるが、
+  //  一度に動かすと瞬間移動に見える
+  it('端で寝たとき、寝姿の幅ぶん ずり寄る（飛ばない）', () => {
+    const { api } = load();
+    ok(api.CLAMP_SLIDE > 0 && api.CLAMP_SLIDE <= 1,
+       `1コマで寄せる量が大きすぎる（瞬間移動に見える）: ${api.CLAMP_SLIDE}`);
+    //  グレイの寝姿は 立ち姿より広い＝押し戻しが起きる形になっている
+    const over = Math.max(api.S3_SLEEP.grey[0].length - api.S3_SPR.grey[0].length,
+                          ...['g1','g2','g3'].map(k => api.S4_SLEEP[k][0].length - api.S4_SPR[k][0].length));
+    ok(over > 0, `どの寝姿も立ち姿より広くない: ${over}`);
+    //  寄せきるまでが長すぎない（1コマ100ms）
+    const frames = Math.ceil(over / api.CLAMP_SLIDE);
+    ok(frames <= 20, `寄せきるのに ${frames}コマ（${(frames*0.1).toFixed(1)}秒）かかる`);
+    const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'invader_game.html'), 'utf8');
+    ok(/if\(lim !== walkX\) walkX \+= Math\.sign\(lim - walkX\)/.test(src),
+       '端に着いたとき 一気にクランプしている');
+  });
+
+  it('足を畳んでも 足元は地面に着く', () => {
+    const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'invader_game.html'), 'utf8');
+    //  背が縮んだぶん浮いてしまわないよう、下端を地面に合わせて描いていること
+    ok(/const by = MAIN_GY - body\.length;/.test(src), '足元を地面に据える計算が無い');
+  });
+});
+
 describe('進化', () => {
   const setup = (api, clock, o) => {
     api.pet.total = { feed:0, snack:0, clean:0, med:0 };
