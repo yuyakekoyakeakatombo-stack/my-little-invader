@@ -41,7 +41,7 @@ function pet(api, clock, over = {}){
   Object.assign(api.pet, {
     name:'TEST', stage:'larva', lineage:'', form:'', formWild:false, voice:'',
     hunger:4, mood:4, health:'GOOD', dead:'', gone:false, goneBy:'',
-    ufoFlag:false, departFlag:false, invadeFlag:false,
+    ufoFlag:false, departFlag:false, invadeFlag:false, homeFlag:false, homeRedeem:false, endGrace:0,
     B:50, C:50, D:50, Dm:50, P:0, M:0, A:0, EP:2, W:0, incubAt:0, poopSince:0,
     best:{sw:0,ss:0,ab:0}, plays:{sw:0,ss:0,ab:0}, diary:{},
     diaryDay:tk, diaryDue:null, diaryMark:null, calDay:tk,
@@ -1329,9 +1329,10 @@ describe('エンディング', () => {
     //  家出（ufoFlag）を立てるのは、疎遠が続いた時と、とげとげのまま立て直せなかった時だけ
     const ufo = [...src.matchAll(/pet\.ufoFlag = true;/g)].length;
     eq(ufo, 2, '家出の入口の数:');
-    //  帰還（homeFlag）は、時間切れと立て直しの2つ
+    //  帰還（homeFlag）は3つ。成体の時間切れ、とげとげの立て直し、
+    //  そして最終形態まで来たのに なかよしが旅立ちの線に届かなかった子
     const home = [...src.matchAll(/pet\.homeFlag = true;/g)].length;
-    eq(home, 2, '帰還の入口の数:');
+    eq(home, 3, '帰還の入口の数:');
     //  それぞれの日記が対応していること
     for(const [flag, tags] of [['ufoFlag', ['farewell','farewellWild']],
                                ['homeFlag', ['broughtHome','redeemed']]])
@@ -1425,19 +1426,117 @@ describe('エンディング', () => {
   });
   //  成体の期限（STUCK_DAYS）は「最終形態に届かないまま止まった子」のための区切り。
   //  最終形態まで来た子には、それぞれの行き先があるので効かせてはいけない
-  it('成体の期限は、最終形態まで来た子には効かない', () => {
+  //  以前ここは「最終形態まで来た子には何も来ない」を正しいこととして書いていた。
+  //  それが行き止まりだった。なかよしが20〜59で固まると、旅立ち（60以上）も
+  //  家出（lowB は20未満）も来ず、どの結末にも辿り着けなかった
+  it('最終形態でも なかよしが届かなければ、迎えが来る', () => {
+    const { api, clock } = load();
+    const put = (B) => pet(api, clock, { stage:'final', lineage:'inv', form:'i2', formWild:false,
+                      health:'GOOD', B, C:80, M:0, praiseCount:99, touchCount:3,
+                      plays:{sw:30,ss:30,ab:30}, snapL:{praise:0,bad:0,plays:0},
+                      larvaAt: clock.now() - 60*86400000,
+                      finalAt:  clock.now() - (api.FINAL_DAYS + 1)*86400000,
+                      lineageAt: clock.now() - (api.FINAL_DAYS + 3)*86400000,
+                      lastTick: clock.now() - 120000 });
+    for(const B of [25, 40, 55, 59]){
+      put(B); api.advancePet();
+      ok(api.pet.homeFlag, `なかよし${B} で結末が来ない（行き止まり）`);
+      ok(!api.pet.homeRedeem, `なかよし${B} が立て直し扱いになっている`);
+      ok(!api.pet.departFlag, `なかよし${B} で旅立ってしまう`);
+    }
+    //  60以上なら今までどおり旅立ち
+    put(60); api.advancePet();
+    ok(api.pet.departFlag, 'なかよし60で旅立たない');
+    ok(!api.pet.homeFlag, 'なかよし60なのに迎えが来ている');
+  });
+  //  成体の期限（STUCK_DAYS）そのものは、最終形態まで来た子には効かない。
+  //  最終形態は自分の期限（FINAL_DAYS／通し上限）で終わる
+  it('成体の期限では、最終形態の子を連れて行かない', () => {
     const { api, clock } = load();
     pet(api, clock, { stage:'final', lineage:'inv', form:'i2', formWild:false, health:'GOOD',
-                      B:30,                                   // 旅立ちの線には届かせない
-                      C:80, M:0, praiseCount:99, touchCount:3, plays:{sw:30,ss:30,ab:30},
+                      B:30, C:80, M:0, praiseCount:99, touchCount:3, plays:{sw:30,ss:30,ab:30},
                       snapL:{praise:0,bad:0,plays:0}, larvaAt: clock.now() - 60*86400000,
-                      finalAt:  clock.now() - 20*86400000,
-                      lineageAt: clock.now() - (api.STUCK_DAYS + 5)*86400000,
+                      finalAt:  clock.now(),                              // なったばかり
+                      //  成体の期限（28日）を過ぎてから最終形態になることは無い。
+                      //  期限の判定が進化より先にあるので、その前に迎えが来る
+                      lineageAt: clock.now() - (api.STUCK_DAYS - 1)*86400000,
                       lastTick: clock.now() - 120000 });
     api.advancePet();
     ok(!api.pet.homeFlag, '成体の期限で連れて行かれないこと');
     ok(!api.pet.ufoFlag,  '家出にもならないこと');
-    ok(!api.pet.departFlag, '旅立ちの条件（なかよし）にも届いていないこと');
+  });
+  //  最終形態から14日を足すと、成体で粘った子ほど長く一緒にいられる逆転が起きる。
+  //  成体到達からの通しで頭を打つ
+  it('幕引きは、成体到達からの通し上限を超えない', () => {
+    const { api, clock } = load();
+    const D = 86400000;
+    ok(api.FINAL_CAP > api.FINAL_DAYS, '通し上限が最終形態の日数より短い');
+    //  早く最終形態になった子は、満額いられる
+    let q = { finalAt: clock.now() - 100*D, lineageAt: clock.now() - 105*D };
+    eq(api.finalDue(q), q.finalAt + api.FINAL_DAYS*D, '早く着いた子の幕引き:');
+    //  遅く最終形態になった子は、通し上限で切られる
+    q = { finalAt: clock.now() - 100*D, lineageAt: clock.now() - 125*D };
+    eq(api.finalDue(q), q.lineageAt + api.FINAL_CAP*D, '遅く着いた子の幕引き:');
+    //  最終形態になっていない子には期限が無い
+    eq(api.finalDue({ finalAt:0, lineageAt: clock.now() }), Infinity, '最終形態前の幕引き:');
+    //  甘やかしルート（毎日通う人は成体到達から15日で成立）は満額いられること
+    const late = api.STUCK_DAYS;                       // 成体到達からの日数
+    ok(15 + api.FINAL_DAYS <= api.FINAL_CAP,
+       `甘やかしが満額いられない（成立15日＋${api.FINAL_DAYS}日 > 上限${api.FINAL_CAP}日）`);
+    ok(late + api.FINAL_DAYS > api.FINAL_CAP,
+       '上限がゆるすぎて、逆転が残る');
+  });
+  //  猶予は「入っているか」だけでなく「守られるか」まで見る。
+  //  幕引きの判定が endGrace を読まなければ、猶予を入れた意味が無い
+  it('猶予のあいだは、幕引きが来ない', () => {
+    const { api, clock } = load();
+    const D = 86400000;
+    const put = (grace) => pet(api, clock, { stage:'final', lineage:'inv', form:'i2',
+      formWild:false, health:'GOOD', B:90, C:80, M:0, praiseCount:99, touchCount:3,
+      plays:{sw:30,ss:30,ab:30}, snapL:{praise:0,bad:0,plays:0},
+      larvaAt: clock.now() - 60*D,
+      finalAt: clock.now() - (api.FINAL_DAYS + 2)*D,       // 期限は過ぎている
+      lineageAt: clock.now() - (api.FINAL_DAYS + 4)*D,
+      endGrace: grace, lastTick: clock.now() - 120000 });
+    put(clock.now() + 2*D); api.advancePet();
+    ok(!api.pet.departFlag && !api.pet.homeFlag && !api.pet.ufoFlag,
+       '猶予の内側なのに幕引きが来ている');
+    put(clock.now() - 1000); api.advancePet();
+    ok(api.pet.departFlag, '猶予が明けたのに幕引きが来ない');
+  });
+  //  成体の期限（STUCK_DAYS）は成体だけのもの。最終形態には自分の期限がある。
+  //  ここが混ざると、最終形態になったばかりの子まで成体の期限で連れて行かれる
+  it('成体の期限は、成体の子にしか効かない', () => {
+    const { api, clock } = load();
+    const D = 86400000;
+    //  成体の期限は過ぎているが、最終形態の期限（通し上限）はまだ来ていない状態
+    pet(api, clock, { stage:'final', lineage:'inv', form:'i2', formWild:false,
+      health:'GOOD', B:90, C:80, M:0, praiseCount:99, touchCount:3,
+      plays:{sw:30,ss:30,ab:30}, snapL:{praise:0,bad:0,plays:0},
+      larvaAt: clock.now() - 60*D,
+      finalAt:   clock.now() - 1*D,
+      lineageAt: clock.now() - (api.FINAL_CAP - 1)*D,
+      lastTick: clock.now() - 120000 });
+    ok((api.FINAL_CAP - 1) > api.STUCK_DAYS,
+       `成体の期限(${api.STUCK_DAYS})を過ぎた状態を作れていない`);
+    ok(api.finalDue() > clock.now(), '最終形態の期限まで来てしまっている');
+    api.advancePet();
+    ok(!api.pet.homeFlag, '成体の期限で連れて行かれている');
+    ok(!api.pet.ufoFlag && !api.pet.departFlag, 'ほかの結末も来ないこと');
+  });
+  //  上限を後から入れたので、すでに越えている子は更新した瞬間に終わってしまう
+  it('更新で いきなり終わらないよう、育っている子には猶予を与える', () => {
+    const { api, clock } = load();
+    const D = 86400000;
+    const sv = { v:2, name:'T', stage:'final', lineage:'inv', form:'i2', formWild:false,
+                 B:30, health:'GOOD', finalAt: clock.now() - 40*D, lineageAt: clock.now() - 60*D };
+    const p = api.migratePet(sv);
+    ok(p.endGrace > clock.now(), '猶予が入っていない（更新した瞬間に終わる）');
+    ok(p.endGrace <= clock.now() + api.END_GRACE_MS + 1000, `猶予が長すぎる: ${p.endGrace - clock.now()}`);
+    //  まだ期限に達していない子には、余計な猶予を付けない
+    const fresh = api.migratePet({ v:2, name:'T', stage:'final', lineage:'inv', form:'i2',
+                                   finalAt: clock.now(), lineageAt: clock.now() });
+    eq(fresh.endGrace, 0, 'まだ期限前の子の猶予:');
   });
   it('成体のまま長くとどまった子には、やがて迎えが来る', () => {
     const { api, clock } = load();
@@ -1986,12 +2085,45 @@ describe('くすりの演出', () => {
 });
 
 // ══ 日記 ══════════════════════════════════════════════════
+describe('音の表', () => {
+  //  日記の文面を足すとき、SND の同じ名前の項目（tantrum など）を
+  //  上書きしてしまったことがある。テストは素通りし、わがままの音だけが消えていた
+  it('音はすべて [周波数, 長さ] の並びである', () => {
+    const { api } = load();
+    const keys = Object.keys(api.SND);
+    ok(keys.length >= 7, `音が ${keys.length} 種しかない`);
+    for(const k of keys){
+      const seq = api.SND[k];
+      ok(Array.isArray(seq) && seq.length > 0, `${k} が空`);
+      for(const step of seq){
+        ok(Array.isArray(step), `${k} に配列でない要素がある: ${JSON.stringify(step)}`);
+        ok(step.length >= 2 && step.length <= 3, `${k} の要素の長さが ${step.length}`);
+        for(const v of step)
+          ok(typeof v === 'number' && Number.isFinite(v),
+             `${k} に数値でない値がある: ${JSON.stringify(step)}`);
+        ok(step[0] >= 0 && step[0] <= 8000, `${k} の周波数が範囲外: ${step[0]}`);
+        ok(step[1] > 0 && step[1] <= 2, `${k} の長さが範囲外: ${step[1]}`);
+      }
+    }
+  });
+  it('リアクションが指す音が、全部そろっている', () => {
+    const { api } = load();
+    for(const [react, snd] of Object.entries(api.REACT_SND))
+      ok(api.SND[snd], `${react} が指す音 ${snd} が無い`);
+  });
+});
+
 describe('日記の重複', () => {
   //  育成は30日ほど。その間ずっと、同じ言い回しが二度出ないようにしたい。
   //  30日で書かれる文は、1日4話題＋結び＝最大150本。これが下限で、
   //  用意したのはその倍。ただし配り方を誤ると、一部のタグに負担が集中して破綻する
+  //  最低限の世話でも毎日立つ。1タグが採られる回数がいちばん多い
   const ROUTINE = ['fed','cleaned','dirty','noPlay','slept','praised','snack',
                    'playSw','playSs','playAb','clear','rain','snow'];
+  //  しつけや甘やかしを続ける遊び方だけで立つ。持ち回りの中で分け合うので、
+  //  上の組ほどは要らないが、2本のままだと毎日おなじ2文が交互に出る
+  const ROUTINE2 = ['scoldedUnfair','taught','snackMany','woken',
+                    'rhythmDay','rhythmNight','tantrum'];
   const WARM_MIN = 24;              // 毎日出るタグが30日で採られる最大回数
   it('毎日出うるタグは、必要数の倍を持っている', () => {
     const { api } = load();
@@ -2008,6 +2140,43 @@ describe('日記の重複', () => {
         ok(n >= 4, `${t} の親密度${w}が ${n}本しか無い`);
       }
     }
+  });
+  it('しつけ・甘やかしで毎日立つタグも、持ち回りに入っている', () => {
+    const { api } = load();
+    for(const t of ROUTINE2){
+      ok(api.DIARY_ROUTINE.has(t), `${t} が持ち回りの外にある（毎回いちばん先に採られる）`);
+      const set = api.DIARY_LINES[t];
+      ok(set, `${t} の文面が無い`);
+      ok(set.length >= 24, `${t} が ${set.length}本しかない`);
+      const any = set.filter(v => v.w == null).length;
+      ok(any >= 12, `${t} の共通ぶんが ${any}本`);
+      for(const w of [0,1,2])
+        ok(set.filter(v => v.w === w).length >= 3, `${t} の親密度${w}が足りない`);
+    }
+    //  報せるべき出来事は持ち回りに入れない（書ける数が少ない日に押し出される）
+    for(const t of ['evolved','sick','cured','hungry','lonely','wrath',
+                    'farewell','farewellWild','broughtHome','redeemed','departed'])
+      ok(!api.DIARY_ROUTINE.has(t), `${t} を持ち回りに入れてはいけない`);
+  });
+  //  正当なしかる（わがままが収まった）にも日記を残す。
+  //  以前は 放置したわがままだけが残り、正しく対処した時は何も残らなかった
+  it('しつけが通った日にも、日記に残る', () => {
+    const { api } = load();
+    ok(api.DIARY_LINES.taught, 'しつけが通った日の文面が無い');
+    ok(api.DIARY_PRIORITY.includes('taught'), 'taught が優先度表に無い');
+    const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'invader_game.html'), 'utf8');
+    const at = src.indexOf("} else if(pet.tantrumAt){");
+    ok(at > 0, 'わがままを収める枝が見つからない');
+    const body = src.slice(at, src.indexOf('} else if(stayingUpLate())', at));
+    ok(/note\('taught'\)/.test(body), 'わがままを収めた枝に日記の印が無い');
+  });
+  //  旧セーブの日記は 'scolded' を指している。読めなくなると過去の日記が空になる
+  it('旧セーブの しかる の日記が、いまも読める', () => {
+    const { api } = load();
+    eq(api.DIARY_LINES.scolded, api.DIARY_LINES.scoldedUnfair, '旧名の指す先:');
+    const e = { d:5, n:'Z', t:['scolded'], v:[1], s:'', vo:'plain', c:'', cv:0,
+                ts:Date.now(), cd:'x', lv:3, wr:1 };
+    ok(api.diaryBody(e, 'ja').length > 0, '旧名の日記が空になる');
   });
   //  結びは ひとりごとが出なかった日に書く。ひとりごとが一度も出ない30日でも
   //  重複しないよう、30日ぶん持たせる
@@ -2162,9 +2331,52 @@ describe('日記の重複', () => {
     }
   });
   //  重複を避ける窓が短いと、育成の途中で同じ文が戻ってくる
-  it('同じ言い回しを避ける窓が、育成期間ぶんある', () => {
+  //  窓は「日記の件数」で数える。育成は最長35日ほどなので、30件だと
+  //  31日目に1日目の文が候補へ戻ってきていた。日記帳が持っている数まで広げる
+  it('同じ言い回しを避ける窓が、日記帳の保持ぶんある', () => {
     const { api } = load();
-    ok(api.DIARY_NOREPEAT_DAYS >= 30, `窓が ${api.DIARY_NOREPEAT_DAYS}日しかない`);
+    ok(api.DIARY_NOREPEAT_DAYS >= api.DIARY_MAX,
+       `窓 ${api.DIARY_NOREPEAT_DAYS} 件 < 日記帳 ${api.DIARY_MAX} 件`);
+    ok(api.DIARY_MAX >= 36, `日記帳が ${api.DIARY_MAX} 件しか持たない（育成は最長35日ほど）`);
+  });
+  //  表示は7行まで。載りきらなかった話題まで「書いた」ことにすると、
+  //  読まれないまま持ち回りと重複よけを消費する
+  it('画面に載らなかった話題は、書いたことにしない', () => {
+    const { api } = load();
+    //  2行の話題を4つ＋2行の結び＝10行。7行には入りきらない
+    const e = { d:5, n:'Z', t:['fed','cleaned','dirty','slept'], v:[1,1,1,1],
+                s:'', vo:'plain', c:'plain', cv:0, ts:Date.now(), cd:'x', lv:3, wr:1 };
+    const before = e.t.length;
+    const shown = api.diaryBody(e, 'ja');
+    const fit = e.t.filter((t,i) =>
+      api.DIARY_LINES[t][e.v[i]].ja.every(l => shown.includes(l))).length;
+    ok(fit < before, `この組み合わせでは落ちない（${fit}/${before}）— 検査になっていない`);
+    const kept = api.trimToShown(Object.assign({}, e, { t:[...e.t], v:[...e.v] }));
+    eq(kept.t.length, fit, '残した話題の数:');
+    eq(kept.v.length, kept.t.length, '言い回しの数が話題と合っていない:');
+    //  載ったものは残っていること（消しすぎない）
+    for(const t of kept.t) ok(e.t.includes(t), `${t} が元に無い`);
+    ok(kept.t.length > 0, '全部 消してしまっている');
+    //  そもそも入りきる日は、何も落とさない
+    const small = { d:5, n:'Z', t:['fed'], v:[0], s:'', vo:'plain', c:'', cv:0,
+                    ts:Date.now(), cd:'x', lv:3, wr:1 };
+    eq(api.trimToShown(small).t, ['fed'], '入りきる日まで削っている:');
+    //  日記帳に入れる時に通っていること。関数があっても呼ばれなければ意味がない
+    api.diaryLog.length = 0;
+    api.addDiary(Object.assign({}, e, { t:[...e.t], v:[...e.v] }));
+    eq(api.diaryLog[0].t.length, fit, '日記帳に残った話題の数:');
+    api.diaryLog.length = 0;
+  });
+  //  いちばん長い話題が、結びを引いた残りに収まること。
+  //  ここが崩れると「話題が1つも載らない日」が生まれ、絵だけの日記になる
+  it('いちばん長い話題でも、結びと一緒に載る', () => {
+    const { api } = load();
+    const maxClose = Math.max(...['plain','calm','rough']
+      .flatMap(v => api.DIARY_CLOSE[v].map(x => x.ja.length)));
+    const maxTopic = Math.max(...Object.values(api.DIARY_LINES)
+      .flatMap(a => a.map(x => x.ja.length)));
+    ok(maxTopic <= 7 - maxClose,
+       `いちばん長い話題 ${maxTopic}行 が、結び ${maxClose}行 を引いた残り ${7-maxClose}行 に入らない`);
   });
 });
 
@@ -2187,6 +2399,26 @@ describe('親密度', () => {
     eq(api.pet.touchLog, [0], 'ごはんとそうじだけの日に積んだ値:');
     api.closeOneDay({ fed:1, cleaned:1 }, 2, false);
     eq(api.pet.touchLog, [0, 2], 'ふれあい2回の日まで積んだ値:');
+  });
+  //  記録の件数で割ると、来たばかりの子が1日よく構われただけで平均が満点になり、
+  //  2日目に「うちとけた」まで飛んでいた。記録の無い日は0として数える
+  it('来たばかりの子は、1日で うちとけた にならない', () => {
+    const { api } = load();
+    api.pet.B = 35;
+    api.pet.touchLog = [3];                       // 1日目に3種ふれあった
+    eq(api.warmLevel(), 0, '1日目の段階:');
+    ok(api.warmth() < 0.3, `1日目の親密度が高すぎる: ${api.warmth().toFixed(2)}`);
+    //  同じ関わりを続ければ、窓のぶんかけて上がっていく
+    const seen = [];
+    api.pet.touchLog = [];
+    for(let d = 1; d <= api.WARM_WINDOW; d++){
+      api.pet.touchLog.push(3);
+      seen.push(api.warmLevel());
+    }
+    eq(seen[seen.length-1], 2, `${api.WARM_WINDOW}日 続けたときの段階:`);
+    ok(seen.filter((v,i) => i && v !== seen[i-1]).length >= 2,
+       `段階が一気に飛んでいる: [${seen}]`);
+    ok(seen.indexOf(2) >= 4, `${seen.indexOf(2)+1}日目で最高段階に届いてしまう`);
   });
   it('直近の関わり方で段階が変わる', () => {
     const { api } = load();

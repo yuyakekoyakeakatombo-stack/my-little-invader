@@ -579,7 +579,7 @@
     praise:  [[784,0.08],[988,0.08],[1319,0.18]],              // うれしい（ソ・シ・ミ）
     anger:   [[311,0.045],[220,0.05],[165,0.14]],              // イライラ（低いところへ転げ落ちる。着地はいちばん低い）
     sad:     [[247,0.10,0.10],[196,0.12,0.10],[175,0.30,0.10]], // しゅん（3段でうなだれる。最後は全音だけ下げて、ため息のように落とす）
-    tantrum: [[220,0.09],[180,0.09],[220,0.09],[180,0.14]],     // いやいや（低く揺れる）
+    tantrum: [[220,0.09],[180,0.09],[220,0.09],[180,0.14]],     // いやいや（低く揺れる）     // いやいや（低く揺れる）
   };
   function playSnd(key){ const n = SND[key]; if(n) playSeq(n); }
   //  仕草と音の対応。ボタンではなく「キャラがどう反応したか」で鳴らす。
@@ -789,7 +789,7 @@
   const SAVE_BAD = 'myvader_pet_bad';   // 読めなかった原文の退避先。上書きせずに残しておく
   // セーブデータの形式。項目を足したり意味を変えたら1つ上げて、MIGRATIONS に手当てを書く。
   //  既定値まかせにすると、育っている途中の子に合わない値が入る（後述の v1 参照）
-  const SAVE_V = 2;
+  const SAVE_V = 3;
   function defaultPet(){ return {
     v: SAVE_V,
     name:'', birth:0, lastTick:0,
@@ -829,6 +829,7 @@
     stage:'egg', lineage:'', form:'',     // 育成段階: egg→mid→larva→adult(系統)→final(形態)
     EP:0, ageMin:0, eggTargetEP:0,        // 進化ポイント/年齢(分)/NEWBORN→BABYの個体別目標EP
     finalAt:0, departFlag:false,          // 最終形態到達時刻・旅立ちエンド確定
+    endGrace:0,                           // 通し上限を後から入れたぶんの猶予（この時刻までは幕引きしない）
     homeFlag:false,                       // 帰還エンド確定（時間切れ／とげとげからの立て直し）
     homeRedeem:false,                     // その帰還が「立て直し」だったか（おもいでの一文が変わる）
     memShown:false,                       // おもいでを自動で開いたか（1回だけ）
@@ -878,6 +879,10 @@
     // v1 → v2：おもいで画面のために通算カウンタを足した。
     //  過去ぶんは数えようがないので0から始める（記録が途中から、という扱い）
     2(p){ p.total = { feed:0, snack:0, clean:0, med:0 }; },
+    // v2 → v3：幕引きに通し上限（成体到達から30日）を入れた。
+    //  すでにその日数を越えている子は、更新した瞬間に終わってしまう。
+    //  最後の数日を取り上げないよう、読み込んだ時点から猶予を与える
+    3(p){ if(p.stage === 'final' && p.finalAt && Date.now() >= finalDue(p)) p.endGrace = Date.now() + END_GRACE_MS; },
   };
   function migratePet(sv){
     const p = Object.assign(defaultPet(), sv);
@@ -1092,6 +1097,14 @@
   //  B80まで積むのに時間がかかる）。1週間ぶん延ばして、休みながら通う人にも届くようにした。
   //  毎日通う人は20日目に成立するので、この期限が邪魔をすることはない
   const STUCK_DAYS      = 28;
+  //  最終形態になってから幕引きまでの日数。旅立ちも、とげとげの行き先もこれで測る
+  const FINAL_DAYS      = 14;
+  //  成体到達からの通し上限。遅く最終形態になった子に 14日を足すと、
+  //  期限（28日）と積み上がって 47日ほどになる。手をかけずに引き延ばした人が
+  //  いちばん長く一緒にいられる、という逆転も起きるので、通しで頭を打つ。
+  //  毎日通う甘やかしルート（成体到達から15日で成立）は、これでも満額14日いられる
+  const FINAL_CAP       = 30;
+  const END_GRACE_MS    = 3 * 86400000;   // 上限を後から入れたぶん、育っている子に与える猶予
   const RET_ESTR_DAYS   = 3;      // 疎遠期がこの日数続くと帰還
   const RET_PRAISE_RATE = 0.1;    // ほめる回数／日 がこれ未満で兆候（10日に1回未満＝極端に少ない）
   const RET_PLAY_RATE   = 0.1;    // ミニゲーム回数／日 がこれ未満で兆候（10日に1回未満）
@@ -1200,6 +1213,14 @@
   // 帰還の兆候があるか（幼体到達後の接し方だけを見る）。1日1回、日付が変わった時に判定
   //  生命維持の怠り（空腹・病気）は「死亡」ルートなのでここでは見ない。
   //  ここで見るのは「ごはんは与えているが構ってやらない」という情緒的な放置。
+  // 幕引きの日（ミリ秒）。最終形態から FINAL_DAYS、ただし成体到達から FINAL_CAP を超えない
+  function finalDue(q){
+    const s = q || pet;
+    if(!s.finalAt) return Infinity;
+    const byForm = s.finalAt + FINAL_DAYS * 86400000;
+    const byAll  = s.lineageAt ? s.lineageAt + FINAL_CAP * 86400000 : Infinity;
+    return Math.min(byForm, byAll);
+  }
   function returnSigns(){
     if(!pet.larvaAt || !pet.snapL) return [];                // 幼体前は判定しない
     const days = daysSince(pet.larvaAt);
@@ -1771,8 +1792,84 @@
                 { w:2, ja:['あまさを','おぼえて おきたい'], en:['I WANT TO KEEP','THIS SWEETNESS'] },
                 { w:2, ja:['しあわせの あじが','する'], en:['IT TASTES','LIKE HAPPINESS'] },
         ],
-    snackMany:[ { ja:['おやつ ばっかりで','おなかが へん'], en:['TOO MANY TREATS.','MY TUMMY IS ODD'] },
-                { ja:['あまいものが','おおすぎた かも'], en:['MAYBE TOO MUCH','SWEET STUFF'] } ],
+    snackMany: [
+                { ja:['おやつ ばっかりで','おなかが へん'], en:['TOO MANY TREATS.','MY STOMACH IS ODD'] },
+                { ja:['あまいものが','おおすぎた かも'], en:['MAYBE TOO MUCH','SWEET STUFF'] },
+                { ja:['くちの なかが','あまいまま'], en:['MY MOUTH IS STILL','ALL SWEET'] },
+                { ja:['ごはんの あじが','しなく なった'], en:['I CANNOT TASTE','REAL FOOD ANYMORE'] },
+                { ja:['からだが','おもたい'], en:['MY BODY','FEELS HEAVY'] },
+                { ja:['うれしいけど','くるしい'], en:['GLAD, BUT','UNCOMFORTABLE'] },
+                { ja:['もう いらない','とは いえない'], en:['I CANNOT SAY','NO MORE, PLEASE'] },
+                { ja:['あまいものは','とまらない'], en:['SWEET THINGS','DO NOT STOP'] },
+                { ja:['きょうも','おやつが おおかった'], en:['A LOT OF TREATS','TODAY AS WELL'] },
+                { ja:['はが','うずうず する'], en:['MY TEETH','FEEL FUNNY'] },
+                { ja:['ごはんを','たべそこねた'], en:['I MISSED','MY REAL MEAL'] },
+                { ja:['おなかが','ぱんぱんだ'], en:['MY BELLY','IS ALL FULL'] },
+                { w:0, ja:['おやつだけが','くる'], en:['ONLY TREATS','EVER COME'] },
+                { w:0, ja:['あまいものは','ことばの かわり'], en:['SWEETS INSTEAD','OF WORDS'] },
+                { w:0, ja:['たべても','みたされない'], en:['EATING','DOES NOT FILL ME'] },
+                { w:0, ja:['ほかの ことも','して ほしい'], en:['I WANT OTHER','THINGS TOO'] },
+                { w:1, ja:['よろこぶと','もっと くれる'], en:['IF I LOOK GLAD','I GET MORE'] },
+                { w:1, ja:['すきなのを','おぼえて くれた'], en:['YOU LEARNED','WHAT I LIKE'] },
+                { w:1, ja:['うれしいけど','ほどほどが いい'], en:['I AM GLAD, BUT','NOT TOO MUCH'] },
+                { w:1, ja:['きょうは','あげすぎだと おもう'], en:['I THINK TODAY','WAS TOO MUCH'] },
+                { w:2, ja:['あまやかされて','いる きがする'], en:['I THINK I AM','BEING SPOILED'] },
+                { w:2, ja:['おやつより','いっしょに いたい'], en:['I WANT YOU','MORE THAN TREATS'] },
+                { w:2, ja:['からだを こわしたら','しんぱいさせる'], en:['IF I GET SICK','YOU WILL WORRY'] },
+                { w:2, ja:['あしたは','ひとつで いい'], en:['TOMORROW','JUST ONE IS FINE'] },
+        ],
+    scoldedUnfair: [
+                { ja:['なんで おこられたのか','わからない'], en:['I DO NOT KNOW','WHY YOU WERE MAD'] },
+                { ja:['おおきな こえは','こわい'], en:['A LOUD VOICE','IS SCARY'] },
+                { ja:['なにも','していないのに'], en:['I DID NOT','DO ANYTHING'] },
+                { ja:['きゅうに','こえが おおきく なった'], en:['THE VOICE SUDDENLY','GOT LOUD'] },
+                { ja:['からだが','かたく なった'], en:['MY BODY','WENT STIFF'] },
+                { ja:['りゆうを','おしえて ほしい'], en:['PLEASE TELL ME','THE REASON'] },
+                { ja:['きょうは','はなしかけない'], en:['I WILL NOT SPEAK','TODAY'] },
+                { ja:['むねが','ざらざら する'], en:['MY CHEST','FEELS ROUGH'] },
+                { ja:['あとで','あやまって ほしかった'], en:['I WANTED AN APOLOGY','AFTERWARDS'] },
+                { ja:['おこられる ことに','なれたく ない'], en:['I DO NOT WANT TO','GET USED TO THIS'] },
+                { ja:['なにが いけないのか','わからないまま'], en:['STILL NOT KNOWING','WHAT WAS WRONG'] },
+                { ja:['きょうの こえは','いつもと ちがった'], en:['THE VOICE TODAY','WAS NOT THE USUAL'] },
+                { w:0, ja:['また おこられた'], en:['SCOLDED AGAIN'] },
+                { w:0, ja:['なにを しても','おこられる'], en:['WHATEVER I DO','I GET SCOLDED'] },
+                { w:0, ja:['もう','なれて しまった'], en:['I HAVE GOTTEN','USED TO IT'] },
+                { w:0, ja:['きたい するのを','やめる'], en:['I WILL STOP','EXPECTING'] },
+                { w:1, ja:['きょうは','きげんが わるいのかな'], en:['MAYBE YOU WERE','IN A BAD MOOD'] },
+                { w:1, ja:['いつもは','こんな こと しないのに'], en:['YOU DO NOT','USUALLY DO THIS'] },
+                { w:1, ja:['なにか','あったのだろうか'], en:['DID SOMETHING','HAPPEN TO YOU?'] },
+                { w:1, ja:['あしたは','わらって ほしい'], en:['I HOPE YOU SMILE','TOMORROW'] },
+                { w:2, ja:['おこられても','きらいには なれない'], en:['EVEN SCOLDED','I CANNOT DISLIKE YOU'] },
+                { w:2, ja:['つかれて いるのだと','おもう'], en:['I THINK YOU ARE','JUST TIRED'] },
+                { w:2, ja:['そばに いるから','だいじょうぶ'], en:['I AM HERE.','IT WILL BE ALL RIGHT'] },
+                { w:2, ja:['また','なかなおり したい'], en:['I WANT TO','MAKE UP AGAIN'] },
+        ],
+    taught: [
+                { ja:['わがままを','やめた'], en:['I STOPPED','BEING DIFFICULT'] },
+                { ja:['いけないことだと','わかった'], en:['I UNDERSTOOD','IT WAS WRONG'] },
+                { ja:['しゅんと した','でも すっきり した'], en:['I FELT SMALL.','BUT ALSO CLEARER'] },
+                { ja:['おこられたのは','ただしかった'], en:['BEING SCOLDED','WAS THE RIGHT THING'] },
+                { ja:['つぎからは','きを つける'], en:['I WILL BE CAREFUL','NEXT TIME'] },
+                { ja:['じぶんでも','やりすぎたと おもう'], en:['I THINK I WENT','TOO FAR MYSELF'] },
+                { ja:['ことばは きつかった','いみは わかった'], en:['THE WORDS WERE HARD.','THE MEANING WAS CLEAR'] },
+                { ja:['したを むいて','きいて いた'], en:['I LISTENED','LOOKING DOWN'] },
+                { ja:['なおせる ことが','ひとつ ふえた'], en:['ONE MORE THING','I CAN FIX'] },
+                { ja:['おこられて','ほっと した'], en:['I FELT RELIEVED','TO BE SCOLDED'] },
+                { ja:['きめごとを','ひとつ おぼえた'], en:['I LEARNED','ONE MORE RULE'] },
+                { ja:['あとで','ごはんを たべた'], en:['I ATE','AFTERWARDS'] },
+                { w:0, ja:['したがった','いみは わからない'], en:['I OBEYED.','I DO NOT KNOW WHY'] },
+                { w:0, ja:['こわいから','やめただけ'], en:['I STOPPED','ONLY BECAUSE SCARY'] },
+                { w:0, ja:['きめごとは','おしつけられる もの'], en:['RULES ARE THINGS','PUSHED ONTO ME'] },
+                { w:0, ja:['だまって','したがった'], en:['I OBEYED','IN SILENCE'] },
+                { w:1, ja:['おこられかたが','やさしかった'], en:['THE SCOLDING','WAS GENTLE'] },
+                { w:1, ja:['わかって ほしくて','わがままを した'], en:['I ACTED UP BECAUSE','I WANTED TO BE SEEN'] },
+                { w:1, ja:['ちゃんと','みて くれていた'], en:['YOU WERE','WATCHING PROPERLY'] },
+                { w:1, ja:['つぎは','いいこに して みる'], en:['I WILL TRY BEING','GOOD NEXT TIME'] },
+                { w:2, ja:['しかって くれて','ありがとう'], en:['THANK YOU','FOR SCOLDING ME'] },
+                { w:2, ja:['まちがいを','おしえて くれる ひと'], en:['SOMEONE WHO SHOWS ME','WHEN I AM WRONG'] },
+                { w:2, ja:['あとで','なでて くれた'], en:['YOU PATTED ME','AFTERWARDS'] },
+                { w:2, ja:['おこられても','きずなは きれない'], en:['SCOLDING DOES NOT','BREAK WHAT WE HAVE'] },
+        ],
     dirty: [
                 { ja:['おそうじ して','ほしかった'], en:['I WANTED IT','TO BE CLEAN'] },
                 { ja:['においが きになって','おちつかない'], en:['THE SMELL BOTHERED ME','ALL DAY'] },
@@ -1930,12 +2027,84 @@
                 ],
     scolded:  [ { ja:['なんで おこられたのか','わからない'], en:['I DO NOT KNOW','WHY YOU WERE MAD'] },
                 { ja:['おおきな こえは','こわい'], en:['LOUD VOICES','SCARE ME'] } ],
-    woken:    [ { ja:['ゆうべ おこされた のは','いやだった'], en:['YOU WOKE ME UP.','I DID NOT LIKE IT'] },
-                { ja:['ねむいのに','おこされて しまった'], en:['I WAS SLEEPY BUT','YOU WOKE ME'] } ],
-    rhythmNight:[{ ja:['はやく ねなさいと','おこられた'], en:['YOU TOLD ME','TO GO TO BED'] },
-                { ja:['まだ おきていたかった','けど ねた'], en:['I WANTED TO STAY UP','BUT I WENT TO BED'] } ],
-    rhythmDay:[ { ja:['ひるまに ねていたら','おこされた'], en:['I WAS ASLEEP AT NOON.','YOU WOKE ME UP'] },
-                { ja:['よるに ねなさいと','おこられた'], en:['YOU TOLD ME TO SLEEP','AT NIGHT INSTEAD'] } ],
+    woken: [
+                { ja:['ゆうべ おこされた のは','いやだった'], en:['BEING WOKEN UP','LAST NIGHT WAS BAD'] },
+                { ja:['ねむいのに','おこされて しまった'], en:['I WAS SLEEPY','AND GOT WOKEN'] },
+                { ja:['ゆめの とちゅうだった'], en:['I WAS MID DREAM'] },
+                { ja:['あたまが','ぼんやり する'], en:['MY HEAD','IS ALL FUZZY'] },
+                { ja:['めが さめてから','ねむれなかった'], en:['I COULD NOT SLEEP','AFTER WAKING'] },
+                { ja:['よるは','そっとして ほしい'], en:['LEAVE ME BE','AT NIGHT'] },
+                { ja:['きょうは','いちにち ねむい'], en:['SLEEPY','ALL DAY TODAY'] },
+                { ja:['なんで いま','おこすのだろう'], en:['WHY WAKE ME','RIGHT NOW?'] },
+                { ja:['からだが','おいつかない'], en:['MY BODY','CANNOT KEEP UP'] },
+                { ja:['ゆうべの ことは','おぼえて いる'], en:['I REMEMBER','LAST NIGHT'] },
+                { ja:['ねむりが','こわく なる'], en:['SLEEP IS BECOMING','SOMETHING SCARY'] },
+                { ja:['よるが','やすまらない'], en:['THE NIGHT','GIVES NO REST'] },
+                { w:0, ja:['また おこされた'], en:['WOKEN AGAIN'] },
+                { w:0, ja:['ねむるのを','あきらめた'], en:['I GAVE UP','ON SLEEPING'] },
+                { w:0, ja:['よるは','いつも こうだ'], en:['NIGHTS ARE','ALWAYS LIKE THIS'] },
+                { w:0, ja:['ねむい','それだけの ひ'], en:['SLEEPY.','THAT WAS THE DAY'] },
+                { w:1, ja:['なにか ようが','あったのかな'], en:['DID YOU NEED','SOMETHING?'] },
+                { w:1, ja:['おきたら','かおが あった'], en:['I WOKE UP AND','YOUR FACE WAS THERE'] },
+                { w:1, ja:['ねむいけど','あえて うれしい'], en:['SLEEPY, BUT GLAD','TO SEE YOU'] },
+                { w:1, ja:['つぎは','あさに して ほしい'], en:['NEXT TIME','PLEASE COME IN THE DAY'] },
+                { w:2, ja:['さびしかったのかな'], en:['WERE YOU LONELY?'] },
+                { w:2, ja:['おこされても','いいけど ねむい'], en:['I DO NOT MIND.','I AM JUST SLEEPY'] },
+                { w:2, ja:['よるは','いっしょに ねよう'], en:['LET US SLEEP','TOGETHER AT NIGHT'] },
+                { w:2, ja:['むりを','しないで ほしい'], en:['PLEASE DO NOT','PUSH YOURSELF'] },
+        ],
+    rhythmNight: [
+                { ja:['はやく ねなさいと','おこられた'], en:['YOU TOLD ME','TO SLEEP EARLY'] },
+                { ja:['まだ おきていたかった','けど ねた'], en:['I WANTED TO STAY UP.','I WENT TO SLEEP'] },
+                { ja:['よるは','なにか おきそうな きがする'], en:['NIGHTS FEEL LIKE','SOMETHING MIGHT HAPPEN'] },
+                { ja:['ねる まえが','いちばん たのしい'], en:['BEFORE SLEEP','IS THE BEST PART'] },
+                { ja:['めが さえて いた'], en:['I WAS WIDE AWAKE'] },
+                { ja:['あと すこしだけ','おきていたかった'], en:['JUST A LITTLE','LONGER, I WANTED'] },
+                { ja:['しぶしぶ','よこに なった'], en:['I LAY DOWN','RELUCTANTLY'] },
+                { ja:['よふかしは','からだに わるいらしい'], en:['STAYING UP LATE','IS BAD FOR YOU'] },
+                { ja:['ねたら','あさが はやかった'], en:['I SLEPT, AND','MORNING CAME FAST'] },
+                { ja:['きょうは','すなおに ねた'], en:['I WENT TO BED','WITHOUT FUSSING'] },
+                { ja:['よるの おとを','もっと ききたかった'], en:['I WANTED TO HEAR','MORE OF THE NIGHT'] },
+                { ja:['ねる じかんは','きめられている'], en:['BEDTIME IS','DECIDED FOR ME'] },
+                { w:0, ja:['ねろと いわれた'], en:['I WAS TOLD TO SLEEP'] },
+                { w:0, ja:['ねても','おなじ あさが くる'], en:['SLEEP OR NOT','THE SAME MORNING COMES'] },
+                { w:0, ja:['よるは','ひとりの じかん'], en:['NIGHT IS','MY OWN TIME'] },
+                { w:0, ja:['いわれた とおりに した'], en:['I DID AS TOLD'] },
+                { w:1, ja:['しんぱい されている'], en:['I AM BEING','WORRIED ABOUT'] },
+                { w:1, ja:['はやく ねると','あさが たのしい'], en:['SLEEP EARLY AND','MORNING IS NICE'] },
+                { w:1, ja:['あしたも あえるから','ねる'], en:['WE MEET AGAIN','TOMORROW. SO I SLEEP'] },
+                { w:1, ja:['おやすみと','いわれた きがする'], en:['I THINK YOU SAID','GOOD NIGHT'] },
+                { w:2, ja:['あなたも','はやく ねて'], en:['YOU SHOULD SLEEP','EARLY TOO'] },
+                { w:2, ja:['あしたを たのしみに','ねる'], en:['I SLEEP LOOKING','FORWARD TO TOMORROW'] },
+                { w:2, ja:['ねる まえの','こえが すき'], en:['I LIKE YOUR VOICE','BEFORE SLEEP'] },
+                { w:2, ja:['おこられても','あたたかい'], en:['SCOLDED, YET','IT FEELS WARM'] },
+        ],
+    rhythmDay: [
+                { ja:['ひるまに ねていたら','おこされた'], en:['I WAS ASLEEP AT NOON.','YOU WOKE ME UP'] },
+                { ja:['よるに ねなさいと','おこられた'], en:['YOU TOLD ME TO SLEEP','AT NIGHT INSTEAD'] },
+                { ja:['ひるは おきている','ものらしい'], en:['IT SEEMS DAYTIME','IS FOR BEING AWAKE'] },
+                { ja:['まぶしくて','めが あかない'], en:['TOO BRIGHT','TO OPEN MY EYES'] },
+                { ja:['よるとの ちがいが','わからない'], en:['I CANNOT TELL','NIGHT FROM DAY'] },
+                { ja:['おきたら','そとが あかるかった'], en:['I WOKE UP AND','IT WAS BRIGHT OUT'] },
+                { ja:['ひるに ねると','よるに ねむれない'], en:['SLEEP BY DAY AND','NIGHT WILL NOT COME'] },
+                { ja:['からだの じかんが','ずれている'], en:['MY BODY CLOCK','IS OUT OF PLACE'] },
+                { ja:['ひるまは','うごくものらしい'], en:['DAYTIME SEEMS TO BE','FOR MOVING'] },
+                { ja:['なおしたほうが','いいのかな'], en:['SHOULD I','FIX THIS?'] },
+                { ja:['あさひが','まぶしい'], en:['THE MORNING SUN','IS DAZZLING'] },
+                { ja:['ひるに おきる','れんしゅう'], en:['PRACTICING','WAKING BY DAY'] },
+                { w:0, ja:['おこされた','それだけ'], en:['I WAS WOKEN.','THAT IS ALL'] },
+                { w:0, ja:['じかんの ことは','どうでもいい'], en:['I DO NOT CARE','ABOUT THE HOURS'] },
+                { w:0, ja:['ひるも よるも','おなじだ'], en:['DAY AND NIGHT','ARE THE SAME'] },
+                { w:0, ja:['また ねむる'], en:['I WILL SLEEP AGAIN'] },
+                { w:1, ja:['きに かけて','くれている'], en:['YOU ARE LOOKING','OUT FOR ME'] },
+                { w:1, ja:['ひるに あえるように','なるのかな'], en:['WILL WE MEET','IN THE DAY NOW?'] },
+                { w:1, ja:['なおしてみようと','おもう'], en:['I THINK I WILL','TRY TO FIX IT'] },
+                { w:1, ja:['よるに ねる','やって みる'], en:['SLEEPING AT NIGHT.','I WILL TRY'] },
+                { w:2, ja:['ひるまに いっしょに','いられるように'], en:['SO WE CAN BE','TOGETHER BY DAY'] },
+                { w:2, ja:['あなたの じかんに','あわせたい'], en:['I WANT TO MATCH','YOUR HOURS'] },
+                { w:2, ja:['おなじ そらを','みるために'], en:['SO WE SEE','THE SAME SKY'] },
+                { w:2, ja:['なおすのは','あなたの ため'], en:['I FIX IT','FOR YOUR SAKE'] },
+        ],
     playSw: [
                 { ja:['スペースウォーク','また やりたい'], en:['I WANT TO PLAY','SPACEWALK AGAIN'] },
                 { ja:['そらを あるくのは','ほしを おもいだす'], en:['WALKING IN THE SKY','REMINDS ME OF HOME'] },
@@ -2290,8 +2459,32 @@
                 { ja:['からだが おもい','うごきたくない'], en:['MY BODY IS HEAVY.','I DO NOT WANT TO MOVE'] } ],
     cured:    [ { ja:['くすり にがかった','ありがとう'], en:['THE MEDICINE WAS','BITTER. THANK YOU'] },
                 { ja:['らくに なった','たすかった'], en:['I FEEL BETTER NOW.','YOU HELPED ME'] } ],
-    tantrum:  [ { ja:['わがまま いって','ごめんね'], en:['SORRY I WAS','DIFFICULT'] },
-                { ja:['なんだか いらいら した','りゆうは ない'], en:['I FELT CROSS TODAY.','THERE IS NO REASON'] } ],
+    tantrum: [
+                { ja:['わがまま いって','ごめんね'], en:['SORRY I WAS','DIFFICULT'] },
+                { ja:['なんだか いらいら した','りゆうは ない'], en:['I FELT CROSS TODAY.','THERE IS NO REASON'] },
+                { ja:['むねが','ざわざわ した'], en:['MY CHEST','FELT RESTLESS'] },
+                { ja:['じぶんでも','とめられなかった'], en:['I COULD NOT STOP','MYSELF EITHER'] },
+                { ja:['あとで','はずかしく なった'], en:['I FELT ASHAMED','LATER ON'] },
+                { ja:['きょうは','なにも したくない'], en:['I DO NOT WANT','TO DO ANYTHING'] },
+                { ja:['からだが','いうことを きかない'], en:['MY BODY','WILL NOT LISTEN'] },
+                { ja:['やつあたり','だったと おもう'], en:['I THINK I TOOK IT','OUT ON YOU'] },
+                { ja:['きげんが','なおらない'], en:['MY MOOD','WILL NOT MEND'] },
+                { ja:['そっと','しておいて ほしい'], en:['PLEASE JUST','LEAVE ME BE'] },
+                { ja:['なんでも','いやに なる ひ'], en:['A DAY WHEN','EVERYTHING IS AWFUL'] },
+                { ja:['あしたには','なおって いるかな'], en:['WILL IT BE BETTER','BY TOMORROW?'] },
+                { w:0, ja:['いらいらを','ぶつける あいてが いない'], en:['NO ONE TO TAKE','MY MOOD OUT ON'] },
+                { w:0, ja:['ひとりで','おさまるのを まった'], en:['I WAITED ALONE','FOR IT TO PASS'] },
+                { w:0, ja:['だれも','きづかなかった'], en:['NOBODY','NOTICED'] },
+                { w:0, ja:['きげんが わるくても','おなじ ひ'], en:['BAD MOOD OR NOT','THE SAME DAY'] },
+                { w:1, ja:['こまらせて しまった'], en:['I CAUSED TROUBLE'] },
+                { w:1, ja:['あとで','なでて もらった'], en:['YOU PATTED ME','AFTERWARDS'] },
+                { w:1, ja:['きづいて くれた'], en:['YOU NOTICED'] },
+                { w:1, ja:['あしたは','いいこに する'], en:['I WILL BE GOOD','TOMORROW'] },
+                { w:2, ja:['やつあたり して','ごめんなさい'], en:['I AM SORRY FOR','TAKING IT OUT ON YOU'] },
+                { w:2, ja:['それでも','そばに いてくれた'], en:['YOU STAYED CLOSE','EVEN SO'] },
+                { w:2, ja:['きらわれたかと','おもった'], en:['I THOUGHT YOU','MIGHT HATE ME'] },
+                { w:2, ja:['ゆるして くれて','ありがとう'], en:['THANK YOU','FOR FORGIVING ME'] },
+        ],
     // この子は服を着ていないので、身につけている物ではなく、
     //  自分の体で気づけることだけを書かせる
     evolved:  [ { ja:['からだが おおきく','なった みたい'], en:['I THINK MY BODY','GOT BIGGER'] },
@@ -2828,10 +3021,13 @@
                 { ja:['ねる まえに','のびを した'], en:['I STRETCHED','BEFORE BED'] },
         ],
   };
+  //  旧セーブ互換：以前この枠は 'scolded' という名前で、不当なしかるだけを指していた。
+  //  保存ずみの日記が同じ文で読めるように、旧名から新しい並びを指しておく
+  DIARY_LINES.scolded = DIARY_LINES.scoldedUnfair;
   DIARY_CLOSE.lively = DIARY_CLOSE.rough;   // 旧セーブ互換（以前この枠は 'lively' という名前だった）
   // 印象の強い順。上から拾って載せる
   const DIARY_PRIORITY = ['wrath','farewell','farewellWild','broughtHome','redeemed','departed','evolved','sick','cured','hungry','lonely','woken',
-                          'rhythmDay','rhythmNight','scolded','dirty',
+                          'rhythmDay','rhythmNight','scoldedUnfair','taught','dirty',
                           'snackMany','tantrum','cleaned','praised','playSw','playSs','playAb',
                           'snack','fed','noPlay','rain','snow','clear','slept'];
 
@@ -2936,7 +3132,8 @@
   // 出来事タグ → 絵記号。絵にならないタグ（別れ・進化など）は描かない
   const TAG_PICT = {
     fed:'fed', hungry:'hungry', snack:'snack', snackMany:'snack',
-    praised:'praised', scolded:'scolded', woken:'scolded', tantrum:'scolded',
+    praised:'praised', scoldedUnfair:'scolded', scolded:'scolded',   // scolded は旧セーブ用
+    taught:'scolded', woken:'scolded', tantrum:'scolded',
     dirty:'dirty', cleaned:'cleaned', sick:'sick', cured:'sick',
     playSw:'play', playSs:'play', playAb:'play',
     slept:'slept', clear:'clear', rain:'rain', snow:'rain',
@@ -3173,7 +3370,10 @@
   const WARM_LINE   = [0.30, 0.65]; // 段階の境目（下から よそよそしい／なじんだ／うちとけた）
   function warmth(){
     const log = pet.touchLog || [];
-    const avg = log.length ? log.reduce((a, b) => a + b, 0) / log.length : 0;
+    // 記録の件数ではなく、窓の日数で割る。件数で割ると、来たばかりの子が
+    //  1日よく構われただけで平均が満点になり、2日目に「うちとけた」まで飛んでいた。
+    //  記録の無い日は0として数え、7日かけて上がるようにする
+    const avg = log.reduce((a, b) => a + b, 0) / WARM_WINDOW;
     const near = Math.max(0, Math.min(1, avg / WARM_KINDS));
     const bond = Math.max(0, Math.min(1, (pet.B || 0) / 100));
     return near * (1 - WARM_B_MIX) + bond * WARM_B_MIX;
@@ -3187,8 +3387,9 @@
   // ── 同じ言い回しが続かないようにする ──
   //  「じめんが きれいだと〜」「きょうも しずかな〜」のように、毎日おなじ文が出ると
   //  記録ではなく定型文に見えてしまう。直近3日ぶんに使ったものは候補から外す。
-  //  育成は30日ほど。その間ずっと重複しないよう、窓は育成期間ぶん取る
-  const DIARY_NOREPEAT_DAYS = 30;
+  //  育成は最長で35日ほど（成体到達から30日の通し上限）。その間ずっと重複しないよう、
+  //  窓は日記帳が持っている件数ぶん取る。30件だと31日目に1日目の文が候補へ戻ってきていた
+  const DIARY_NOREPEAT_DAYS = DIARY_MAX;
   function recentPhrases(){
     const used = new Set();
     for(const e of diaryLog.slice(-DIARY_NOREPEAT_DAYS)){
@@ -3209,8 +3410,13 @@
   //  進化・病気・別れのような「報せるべき出来事」は今までどおり先に置き、
   //  くり返し立つ ふだんの話題だけ、久しく書いていないものから採る。
   //  同着をいつも優先度順で解くと、いちばん上のタグが毎日出てしまうので散らす
+  //  くり返し立つものは ここに入れて持ち回りにする。しつけや甘やかしを続ける遊び方だと、
+  //  しかる・おやつ・夜更かし が毎日立つ。持ち回りの外に置くと、この3つだけで
+  //  35日ぶんの枠を埋めてしまい、ごはんもそうじも日記に出てこなくなっていた
   const DIARY_ROUTINE = new Set(['dirty','cleaned','praised','playSw','playSs','playAb',
-                                 'snack','fed','noPlay','rain','snow','clear','slept']);
+                                 'snack','fed','noPlay','rain','snow','clear','slept',
+                                 'scoldedUnfair','taught','snackMany','woken',
+                                 'rhythmDay','rhythmNight','tantrum']);
   function lastWritten(){
     const at = {};
     diaryLog.forEach((e, i) => (e.t || []).forEach(t => { at[t] = i; }));
@@ -3275,8 +3481,26 @@
              s: solo, vo: voice(), c: c, cv: cv, ts: Date.now(), cd: cd || todayKey(),
              lv: diaryLevel(), wr: Math.round(writeRatio() * 100) / 100 };
   }
+  // 表示は7行まで。話題が多い日は画面に載りきらないぶんが落ちる。
+  //  落ちた話題まで「書いた」ことにすると、読まれないまま持ち回りと重複よけを消費して、
+  //  実際に目にする日記の変化が少なくなる。載ったぶんだけ残す
+  function trimToShown(e){
+    if(!e || !e.t || e.t.length <= 1) return e;
+    const shown = diaryBody(e, 'ja');
+    const keep = [];
+    e.t.forEach((t, i) => {
+      const set = DIARY_LINES[t]; if(!set) return;
+      const m = set[Math.min(e.v[i] || 0, set.length - 1)];
+      if(m.ja.every(l => shown.includes(l))) keep.push(i);
+    });
+    if(!keep.length || keep.length === e.t.length) return e;
+    e.t = keep.map(i => e.t[i]);
+    e.v = keep.map(i => e.v[i]);
+    return e;
+  }
   function addDiary(e){
     if(!e) return;
+    e = trimToShown(e);
     diaryLog.push(e);
     if(diaryLog.length > DIARY_MAX) diaryLog.splice(0, diaryLog.length - DIARY_MAX);
     diaryUnread++;
@@ -3769,25 +3993,32 @@
       pet.homeFlag = true; pet.homeRedeem = false;
       addDiary({ d: petDay(), n: pet.name, t: ['broughtHome'], v: [voiceIdx()], c: '', ts: Date.now(), cd: todayKey() });
     }
-    // とげとげの行き先。立て直せたかどうかで、迎えが来るか、黙って出ていくかが分かれる。
-    //  立て直しの判定を先に置くので、間に合った子は帰還になる
-    if(pet.stage==='final' && pet.finalAt && isWild() && !pet.ufoFlag && !pet.homeFlag && !pet.invadeFlag &&
-       !invadeSigns() && now - pet.finalAt >= 14*86400000){
-      if(redeemed()){
-        pet.homeFlag = true; pet.homeRedeem = true;
-        addDiary({ d: petDay(), n: pet.name, t: ['redeemed'], v: [voiceIdx()], c: '', ts: Date.now(), cd: todayKey() });
+    // 最終形態の幕引き。最終形態から14日、ただし成体到達から30日を超えない。
+    //  上限を後から入れたので、すでに育っている子には猶予（endGrace）を与える
+    if(pet.stage==='final' && pet.finalAt && !pet.ufoFlag && !pet.homeFlag &&
+       !pet.invadeFlag && !pet.departFlag && now >= (pet.endGrace||0) && now >= finalDue()){
+      if(isWild()){
+        // とげとげの行き先。立て直せたかどうかで、迎えが来るか、黙って出ていくかが分かれる
+        if(invadeSigns()){ /* 侵攻の条件がそろっている間は、そちらに譲る */ }
+        else if(redeemed()){
+          pet.homeFlag = true; pet.homeRedeem = true;
+          addDiary({ d: petDay(), n: pet.name, t: ['redeemed'], v: [voiceIdx()], c: '', ts: Date.now(), cd: todayKey() });
+        } else {
+          pet.ufoFlag = true;
+          addDiary({ d: petDay(), n: pet.name, t: ['farewellWild'], v: [voiceIdx()], c: '', ts: Date.now(), cd: todayKey() });
+        }
+      } else if(pet.B >= 60 && pet.health === 'GOOD'){
+        pet.departFlag = true;
+        // 帰還エンドと同じく、最後の一言を日記に書き残してから旅立つ。
+        //  演出のあとは主のいない画面で止まるので、読み返せるものが無いと画面が空のまま残ってしまう
+        addDiary({ d: petDay(), n: pet.name, t: ['departed'], v: [voiceIdx()], c: '', ts: Date.now(), cd: todayKey() });
       } else {
-        pet.ufoFlag = true;
-        addDiary({ d: petDay(), n: pet.name, t: ['farewellWild'], v: [voiceIdx()], c: '', ts: Date.now(), cd: todayKey() });
+        // 最終形態にはなったが、なかよしが旅立ちの線に届かなかった／病気のまま。
+        //  ここが無いと、なかよし20〜59で固まった子がどの結末にも辿り着けない
+        //  （20未満は家出の lowB で拾われる）。成体の時間切れと同じ「迎えが来る」で区切る
+        pet.homeFlag = true; pet.homeRedeem = false;
+        addDiary({ d: petDay(), n: pet.name, t: ['broughtHome'], v: [voiceIdx()], c: '', ts: Date.now(), cd: todayKey() });
       }
-    }
-    //  とげとげに育った子には来ない。あとからどれだけ世話を頑張っても、この道は閉じている
-    if(pet.stage==='final' && pet.finalAt && !pet.departFlag && !isWild() &&
-       now - pet.finalAt >= 14*86400000 && pet.B >= 60 && pet.health === 'GOOD'){
-      pet.departFlag = true;
-      // 帰還エンドと同じく、最後の一言を日記に書き残してから旅立つ。
-      //  演出のあとは主のいない画面で止まるので、読み返せるものが無いと画面が空のまま残ってしまう
-      addDiary({ d: petDay(), n: pet.name, t: ['departed'], v: [voiceIdx()], c: '', ts: Date.now(), cd: todayKey() });
     }
 
     maybeEvolve();   // 進化条件チェック（起きている時のみ発動）
@@ -5644,7 +5875,8 @@
           addD(+5);
           if(pet.mood > 0) pet.mood--;
           addA(A_ADJ.scoldFair); markTouch('scold');   // しつけは甘やかしでも放置でもない（ふれあいには数える）
-          setReaction('sad');                                       // まずしゅんとする
+          note('taught');                              // しつけが通った日。放置したわがままだけが
+          setReaction('sad');                          //  日記に残る、という非対称をなくす
           // ごはんを出したまましかった場合：しゅんとしたあとで、その皿を食べに行く。
           //  叱られた直後に♪で喜ばれると「叱ったのに喜んでいる」ように見えるので、音符は出さない
           if(pet.plateAt && !pet.plateSpoiled && pet.hunger < HUNGER_MAX) pendingEat = pet.plateKind || 'meal';
@@ -5664,7 +5896,7 @@
           addP(P_ADJ.scoldBad);
           addM(M_ADJ.scoldBad);
           pet.scoldBadCount = (pet.scoldBadCount||0) + 1;
-          addA(A_ADJ.scoldBad); note('scolded');
+          addA(A_ADJ.scoldBad); note('scoldedUnfair');
           //  しゅん（sad）は しつけが通った時だけの反応にしてある。
           //  身に覚えのない叱られ方には怒る（睡眠妨害と同じ）
           setReaction('anger');
@@ -6769,7 +7001,7 @@
   // 項目はキーで管理（表示ラベルは言語辞書、値は各キーで分岐）
   //  版の番号は sw.js の VERSION と同じもの。tools/bump-sw.sh が両方いっしょに
   //  書き換える（ずれると、テスターの端末に出ている版が分からなくなる）
-  const APP_VERSION = '2026-08-27-02';
+  const APP_VERSION = '2026-08-28-01';
   //  (C) は Press Start 2P に © が無く、別の字体に落ちて1文字だけ形が浮くため
   const APP_COPY = '(C) 2026 Studio M.D.Q.';
   const SETTINGS_KEYS = ['language','weather','sound','bodycolor','version','reset'];
