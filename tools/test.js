@@ -360,10 +360,29 @@ describe('タイトルの選択肢', () => {
     ok(api.OPT_Y0 + api.OPT_H + 2 <= 65, '下の選択肢が画面から出る');
   });
   //  選択肢が見えていないうちに押された A で、見えていないものが決まってしまわないように。
-  //  そのぶん、押したら待ちを飛ばして すぐ選択肢を出す
-  it('選択肢が出る前の A は、待ちを飛ばすだけ', () => {
-    ok(/if\(!openingReady\)\{ titleWait = 20; openingReady = true; return; \}/.test(src()),
-       '選択肢が見えていないうちに A で決まってしまう');
+  //  そのぶん、押したら演出を飛ばして すぐ選択肢を出す。
+  //  以前はここで待ちカウンタと openingReady だけを進めていた。選択肢を描くのは
+  //  「UFOが去りきってから」なので、演出の途中で押すと 画面に何も出ていないのに
+  //  ready になり、2回目の押しで いきなり説明書が開いていた
+  it('選択肢が出る前に A を押しても、説明書は開かない', () => {
+    const s = src();
+    //  ready を立てるのは「選択肢を描いた側」だけ。ボタン側で立ててはいけない
+    const sets = [...s.matchAll(/openingReady = true/g)].length;
+    eq(sets, 1, 'openingReady を立てている場所の数:');
+    const draw = s.indexOf('if(titleWait > 19){');
+    const at   = s.indexOf('openingReady = true');
+    ok(draw > 0 && at > draw && at < draw + 200,
+       'openingReady を、選択肢を描く場所いがいで立てている');
+    //  押されたら演出を飛ばす。飛ばさないと、待ちだけ進んでも選択肢は出てこない
+    const h = s.indexOf("if(manualFrame) return;                       // 説明書を開いているあいだは効かせない");
+    ok(h > 0, 'A のボタン処理が見つからない');
+    const body = s.slice(h, s.indexOf('showView(\'main\');', h));
+    ok(/if\(fO < O_UFO_GONE\) fO = O_UFO_GONE;/.test(body),
+       '押しても演出が進まない（選択肢がいつまでも出ない）');
+    ok(!/openingReady = true/.test(body), 'ボタン側で ready を立てている');
+    //  ready でないうちは、選択肢を決める処理まで進まない
+    ok(/if\(!openingReady\)\{[\s\S]{0,400}?return;\n    \}/.test(body),
+       '選択肢が出る前の押しが、決定まで進んでしまう');
   });
   //  ことばを聞くのは START のあと。説明書を見にきただけの人にはえらばせない
   it('ことばをえらぶのは、START のあと', () => {
