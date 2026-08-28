@@ -359,30 +359,41 @@ describe('タイトルの選択肢', () => {
     // 2行とも画面(65ドット)に収まる
     ok(api.OPT_Y0 + api.OPT_H + 2 <= 65, '下の選択肢が画面から出る');
   });
-  //  選択肢が見えていないうちに押された A で、見えていないものが決まってしまわないように。
-  //  そのぶん、押したら演出を飛ばして すぐ選択肢を出す。
-  //  以前はここで待ちカウンタと openingReady だけを進めていた。選択肢を描くのは
-  //  「UFOが去りきってから」なので、演出の途中で押すと 画面に何も出ていないのに
-  //  ready になり、2回目の押しで いきなり説明書が開いていた
-  it('選択肢が出る前に A を押しても、説明書は開かない', () => {
+  //  演出のあいだ（MANUAL・START が出るまで）は、どのボタンも効かない。
+  //  以前は A だけ「押したら選択肢を出す」抜け道があり、画面に何も出ていないのに
+  //  選ばれた扱いになって、2回目の押しで説明書が開いていた
+  it('演出のあいだは、どのボタンも効かない', () => {
     const s = src();
+    //  受けつけない条件は1か所にまとめる。ボタンごとに書くと、足した時に漏れる
+    ok(/function openingLocked\(\)\{ return !!manualFrame \|\| !openingReady; \}/.test(s),
+       'オープニングの受けつけ判定が無い');
+    //  A・B・十字・MENU の4系統すべてが、その判定を通ること
+    const handlers = [
+      ["document.getElementById('oa')", 'A'],
+      ["document.getElementById('ob')", 'B'],
+      ["#view-opening .dpad-arrow", '十字'],
+      ["document.getElementById('omenu')", 'MENU'],
+    ];
+    for(const [needle, name] of handlers){
+      const at = s.indexOf('onPress(' + needle) >= 0
+        ? s.indexOf('onPress(' + needle)
+        : s.indexOf(needle);
+      ok(at > 0, `${name} のボタン処理が見つからない`);
+      const body = s.slice(at, at + 400);
+      ok(/openingLocked\(\)\) return;/.test(body), `${name} が演出中でも効いてしまう`);
+      //  音も鳴らさない。判定より先に鳴らすと「効いた」と思わせてしまう
+      const lock = body.indexOf('openingLocked()');
+      const click = body.indexOf('playClick');
+      ok(click < 0 || lock < click, `${name} が止める前に音を鳴らしている`);
+    }
     //  ready を立てるのは「選択肢を描いた側」だけ。ボタン側で立ててはいけない
-    const sets = [...s.matchAll(/openingReady = true/g)].length;
-    eq(sets, 1, 'openingReady を立てている場所の数:');
+    eq([...s.matchAll(/openingReady = true/g)].length, 1, 'openingReady を立てている場所の数:');
     const draw = s.indexOf('if(titleWait > 19){');
-    const at   = s.indexOf('openingReady = true');
-    ok(draw > 0 && at > draw && at < draw + 200,
+    const set  = s.indexOf('openingReady = true');
+    ok(draw > 0 && set > draw && set < draw + 200,
        'openingReady を、選択肢を描く場所いがいで立てている');
-    //  押されたら演出を飛ばす。飛ばさないと、待ちだけ進んでも選択肢は出てこない
-    const h = s.indexOf("if(manualFrame) return;                       // 説明書を開いているあいだは効かせない");
-    ok(h > 0, 'A のボタン処理が見つからない');
-    const body = s.slice(h, s.indexOf('showView(\'main\');', h));
-    ok(/if\(fO < O_UFO_GONE\) fO = O_UFO_GONE;/.test(body),
-       '押しても演出が進まない（選択肢がいつまでも出ない）');
-    ok(!/openingReady = true/.test(body), 'ボタン側で ready を立てている');
-    //  ready でないうちは、選択肢を決める処理まで進まない
-    ok(/if\(!openingReady\)\{[\s\S]{0,400}?return;\n    \}/.test(body),
-       '選択肢が出る前の押しが、決定まで進んでしまう');
+    //  演出は飛ばさない。押しても最後まで流れること
+    ok(!/fO = O_UFO_GONE/.test(s), 'ボタンで演出を飛ばしている');
   });
   //  ことばを聞くのは START のあと。説明書を見にきただけの人にはえらばせない
   it('ことばをえらぶのは、START のあと', () => {

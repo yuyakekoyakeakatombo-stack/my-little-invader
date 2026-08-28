@@ -741,21 +741,17 @@
 
   setInterval(tickOpening, 80);
 
+  // オープニングのボタンを受けつけない条件。
+  //  演出のあいだ（MANUAL・START が出るまで）は、どのボタンも効かない。
+  //  以前は A だけ「押したら選択肢を出す」抜け道があり、画面に何も出ていないのに
+  //  選ばれた扱いになって、2回目の押しで説明書が開いていた。
+  //  音も鳴らさない。反応があると「効いた」と思わせてしまう
+  function openingLocked(){ return !!manualFrame || !openingReady; }
+
   // A：えらんだものを決める（説明書を開く／ことばへ進む／はじめる）
   onPress(document.getElementById('oa'), ()=>{
-    if(manualFrame) return;                       // 説明書を開いているあいだは効かせない
+    if(openingLocked()) return;                   // 演出のあいだは押せない
     playClick(); btnAnim(document.getElementById('oa'));
-    // 選択肢が出るのを待たずに押されたら、演出を飛ばして出す。
-    //  以前はここで待ちカウンタと openingReady だけを進めていた。
-    //  選択肢を描くのは「UFOが去りきってから」なので、演出の途中で押すと
-    //  画面には何も出ないのに「もう出ている」ことになり、
-    //  2回目の押しで いきなり説明書が開いていた。
-    //  openingReady は描いた側で立てる。ここでは演出を進めるだけにする
-    if(!openingReady){
-      if(fO < O_UFO_GONE) fO = O_UFO_GONE;   // UFOが去ったところまで飛ばす
-      titleWait = 20;                        // 次のコマで選択肢が出て、そこで ready になる
-      return;
-    }
     if(openStep === 0){
       if(OPEN_OPTS[openSel] === 'MANUAL'){
         openManual();                             // 閉じると この選択肢に戻ってくる
@@ -773,13 +769,13 @@
   });
   // B：ことばえらびから、はじめる・説明書 に戻す
   onPress(document.getElementById('ob'), ()=>{
-    if(manualFrame) return;
+    if(openingLocked()) return;
     playClick(); btnAnim(document.getElementById('ob'));
     openStep = 0;
   });
   document.querySelectorAll('#view-opening .dpad-arrow').forEach(el=>{
     onPress(el, ()=>{
-      if(manualFrame || !openingReady) return;
+      if(openingLocked()) return;
       playClick(900); dpadAnim(el);
       const n = (openStep === 1) ? LANG_OPTS.length : OPEN_OPTS.length;
       const d = el.classList.contains('up') ? n-1 : el.classList.contains('down') ? 1 : 0;
@@ -788,7 +784,10 @@
       else               openSel = (openSel + d) % n;
     });
   });
-  onPress(document.getElementById('omenu'), ()=>{ playClick(); btnAnim(document.getElementById('omenu'),1,0.93); });
+  onPress(document.getElementById('omenu'), ()=>{
+    if(openingLocked()) return;
+    playClick(); btnAnim(document.getElementById('omenu'),1,0.93);
+  });
 
   // ════════════════════════════════════════
   // ペット状態（フェーズ1: 名前・日数・表示用ステータスの骨格）
@@ -7010,7 +7009,7 @@
   // 項目はキーで管理（表示ラベルは言語辞書、値は各キーで分岐）
   //  版の番号は sw.js の VERSION と同じもの。tools/bump-sw.sh が両方いっしょに
   //  書き換える（ずれると、テスターの端末に出ている版が分からなくなる）
-  const APP_VERSION = '2026-08-28-02';
+  const APP_VERSION = '2026-08-28-03';
   //  (C) は Press Start 2P に © が無く、別の字体に落ちて1文字だけ形が浮くため
   const APP_COPY = '(C) 2026 Studio M.D.Q.';
   const SETTINGS_KEYS = ['language','weather','sound','bodycolor','version','reset'];
