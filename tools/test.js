@@ -2083,12 +2083,12 @@ describe('世話の音', () => {
 });
 
 describe('くすりの演出', () => {
-  //  左の画面外から放物線で飛んできて、当たってから点滅する
+  //  右の画面外から放物線で飛んできて、当たってから点滅する
   it('飛来のあとに点滅が来る', () => {
     const { api } = load();
     eq(api.MED_T, api.MED_FLY + api.MED_BLINK, '全体の長さ:');
     ok(api.MED_FLY > 0 && api.MED_BLINK > 0, '飛来と点滅の両方があること');
-    ok(api.MED_FROM < 0, `画面の外から飛んでこない: ${api.MED_FROM}`);
+    ok(api.MED_FROM > 54, `右の画面外から飛んでこない: ${api.MED_FROM}`);
   });
   it('最後のコマで、ちょうど狙った場所に着く', () => {
     const { api } = load();
@@ -2106,11 +2106,49 @@ describe('くすりの演出', () => {
     for(let t = 0; t <= (api.MED_FLY - 1) / 2; t++){ const y = at(t).y;
       ok(y <= prevY, `上がる途中で下がっている t=${t}`); prevY = y; }
   });
-  it('薬の絵がある', () => {
+  //  右から飛ぶので、進む向きは 右→左。途中で戻らないこと
+  it('右から左へ、まっすぐ寄っていく', () => {
     const { api } = load();
-    ok(Array.isArray(api.MED_PILL) && api.MED_PILL.length, '絵が無い');
-    ok(api.MED_PILL.some(r => r.some(v => v)), '中身が空');
-    ok(api.MED_PILL[0].length <= 6 && api.MED_PILL.length <= 4, '飛ばすには大きすぎる');
+    const tx = 19, ty = 54;
+    const at = t => api.medPos(t, tx, ty);
+    ok(at(0).x > tx, `飛び出しが狙った先より左にある: ${at(0).x}`);
+    let prev = at(0).x;
+    for(let t = 1; t < api.MED_FLY; t++){
+      const x = at(t).x;
+      ok(x <= prev, `途中で右へ戻っている t=${t}（${prev} → ${x}）`);
+      prev = x;
+    }
+  });
+  //  お世話アイコンと同じ形にそろえる。ばらばらだと、何が飛んできたのか読めない
+  it('薬の絵は、お世話アイコンを小さくした形', () => {
+    const { api } = load();
+    const P = api.MED_PILL, I = api.CARE_ICONS.MED;
+    ok(Array.isArray(P) && P.length, '絵が無い');
+    ok(P.some(r => r.some(v => v)), '中身が空');
+    //  アイコンより小さく、それでも形が読める大きさ
+    ok(P[0].length < I[0].length && P.length < I.length,
+       `アイコン(${I[0].length}×${I.length})より小さくない: ${P[0].length}×${P.length}`);
+    ok(P[0].length >= 7 && P.length >= 6, `小さすぎて形が読めない: ${P[0].length}×${P.length}`);
+    //  画面(54×65)を飛ぶので、大きすぎないこと
+    ok(P[0].length <= 12 && P.length <= 11, `飛ばすには大きすぎる: ${P[0].length}×${P.length}`);
+    //  2色カプセル：右上は塗りつぶし、左下は輪郭だけ
+    const dots = g => g.reduce((a,r)=>a + r.filter(v=>v).length, 0);
+    const half = (g, top) => {
+      let n = 0;
+      g.forEach((r, y) => r.forEach((v, x) => {
+        const upper = (x / (g[0].length-1)) - (y / (g.length-1)) > 0;   // 右上か左下か
+        if(v && upper === top) n++;
+      }));
+      return n;
+    };
+    ok(half(P, true) > half(P, false) * 1.5,
+       `右上が塗りつぶしになっていない（右上${half(P,true)} / 左下${half(P,false)}）`);
+    //  左下は輪郭なので、中に空きがあること
+    const lower = P.slice(Math.floor(P.length/2));
+    ok(lower.some(r => { const on = r.map((v,i)=>v?i:-1).filter(i=>i>=0);
+      return on.length >= 2 && (on[on.length-1] - on[0] + 1) > on.length; }),
+       '左下が塗りつぶされていて、輪郭になっていない');
+    ok(dots(P) < dots(I), 'アイコンより点が多い');
   });
 });
 
