@@ -2615,69 +2615,8 @@ describe('日記', () => {
 // ══ にっきの字 ══════════════════════════════════════════
 //  よその星から来たばかりの子は地球の言葉を書けない。段階が上がるにつれて書けるようになる
 describe('にっきの字', () => {
-  // 自分の文字だけで書く段階（あかちゃん）は、読み手の言語で字数が変わってはいけない。
-  //  英語の文面は かなの倍ちかい字数なので、そのまま置きかえると
-  //  同じ出来事なのに英語だけ字がぎっしり並び、入りきらず小さく潰れていた
-  const babyEntry = (lg) => {
-    const { api, clock } = load({ storage: { myvader_lang: lg } });
-    api.lang = lg;
-    const t0 = clock.now();
-    Object.assign(api.pet, api.defaultPet(), { name:'ALPHA', stage:'mid', birth:t0-86400000, lastTick:t0, EP:1, B:30 });
-    return { api, e: api.buildDiary({ fed:2, playSw:1 }, 2, '2026-06-15') };
-  };
-  const runeCount = (api, e) => api.diaryWords(e).flat().reduce((a,w)=>a + (w.t||w.r||'').length, 0);
-  it('あかちゃんの日記は、言語が変わっても字数が変わらない', () => {
-    const ja = babyEntry('ja'), en = babyEntry('en');
-    // 同じ出来事・同じ言い回しでそろえる
-    const e = { ...ja.e };
-    eq(en.api.entryLevel(e), en.api.LV_BABY, 'あかちゃんの段階のはず:');
-    eq(runeCount(en.api, e), runeCount(ja.api, e), 'あかちゃんの日記の字数（英語 / 日本語）:');
-  });
-  it('あかちゃんの日記は、どの言語でも1字も読める字が混ざらない', () => {
-    for(const lg of ['ja','en']){
-      const { api, e } = babyEntry(lg);
-      const readable = api.diaryWords(e).flat().filter(w => w.t);
-      eq(readable.length, 0, `${lg}: 読める字が混ざっている:`);
-    }
-  });
-  it('あかちゃんの日記は、字を小さく潰さずに収まる', () => {
-    const W = 54, S = 4, MAXW = W*S - 8;
-    for(const lg of ['ja','en']){
-      const { api, e } = babyEntry(lg);
-      const k = api.diaryBaseDot(api.entryLevel(e));   // あかちゃんの玉の大きさ（3）
-      const F = api.diaryFontSize(), gap = Math.max(4, F*0.4);
-      // あかちゃんは全部が自分の文字なので、はばは字数から決まる（フォントを測らずに出せる）
-      const lineW = ws => ws.reduce((a,w)=>a + ([...w.r].length*6*k - k) + gap, -gap);
-      api.diaryRows(e).filter(r=>r.words).forEach(r => {
-        const w = lineW(r.words);
-        ok(w <= MAXW, `${lg}: 行が枠からはみ出す（${Math.round(w)}px / 枠${MAXW}px）`);
-      });
-    }
-  });
-  // 読める字が混ざる段階から先は、表示中の言語で書く
-  it('こどもの日記は、表示中の言語で書かれる', () => {
-    const mk = lg => {
-      const { api, clock } = load({ storage: { myvader_lang: lg } });
-      api.lang = lg;
-      const t0 = clock.now();
-      Object.assign(api.pet, api.defaultPet(), { name:'ALPHA', stage:'larva', birth:t0-5*86400000, lastTick:t0, EP:4, B:30 });
-      const e = api.buildDiary({ fed:2, playSw:1 }, 5, '2026-06-15');
-      // 読める字も 自分の文字も、もとの単語は同じところから来る。
-      //  ここを見ないと、diaryWords がどの文面を使ったかを確かめられない
-      const ws = api.diaryWords(e).flat().map(w => w.t || w.r);
-      ok(ws.length > 0, `${lg}: 本文が空`);
-      return ws.join(' ');
-    };
-    ok(/[ぁ-んァ-ン]/.test(mk('ja')), 'ja: かなで書かれていない');
-    const en = mk('en');
-    ok(!/[ぁ-んァ-ン]/.test(en), `en: かなが混ざっている（${en}）`);
-  });
-
-  // その日1日ぶんの材料を持たせた日記をひとつ作る
-  const entry = (api, over) => Object.assign({
-    d:1, n:'T', t:['fed','praised'], v:[0,0], s:'', vo:'plain', c:'', cv:0,
-    ts:0, cd:'2026-8-20' }, over);
-
+  //  宇宙文字は廃止した。書き始めは来たその日のまま。
+  //  うまれたては絵、あかちゃんからは ふつうに読める文になる
   it('来たその日から日記を書く（うまれたてでも書く）', () => {
     const { api, clock } = load();
     pet(api, clock, { stage:'egg', name:'T' });
@@ -2688,6 +2627,51 @@ describe('にっきの字', () => {
     const { api, clock } = load();
     pet(api, clock, { stage:'egg', name:'' });
     ok(!api.diaryWriting());
+  });
+  it('宇宙文字は もう使わない', () => {
+    const { api } = load();
+    const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'invader_game.html'), 'utf8');
+    for(const name of ['DIARY_RUNE', 'RUNE_KEYS', 'runeOf', 'KANA_LETTER'])
+      ok(!src.includes(name), `${name} が残っている`);
+    ok(api.runeOf === undefined, 'runeOf が呼べてしまう');
+  });
+  //  どの段階でも読めること。以前は あかちゃん・こども が読めない字で書いていた
+  it('どの段階の日記も、ふつうに読める文で出る', () => {
+    for(const lg of ['ja','en']){
+      const { api, clock } = load({ storage: { myvader_lang: lg } });
+      api.lang = lg;
+      for(const [stage, lv] of [['mid', api.LV_BABY], ['larva', api.LV_CHILD], ['adult', api.LV_ADULT]]){
+        pet(api, clock, { stage, lineage:'grey', EP: stage==='adult' ? 8 : 2 });
+        api.pet.birth = clock.now() - 5*86400000;
+        const e = api.buildDiary({ fed:1, cleaned:1, solo:'' }, 5, 'x');
+        ok(e, `${lg}/${stage}: 日記が組めない`);
+        eq(api.entryLevel(e), lv, `${lg}/${stage} の段階:`);
+        const body = api.diaryBody(e, lg).filter(Boolean);
+        ok(body.length > 0, `${lg}/${stage}: 本文が空`);
+        //  文面がそのまま出ること（置きかえられていない）
+        for(const t of e.t){
+          const m = api.DIARY_LINES[t][e.v[e.t.indexOf(t)]];
+          ok(m[lg].every(l => body.includes(l)), `${lg}/${stage}: ${t} の文が出ていない`);
+        }
+      }
+    }
+  });
+  //  うまれたての絵日記は、そういう日記を持っている古いセーブのために残してある。
+  //  3日目から書き始めるので、新しく作られることはない
+  it('うまれたての絵日記は、古いセーブのために残す', () => {
+    const { api, clock } = load({ storage:{ myvader_lang:'ja' } });
+    pet(api, clock);
+    const e = { d:1, n:'ALPHA', t:['fed','praised'], v:[0,0], s:'', vo:'plain', c:'', cv:0,
+                ts: clock.now(), cd:'2026-06-15', lv: api.LV_NEW, wr:0 };
+    const rows = api.diaryMarks(e);
+    ok(rows.length > 0, '絵が出ないこと');
+    const flat = rows.flat();
+    ok(flat.includes(api.DIARY_PICT.fed), 'その日の出来事の絵であること');
+    //  宇宙文字は混ざらない
+    const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'invader_game.html'), 'utf8');
+    const at = src.indexOf('function diaryMarks');
+    ok(at > 0, 'diaryMarks が見つからない');
+    ok(!/RUNE/.test(src.slice(at, at + 700)), '絵日記に宇宙文字が残っている');
   });
   // 中身が無いうちに開かせると「まだ なにも かいていない」だけの画面になる
   it('メニューの「にっき」は、1件目が書かれてから並ぶ', () => {
@@ -2714,7 +2698,7 @@ describe('にっきの字', () => {
     eq(right.map(i => name(list,i)), ['story','manual'], '日記が増えても右は変わらない:');
   });
   // おもいでは別れたあとにだけ出る。右の列のいちばん上（ストーリーの上）に入り、
-  //  ストーリーと説明書は1段ずつ下がる
+  // ストーリーと説明書は1段ずつ下がる
   it('おもいでは右の列のいちばん上に入り、ストーリーが1段下がる', () => {
     const { api, clock } = load({ storage:{ myvader_lang:'ja' } });
     pet(api, clock, { name:'T', gone:true, goneBy:'return' });
@@ -2725,7 +2709,7 @@ describe('にっきの字', () => {
     eq(left.map(i => list[i][1]), ['status','diary','settings'], '左の列は変わらない:');
   });
   // アイコンから下へ降りたときの着地点は左の列の先頭。おもいでが出ていると
-  //  一覧の先頭（＝6番）は右の列のいちばん上になるので、そこへ降りると不自然
+  // 一覧の先頭（＝6番）は右の列のいちばん上になるので、そこへ降りると不自然
   it('おもいでが出ていても、左の列の先頭はステータスのまま', () => {
     for(const over of [{}, { gone:true, goneBy:'return' }]){
       const { api, clock } = load({ storage:{ myvader_lang:'ja' } });
@@ -2764,6 +2748,83 @@ describe('にっきの字', () => {
     api.pet.gone = false; api.pet.dead = 'starve';
     ok(api.menuList().some(m => m[1] === 'diary'), '死んだあとも並ぶこと');
   });
+  // 段階は書いた時点で焼き付ける（あとから読み返しても変わらない）
+  it('日記の段階は、書いた時点のまま動かない', () => {
+    const { api, clock } = load();
+    pet(api, clock, { stage:'egg', name:'T', diary:{fed:1} });
+    const e = api.buildDiary({ fed:1 }, 1);
+    eq(e.lv, api.LV_NEW, '書いた時点の段階:');
+    api.pet.stage = 'final';
+    eq(api.entryLevel(e), api.LV_NEW, '育っても動かないこと:');
+  });
+  it('段階を持たない古い日記は、ふつうの文として読める', () => {
+    const { api, clock } = load();
+    pet(api, clock);
+    const e = { d:1, n:'T', t:['fed'], v:[0], s:'', vo:'plain', c:'', cv:0,
+                ts: clock.now(), cd:'x' };
+    eq(api.entryLevel(e), api.LV_ADULT, '段階が無い日記の扱い:');
+    ok(api.diaryBody(e).length > 0, '本文が出ること');
+  });
+  it('本文の大きさは 言語で変わる', () => {
+    for(const [lg, expect] of [['ja', 10], ['en', 6]]){
+      const { api } = load({ storage:{ myvader_lang: lg } });
+      eq(api.diaryFontSize(), expect, `${lg} の本文の大きさ:`);
+    }
+  });
+  //  絵日記の玉の大きさ。小さすぎると絵が潰れ、大きすぎると1行に収まらない
+  it('うまれたての絵は、読める大きさで描く', () => {
+    const { api } = load();
+    const u = api.LV_DOT[api.LV_NEW];
+    ok(u >= 3, `絵の玉が ${u}ドットしかなく、絵が潰れる`);
+    ok(u <= 5, `絵の玉が ${u}ドットあって、1行に収まらない`);
+  });
+  it('絵にならないタグの日でも、書いた跡は残る', () => {
+    const { api, clock } = load();
+    pet(api, clock);
+    const e = { d:1, n:'T', t:['evolved'], v:[0], s:'', vo:'plain', c:'', cv:0,
+                ts: clock.now(), cd:'x', lv: api.LV_NEW, wr:0 };
+    ok(api.diaryMarks(e).flat().length > 0, '空白のページにはしないこと');
+  });
+  //  古い日記（うまれたて）は絵のまま読ませる。ふつうの文にすると、
+  //  その子の日記が あとから書き換わったように見える
+  it('うまれたての日記だけ、絵で描く', () => {
+    const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'invader_game.html'), 'utf8');
+    const at = src.indexOf('const lv = e ? entryLevel(e) : LV_ADULT;');
+    ok(at > 0, '描き分けが見つからない');
+    const body = src.slice(at, at + 200);
+    ok(/lv === LV_NEW\) drawDiaryMarks\(e\)/.test(body), 'うまれたてを絵で描いていない');
+    ok(/drawDiaryText\(e\)/.test(body), 'それ以外を文で描いていない');
+  });
+  //  同じ日記を開き直すたびに並びが変わると、記録ではなく その場の飾りに見える
+  it('絵日記は、開き直しても同じ並びになる', () => {
+    const { api, clock } = load({ storage:{ myvader_lang:'ja' } });
+    pet(api, clock);
+    const e = { d:1, n:'ALPHA', t:['fed','praised','cleaned'], v:[0,0,0], s:'', vo:'plain',
+                c:'', cv:0, ts: clock.now(), cd:'2026-06-15', lv: api.LV_NEW, wr:0 };
+    const a = JSON.stringify(api.diaryMarks(e));
+    for(let i = 0; i < 5; i++)
+      eq(JSON.stringify(api.diaryMarks(e)), a, `${i+2}回目の並びが違う:`);
+    //  日が違えば並びも変わる（毎回おなじ形に固定されていない）。
+    //  らくがきの候補は少ないので、何日かぶんを見て種類が増えることで確かめる
+    const kinds = new Set();
+    for(let d = 1; d <= 8; d++)
+      kinds.add(JSON.stringify(api.diaryMarks(Object.assign({}, e, { d, cd:'2026-06-' + (10+d) }))));
+    ok(kinds.size >= 2, `8日ぶんで並びが ${kinds.size} 種類しか出ない`);
+  });
+  // 来たばかりの子がいきなり画面いっぱいに書くのは、絵として不自然
+  it('書く量は日を追って少しずつ増える', () => {
+    const { api, clock } = load();
+    pet(api, clock, { P:0 });
+    const at = d => { api.pet.birth = clock.now() - (d-1)*86400000; return api.diaryStyle().topics; };
+    const got = [1,2,3,4,5].map(at);
+    eq(got.slice(0,3), [1,2,3], '1日目1話題／2日目2話題／3日目3話題:');
+    eq(got[3], got[4], '4日目で通常にもどり、以後は増えない:');
+    ok(got.every((v,i) => i === 0 || v >= got[i-1]), `減らないこと（${got}）`);
+    //  おっとりは4話題まで伸びる
+    pet(api, clock, { P:-100 });
+    eq(at(4), 4, 'おっとりの4日目:');
+  });
+  //  到着した日の夜に、その日ぶんが1件書かれる
   it('到着した日の夜に、その日ぶんが1件書かれる', () => {
     const { api, clock } = load();
     const now = clock.now();
@@ -2775,162 +2836,6 @@ describe('にっきの字', () => {
     for(let h=10; h<=22; h++){ clock.set(base + h*3600000); api.advancePet(); }
     eq(api.diaryLog.length, 1, '初日の夜に届くこと:');
     eq(api.diaryLog[0].lv, api.LV_NEW, 'うまれたての字で書かれること:');
-  });
-  it('段階は書いた時点で焼き付ける（あとから読み返しても変わらない）', () => {
-    const { api, clock } = load();
-    pet(api, clock, { stage:'egg', name:'T', diary:{fed:1} });
-    const e = api.buildDiary({ fed:1 }, 1);
-    eq(e.lv, api.LV_NEW);
-    api.pet.stage = 'final';                       // 育っても、その日記の段階は動かない
-    eq(api.entryLevel(e), api.LV_NEW);
-  });
-  it('段階を持たない古い日記は、これまで通り日本語で読める', () => {
-    const { api, clock } = load();
-    pet(api, clock);
-    const e = entry(api, {});
-    delete e.lv;
-    eq(api.entryLevel(e), api.LV_ADULT);
-    ok(api.diaryBody(e).length > 0, '本文が出ること');
-  });
-  it('あかちゃんは、単語がぜんぶ自分の文字になる', () => {
-    const { api, clock } = load({ storage:{ myvader_lang:'ja' } });
-    pet(api, clock);
-    const words = api.diaryWords(entry(api, { lv: api.LV_BABY }));
-    const flat = words.flat();
-    ok(flat.length > 0, '単語が取れること');
-    ok(flat.every(w => typeof w.r === 'string' && w.r.length), '日本語がまじらないこと');
-    // 宇宙文字の数＝もとの単語の字数。書けなかった単語の長さがそのまま残る
-    const body = api.diaryBody(entry(api, { lv: api.LV_BABY }));
-    const lens = body.filter(l=>l).flatMap(l => l.split(' ').filter(w=>w).map(w => [...w].length));
-    eq(flat.map(w => [...w.r].length), lens, '字数がもとの単語と合うこと:');
-  });
-  it('おとなは、ぜんぶ日本語になる', () => {
-    const { api, clock } = load({ storage:{ myvader_lang:'ja' } });
-    pet(api, clock);
-    const flat = api.diaryWords(entry(api, { lv: api.LV_ADULT, wr:1 })).flat();
-    ok(flat.length > 0 && flat.every(w => w.t), '自分の文字が残らないこと');
-  });
-  it('こどもは、書ける単語の割合が増えるほど日本語が増える', () => {
-    const { api, clock } = load({ storage:{ myvader_lang:'ja' } });
-    pet(api, clock);
-    const jp = wr => api.diaryWords(entry(api, { lv: api.LV_CHILD, wr })).flat().filter(w => w.t).length;
-    const lo = jp(0.1), hi = jp(0.9);
-    ok(lo < hi, `割合が高いほど日本語が多いこと（0.1→${lo}語 / 0.9→${hi}語）`);
-    eq(jp(0), 0, '0なら1語も書けないこと:');
-  });
-  it('同じ日記は何度組み直しても同じ形になる（開くたびに変わらない）', () => {
-    const { api, clock } = load({ storage:{ myvader_lang:'ja' } });
-    pet(api, clock);
-    // 2回だけ比べると、乱数で偶然そろって見逃すことがある。
-    //  回数を増やし、絵も「並びの数」ではなく字形そのものを見比べる
-    const e = entry(api, { lv: api.LV_CHILD, wr:0.5,
-                           t:['fed','praised','slept'], v:[0,0,0], c:'plain' });
-    const words = api.diaryWords(e);
-    for(let i=0;i<6;i++) eq(api.diaryWords(e), words, `${i+2}回目で単語の置き換えが変わった:`);
-    const m = entry(api, { lv: api.LV_NEW, t:['fed','praised','slept'], v:[0,0,0] });
-    const marks = api.diaryMarks(m);
-    for(let i=0;i<6;i++) eq(api.diaryMarks(m), marks, `${i+2}回目で絵の並びが変わった:`);
-  });
-  it('うまれたては、その日の出来事が絵になる', () => {
-    const { api, clock } = load();
-    pet(api, clock);
-    const rows = api.diaryMarks(entry(api, { lv: api.LV_NEW, t:['fed','praised'] }));
-    const flat = rows.flat();
-    ok(flat.includes(api.DIARY_PICT.fed), 'ごはんの絵が入ること');
-    ok(flat.includes(api.DIARY_PICT.praised), 'ほめられた絵が入ること');
-    ok(flat.length >= 3, 'らくがきと自分の文字も混じること');
-  });
-  it('絵にならないタグの日でも、書いた跡は残る', () => {
-    const { api, clock } = load();
-    pet(api, clock);
-    const rows = api.diaryMarks(entry(api, { lv: api.LV_NEW, t:['evolved'] }));
-    ok(rows.flat().length > 0, '空白のページにはしないこと');
-  });
-  // 英語は本文が6pxしかないので、日本語と同じ2ドット（＝10px）で宇宙文字を描くと
-  //  記号だけが文字の倍近く大きくなって浮く。言葉が混ざる段階では文字に合わせる
-  it('言葉が混ざる段階では、宇宙文字が文字より大きくならない', () => {
-    // 本文の大きさそのものを押さえる。文字と記号を見比べるだけだと、
-    //  両方が一緒に動く壊し方（文字も10pxにする）を見逃す
-    for(const [lg, expect] of [['ja', 10], ['en', 6]]){
-      const { api } = load({ storage:{ myvader_lang: lg } });
-      const fs = api.diaryFontSize();
-      eq(fs, expect, `${lg} の本文の大きさ:`);
-      const h = 5 * api.diaryBaseDot(api.LV_CHILD);        // 宇宙文字は5ドットぶんの高さ
-      ok(h <= fs, `${lg}: 宇宙文字${h}px が 文字${fs}px より大きい`);
-      ok(h >= fs - 2, `${lg}: 宇宙文字${h}px が 文字${fs}px に対して小さすぎる`);
-    }
-  });
-  it('言葉が混ざらない段階は、言語に関係なく大きいまま', () => {
-    const ja = load({ storage:{ myvader_lang:'ja' } }).api;
-    const en = load({ storage:{ myvader_lang:'en' } }).api;
-    for(const lv of [ja.LV_NEW, ja.LV_BABY])
-      eq(en.diaryBaseDot(lv), ja.diaryBaseDot(lv), `段階${lv}は言語で変わらないこと:`);
-  });
-  it('段階が上がるほど字は小さくなる', () => {
-    const { api } = load();
-    const d = api.LV_DOT;
-    ok(d[api.LV_NEW] > d[api.LV_BABY] && d[api.LV_BABY] > d[api.LV_CHILD],
-       `うまれたて>あかちゃん>こども であること（${d.join(',')}）`);
-  });
-  // ── 宇宙文字26字（A〜Z）──
-  it('宇宙文字は26字あって、同じ形が2つない', () => {
-    const { api } = load();
-    eq(api.RUNE_KEYS.length, 26);
-    const seen = new Map();
-    for(const k of api.RUNE_KEYS){
-      const sig = api.DIARY_RUNE[k].map(r => r.join('')).join('/');
-      ok(!seen.has(sig), `${k} と ${seen.get(sig)} が同じ形`);
-      seen.set(sig, k);
-    }
-  });
-  it('かなの表は、すべて実在する宇宙文字を指している', () => {
-    const { api } = load();
-    for(const [kana, letter] of Object.entries(api.KANA_LETTER))
-      ok(api.DIARY_RUNE[letter], `${kana} → ${letter} の字が無い`);
-  });
-  // でたらめに散らすのではなく規則で決まるので、読み比べれば見当がつく
-  it('同じ音はいつも同じ字になる（規則で決まる）', () => {
-    const { api } = load();
-    eq(api.runeOf('こ'), api.runeOf('か'), 'か行は同じ字:');
-    eq(api.runeOf('ご'), api.runeOf('が'), 'が行は同じ字:');
-    ok(api.runeOf('か') !== api.runeOf('が'), '清音と濁音は別の字であること');
-    ok(api.runeOf('あ') !== api.runeOf('い'), '母音どうしも別の字であること');
-  });
-  it('表に無い字でも、字形が返る（欠けたマスにしない）', () => {
-    const { api } = load();
-    for(const ch of ['ア','ー','Ｚ','!','漢'])
-      ok(Array.isArray(api.runeOf(ch)), `${ch} の字形が無い`);
-  });
-  it('同じ単語は、いつ書いても同じ並びになる', () => {
-    const { api } = load();
-    const a = [...'ごはん'].map(c => api.runeOf(c));
-    const b = [...'ごはん'].map(c => api.runeOf(c));
-    eq(a, b);
-  });
-  // 来たばかりの子がいきなり画面いっぱいに書くのは、絵として不自然
-  it('書く量は日を追って少しずつ増える', () => {
-    const { api, clock } = load();
-    pet(api, clock, { P:0 });
-    const at = d => { api.pet.birth = clock.now() - (d-1)*86400000; return api.diaryStyle().topics; };
-    const got = [1,2,3,4,5].map(at);
-    eq(got.slice(0,3), [1,2,3], '1日目1話題／2日目2話題／3日目3話題:');
-    eq(got[3], got[4], '4日目で通常にもどり、以後は増えない:');
-    ok(got.every((v,i) => i === 0 || v >= got[i-1]), `減らないこと（${got}）`);
-  });
-  it('あかちゃんの日記には、まだ絵が残っている', () => {
-    const { api, clock } = load({ storage:{ myvader_lang:'ja' } });
-    pet(api, clock);
-    const rows = api.diaryRows(entry(api, { lv: api.LV_BABY, t:['fed','praised'], v:[0,0] }));
-    const marks = rows.filter(r => r.marks);
-    eq(marks.length, 1, '絵の行が1行あること:');
-    ok(marks[0].marks.includes(api.DIARY_PICT.fed), 'その日の出来事の絵であること');
-    ok(rows.some(r => r.words), '自分の文字の行もあること');
-  });
-  it('こどもになると絵は出ず、言葉だけになる', () => {
-    const { api, clock } = load({ storage:{ myvader_lang:'ja' } });
-    pet(api, clock);
-    const rows = api.diaryRows(entry(api, { lv: api.LV_CHILD, wr:0.5 }));
-    ok(rows.length > 0 && rows.every(r => r.words), '絵の行が混ざらないこと');
   });
   it('幼いうちは結びの言葉を書かない', () => {
     const { api, clock } = load();
