@@ -143,7 +143,8 @@
   .dpad-arrow.right { top:24px; right:0; }
 
   .btns { display:flex; gap:8px; align-items:center; }
-  /* Nintendo式：Bが下・Aが上の斜め配置 */
+  /* Bを下げて斜めに置く。親指の付け根を軸に振ると、指先はまっすぐ横ではなく
+     弧を描くので、水平に並べるより押し分けやすい */
   .btn-row { display:flex; gap:12px; align-items:flex-start; }
   .btns-wrap { display:flex; flex-direction:column; align-items:center; gap:3px; }
   .btns-wrap.btn-b { transform:translateY(8px); }
@@ -4440,7 +4441,8 @@
       [0,1,1,1,1,1,1,1,1,1,0],[1,1,0,1,1,1,1,1,0,1,1],[1,1,1,1,1,1,1,1,1,1,1],[0,1,1,1,1,1,1,1,1,1,0],
       [0,0,0,1,0,1,0,1,0,0,0],[0,0,0,1,0,1,0,1,0,0,0],[0,0,0,1,0,1,0,1,0,0,0],
     ],
-    // インベーダー：古典的なカニ型（11×8）
+    // インベーダー：横に広い体に触角と2本脚。3系統でいちばん左右に張り出した輪郭にして、
+    //  グレイ（縦長）・マーシャン（丸い）とシルエットで見分けがつくようにする
     inv:[
       [0,0,0,1,0,0,0,0,0,1,0,0,0],[0,0,0,0,1,0,0,0,1,0,0,0,0],[0,0,0,1,1,1,1,1,1,1,0,0,0],[0,0,1,1,1,1,1,1,1,1,1,0,0],
       [0,1,1,1,0,1,1,1,0,1,1,1,0],[1,0,1,1,1,1,1,1,1,1,1,0,1],[1,0,0,1,1,1,1,1,1,1,0,0,1],[0,1,0,1,0,0,0,0,0,1,0,1,0],
@@ -5994,8 +5996,8 @@
   }
 
   // ── 侵攻エンディング（E5・バッド）：迎えが去ったあと、大群が降りてくる ──
-  //  スペースインベーダーの隊列そのままに、整然と並んだ影が じわじわ 下がってくる。
-  //  最後は誰もいない庭に GAME OVER だけが残る
+  //  ばらばらに動く他の演出と対にして、ここだけは整然と並んだ影が じわじわ 下がってくる。
+  //  規則正しさが不気味さになる。最後は誰もいない庭に GAME OVER だけが残る
   const INV_SPR = [                     // 隊列用の小さなインベーダー（7×5）
     [0,0,1,0,1,0,0],
     [0,1,1,1,1,1,0],
@@ -6838,9 +6840,13 @@
   // 項目はキーで管理（表示ラベルは言語辞書、値は各キーで分岐）
   //  版の番号は sw.js の VERSION と同じもの。tools/bump-sw.sh が両方いっしょに
   //  書き換える（ずれると、テスターの端末に出ている版が分からなくなる）
-  const APP_VERSION = '2026-08-29-02';
+  const APP_VERSION = '2026-09-01-01';
   //  (C) は Press Start 2P に © が無く、別の字体に落ちて1文字だけ形が浮くため
   const APP_COPY = '(C) 2026 Studio M.D.Q.';
+  // 天気は Open-Meteo から貰っている。CC BY 4.0 なので、無料で使う場合でも
+  //  出どころを見える所に出す義務がある。天気をオフにしている人にも常に出す
+  //  （使っていない時だけ隠すと、義務のある表示が設定次第で消えてしまう）
+  const APP_WEATHER_CREDIT = 'WEATHER: OPEN-METEO.COM';
   const SETTINGS_KEYS = ['language','weather','sound','bodycolor','version','reset'];
   let inAbout = false;        // バージョンの中身（題・版・著作権）を出している
   let inWeather = false, wSel = 0, wScroll = 0;      // 天気の選択リスト（オフ／げんざいち／都市）
@@ -6934,6 +6940,7 @@
         ctxN.fillText('MY LITTLE INVADER',(W*S)/2, 27*S);
         ctxN.fillText('VER ' + APP_VERSION,(W*S)/2, 37*S);
         ctxN.font='5px "Press Start 2P"';
+        ctxN.fillText(APP_WEATHER_CREDIT,(W*S)/2, 46*S);
         ctxN.fillText(APP_COPY,(W*S)/2, 54*S);
         return;
       }

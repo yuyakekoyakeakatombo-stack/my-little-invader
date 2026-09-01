@@ -4442,6 +4442,36 @@ describe('バージョンと著作権', () => {
     const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'invader_game.html'), 'utf8');
     ok(/fillText\('VER ' \+ APP_VERSION/.test(src), 'バージョンの画面に版が出ていない');
   });
+  // 天気の出どころ表示。Open-Meteo は CC BY 4.0 で、無料利用でも帰属が要る。
+  //  消すとライセンス違反になるので、消えたら気づけるようにしておく
+  it('天気の出どころが、バージョンの画面に出ている', () => {
+    const { api } = load();
+    const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'invader_game.html'), 'utf8');
+    ok(/open-?meteo/i.test(api.APP_WEATHER_CREDIT), `出どころの名が無い: ${api.APP_WEATHER_CREDIT}`);
+    ok(/fillText\(APP_WEATHER_CREDIT/.test(src), 'バージョンの画面に出どころが描かれていない');
+  });
+  it('天気の出どころは、天気の設定に関係なく出る', () => {
+    const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'invader_game.html'), 'utf8');
+    const m = src.match(/ctxN\.fillText\(APP_WEATHER_CREDIT[^\n]*\n/);
+    ok(m, '出どころを描く行が見つからない');
+    // 描く行が weatherMode や weatherFetched で括られていたら、オフの人に出なくなる
+    const line = m[0];
+    ok(!/weatherMode|weatherFetched/.test(line), '天気の設定次第で出どころが消える');
+  });
+  it('出どころの行が、画面の幅と著作権の行に ぶつからない', () => {
+    const { api } = load();
+    const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'invader_game.html'), 'utf8');
+    const W = 54, S = 4;
+    // Press Start 2P は等幅で、字送りは指定した大きさとほぼ同じ
+    const px = +(src.match(/ctxN\.font='(\d+)px "Press Start 2P"';\s*\n\s*ctxN\.fillText\(APP_WEATHER_CREDIT/) || [])[1];
+    ok(px, '出どころの字の大きさが読めない');
+    const wide = api.APP_WEATHER_CREDIT.length * px;
+    ok(wide <= W * S, `出どころが画面からはみ出す（${wide}px / 画面 ${W*S}px）`);
+    const yCredit = +(src.match(/fillText\(APP_WEATHER_CREDIT[^,]*,[^,]*,\s*(\d+)\*S/) || [])[1];
+    const yCopy   = +(src.match(/fillText\(APP_COPY[^,]*,[^,]*,\s*(\d+)\*S/) || [])[1];
+    ok(yCredit && yCopy, '行の位置が読めない');
+    ok(yCopy - yCredit >= px, `出どころと著作権が重なる（間 ${yCopy-yCredit} ドット / 字 ${px}px）`);
+  });
   it('著作権に名義が入っている', () => {
     const { api } = load();
     ok(/\d{4}/.test(api.APP_COPY), `年が無い: ${api.APP_COPY}`);

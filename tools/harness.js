@@ -42,7 +42,7 @@ const EXPORTS = `
   todayKey, petDay, dayLabel, daysBetweenKeys,
   formLabel, endLabel, typeLabel, stageLabel, menuList, menuCols, MENU_RIGHT,
   bestText, playText, PLAY_ITEMS, PLAY_KEYS, MEM_PAGES,
-  APP_VERSION, APP_COPY, SETTINGS_KEYS,
+  APP_VERSION, APP_COPY, APP_WEATHER_CREDIT, SETTINGS_KEYS,
   CARE_ICONS, CARE_ORDER,
   endedShowMemory, MEM_CHAR_BOT, GHOST_MEM_DELAY,
   healthState, statusAlert, headIcons, headIconX, headAlert, headDefault, HEAD_ICON_W,
