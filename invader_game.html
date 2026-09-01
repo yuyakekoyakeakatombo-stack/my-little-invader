@@ -3059,13 +3059,13 @@
   function diaryUnlocked(){ return diaryLog.length > 0; }
 
   // ════════════════════════════════════════
-  // にっきの「字」──よその星から来たばかりの子は、地球の言葉をまだ書けない。
-  //  うまれたて：絵とらくがき／あかちゃん：ぜんぶ自分の文字／
-  //  こども：書ける単語から日本語になる／おとな：ぜんぶ書ける。
-  //  段階は書いた時点で日記に焼き付ける（lv）。あとから読み返しても、その日の字のままにするため
+  // にっきの段階──どの日記も文字で読めるが、育ち具合で書きぶりが変わる。
+  //  幼いうちは結びの一文を書かない（口調はその子の性格で決まるもので、
+  //  まだ性格が定まっていない子に言わせると、誰の日記でも同じ声になってしまう）。
+  //  書ける量そのものは日数で増える（diaryStyle の cap）。
+  //  段階は書いた時点で日記に焼き付ける（lv）。あとから読み返しても、その日の記録のままにするため
   // ════════════════════════════════════════
   const LV_NEW = 0, LV_BABY = 1, LV_CHILD = 2, LV_ADULT = 3;
-  const LV_DOT = [4, 3, 2, 0];        // 段階ごとの1ドットの大きさ。育つほど字が小さく整っていく
   function diaryLevel(){
     return pet.stage === 'egg'   ? LV_NEW
          : pet.stage === 'mid'   ? LV_BABY
@@ -3073,104 +3073,7 @@
   }
   // こどもの間に、書ける単語が増えていく割合。幼体はEP 1→4 で成体になるので、その進み具合で見る
   function writeRatio(){ return Math.max(0, Math.min(1, ((pet.EP||0) - 1) / 3)); }
-  const dotArt = s => s.trim().split('\n').map(r => r.trim().split('').map(c => c === '#' ? 1 : 0));
 
-  // 絵記号 7×5。日記の出来事タグをそのまま絵にしたもの（保存する情報は増えない）
-  const DIARY_PICT = {
-    fed:     dotArt(`..#.#..
-                     .......
-                     #######
-                     .#####.
-                     ..###..`),
-    hungry:  dotArt(`.......
-                     .......
-                     #######
-                     .#...#.
-                     ..###..`),
-    snack:   dotArt(`#.....#
-                     .#####.
-                     .#####.
-                     .#####.
-                     #.....#`),
-    praised: dotArt(`.##.##.
-                     #######
-                     #######
-                     .#####.
-                     ...#...`),
-    scolded: dotArt(`...#...
-                     ...#...
-                     ...#...
-                     .......
-                     ...#...`),
-    dirty:   dotArt(`...#...
-                     ..###..
-                     ..###..
-                     .#####.
-                     #######`),
-    cleaned: dotArt(`#..#..#
-                     .#.#.#.
-                     ..###..
-                     .#.#.#.
-                     #..#..#`),
-    play:    dotArt(`#.#####
-                     .#####.
-                     #######
-                     .#...#.
-                     #.#.#.#`),
-    slept:   dotArt(`#####..
-                     ...#...
-                     ..#....
-                     .#.....
-                     #####..`),
-    clear:   dotArt(`#..#..#
-                     .#####.
-                     .#...#.
-                     .#####.
-                     #..#..#`),
-    rain:    dotArt(`#######
-                     .......
-                     #..#..#
-                     .#..#..
-                     #..#..#`),
-    sick:    dotArt(`...#...
-                     ...#...
-                     .#####.
-                     ...#...
-                     ...#...`),
-  };
-  // 出来事タグ → 絵記号。絵にならないタグ（別れ・進化など）は描かない
-  const TAG_PICT = {
-    fed:'fed', hungry:'hungry', snack:'snack', snackMany:'snack',
-    praised:'praised', scoldedUnfair:'scolded', scolded:'scolded',   // scolded は旧セーブ用
-    taught:'scolded', woken:'scolded', tantrum:'scolded',
-    dirty:'dirty', cleaned:'cleaned', sick:'sick', cured:'sick',
-    playSw:'play', playSs:'play', playAb:'play',
-    slept:'slept', clear:'clear', rain:'rain', snow:'rain',
-  };
-  // うまれたてだけに混じる、意味のない筆致
-  const DIARY_SCRAWL = [
-    dotArt(`.....
-            #..#.
-            .##..
-            ...#.
-            .....`),
-    dotArt(`.....
-            ..#..
-            .#.#.
-            #...#
-            .....`),
-    dotArt(`.....
-            #####
-            .....
-            .....
-            .....`),
-  ];
-  // 日付から決まる乱数。同じ日記を開き直しても毎回おなじ形にするため（日替わりでちらつかせない）
-  function diaryRnd(seedStr){
-    let s = 2166136261;
-    for(let i=0;i<seedStr.length;i++){ s ^= seedStr.charCodeAt(i); s = Math.imul(s, 16777619); }
-    return () => { s ^= s << 13; s ^= s >>> 17; s ^= s << 5; s |= 0; return ((s >>> 0) % 100000) / 100000; };
-  }
 
   // 性格で書き方が変わる。おっとりはまめに長く、やんちゃは書き忘れる日があって短い
   function diaryStyle(){
@@ -3397,22 +3300,6 @@
       lines.forEach(l=>out.push(l));
     });
     return out;
-  }
-  // 日記の字の段階。lv を持たない古い日記は、これまで通りの日本語で読ませる
-  function entryLevel(e){ return (e && e.lv != null) ? (e.lv|0) : LV_ADULT; }
-  // うまれたて：まだ単語という形になっていない。その日の出来事を絵にして、
-  //  らくがきと、ひとつだけ自分の文字を混ぜる
-  function diaryMarks(e){
-    const rnd = diaryRnd('m' + (e.cd || '') + (e.d || 0));
-    const pick = a => a[Math.floor(rnd() * a.length) % a.length];
-    const items = [];
-    (e.t || []).forEach(t => { const k = TAG_PICT[t]; if(k) items.push(DIARY_PICT[k]); });
-    if(!items.length) items.push(pick(DIARY_SCRAWL));       // 絵にならない日でも、書いた跡は残す
-    items.push(pick(DIARY_SCRAWL));
-    // 3つずつの行に折り返して、行ごとに並びを崩す
-    const rows = [];
-    for(let i=0;i<items.length;i+=3) rows.push(items.slice(i, i+3));
-    return rows;
   }
 
 
@@ -6840,7 +6727,7 @@
   // 項目はキーで管理（表示ラベルは言語辞書、値は各キーで分岐）
   //  版の番号は sw.js の VERSION と同じもの。tools/bump-sw.sh が両方いっしょに
   //  書き換える（ずれると、テスターの端末に出ている版が分からなくなる）
-  const APP_VERSION = '2026-09-01-01';
+  const APP_VERSION = '2026-09-01-02';
   //  (C) は Press Start 2P に © が無く、別の字体に落ちて1文字だけ形が浮くため
   const APP_COPY = '(C) 2026 Studio M.D.Q.';
   // 天気は Open-Meteo から貰っている。CC BY 4.0 なので、無料で使う場合でも
@@ -7664,10 +7551,6 @@
   // ── 日記の本文を描く（3通り）──
   //  本文の入る帯は y20〜50。どの描き方でも、この中で上下中央にそろえる
   const DBODY_TOP = 20, DBODY_BOT = 50;
-  function stampU(g, px, py, u, col){         // 1ドットの大きさを変えて置く
-    ctxT.fillStyle = col || ON;
-    g.forEach((row,ry)=>row.forEach((v,rx)=>{ if(v) ctxT.fillRect(px+rx*u, py+ry*u, u, u); }));
-  }
   function drawDiaryText(e){
     const body = e ? diaryBody(e) : (lang==='ja' ? DIARY_EMPTY.ja : DIARY_EMPTY.en);
     const fs = (lang === 'ja') ? 10 : 6;
@@ -7685,16 +7568,6 @@
     if(n > 1 && top + (n-1)*lh + hRow > bot) lh = Math.max(hRow + 1, (bot - top - hRow) / (n - 1));
     const y0 = Math.max(top, Math.round((top + bot)/2 - ((n-1)*lh + hRow)/2));
     return { y0, lh };
-  }
-  // うまれたて：絵とらくがきを行に並べる。1ドットは画面のドットと同じ大きさ＝いちばん字が大きい
-  function drawDiaryMarks(e){
-    const u = LV_DOT[LV_NEW], rows = diaryMarks(e), h = 5 * u;
-    const { y0, lh } = bodyRows(rows.length, h, 3 * u);
-    rows.forEach((row, ri) => {
-      const w = row.reduce((a,g)=>a + (g[0].length + 2) * u, -2 * u);
-      let x = Math.round((W*S - w) / 2);
-      row.forEach(g => { stampU(g, x, y0 + ri*lh, u, ON); x += (g[0].length + 2) * u; });
-    });
   }
   // あかちゃん・こども：単語ごとに、日本語か自分の文字か。
   //  自分の文字は「その単語の字数ぶん」置くので、書けなかった単語の長さがそのまま残る
@@ -7737,12 +7610,11 @@
     }
     for(let x=6;x<W-6;x++) dot(ctxT, x, 17, DIM);
     // 本文（材料から組み立てた行）。ページ数(y57)に掛からないよう上下中央に置く
-    //  文字はどの段階でも ふつうに読める。うまれたての絵日記だけ、
-    //  そういう日記を持っている古いセーブのために残してある
-    //  （いまは3日目から書き始めるので、新しく作られることはない）
-    const lv = e ? entryLevel(e) : LV_ADULT;
-    if(e && lv === LV_NEW) drawDiaryMarks(e);
-    else                   drawDiaryText(e);
+    //  段階によらず、どの日記も文字で読める。書ける量は日を追って増えるので（diaryStyle）、
+    //  来たばかりの子の日記は自然と短く、育つほど長くなる。
+    //  以前は うまれたてだけ絵記号で描いていたが、初日の一言が読めなくなるため取りやめた。
+    //  絵日記だった古いセーブも、いまは同じ文章として読める
+    drawDiaryText(e);
     // ページ数（本文の下）。書いた本人の名前は見出しに出るので、ここでは繰り返さない
     if(e){
       ctxT.font = uiFont(6); ctxT.fillStyle = ON;
