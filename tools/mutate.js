@@ -31,6 +31,15 @@ const TEST = path.join(__dirname, 'test.js');
 // [名前, 置換前, 置換後, 期待]  期待='caught' … 検出できるべき
 //                               期待='equivalent' … 壊しても挙動が変わらない（検出できなくてよい）
 const MUTATIONS = [
+  ['ごはんを ふれあいに数えない（毎日世話をしても なかよしが下がる）',
+   "          markTouch('feed');\n", "", 'caught'],
+  ['ごはんで なかよしの点が入る（ふれあい無しでも旅立ちに届く）',
+   "          markTouch('feed');",
+   "          if(pet.hunger <= 1) gainB(1, 'feed');\n          markTouch('feed');", 'caught'],
+  ['ふれあい1種類でも減らす（そうじだけの日を罰する）',
+   "return touches >= 2 ? 0 : (touches === 1 ? 2 : 5);", "return touches >= 1 ? 2 : 5;", 'caught'],
+  ['なかよしの初期値を 目盛の帯の下端に置く（数日 手応えが無い）',
+   "C:50, B:40, W:0", "C:50, B:35, W:0", 'caught'],
   ['なかよしの上限を連続日数と無関係にする',
    'const BOND_CAP = [1, 1, 2, 2, 3];', 'const BOND_CAP = [5, 5, 5, 5, 5];', 'caught'],
   ['ふれあいを種類ではなく回数で数える',

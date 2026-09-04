@@ -114,6 +114,52 @@ describe('なかよし', () => {
     for(let i=1;i<=12;i++) day(api, i % 3 === 0);
     ok(api.pet.B < 20, `下がるはず（実際 ${api.pet.B}）`);
   });
+  //  目盛は round(B/10) 本なので、B40 は「4本の帯（35〜44）」の真ん中。
+  //  帯の下端(35)から始めると、1本動かすのに10ポイント要り、最初の数日 手応えが無い
+  it('なかよしの初期値は、目盛の帯の真ん中から始まる', () => {
+    const { api } = load();
+    const B = api.defaultPet ? api.defaultPet().B : null;
+    ok(B != null, '初期値が読めない');
+    const bar = Math.round(B / 10);                 // ステータス画面と同じ出し方
+    const low = bar * 10 - 5, high = bar * 10 + 4;  // その目盛が占める帯
+    const mid = (low + high) / 2;
+    ok(Math.abs(B - mid) <= 1,
+       `初期値 ${B} が ${bar}本の帯（${low}〜${high}）の端に寄っている（真ん中は ${mid}）`);
+  });
+  //  ごはんは ふれあいに数える。数えないと、毎日ごはんと そうじをしている人が
+  //  「ふれあい1種類」と見なされて -2 され、下がり続ける（実際にそうなっていた）
+  it('ごはんは ふれあいに数える', () => {
+    const { api, clock, sandbox } = load();
+    pet(api, clock);
+    api.pet.hunger = 2;
+    sandbox.Math.random = () => 0.99;       // わがままで拒否されると、ごはんが届かない
+    api.doCare('FEED');
+    ok(api.pet.touchKinds && api.pet.touchKinds.feed, 'ごはんが ふれあいに数えられていない');
+  });
+  it('ごはんと そうじだけの日は、なかよしが減らない', () => {
+    const { api, clock } = load();
+    pet(api, clock, { B:40, careStreak:0 });
+    const before = api.pet.B;
+    api.closeOneDay({}, 2, false);          // ごはん＋そうじ＝2種類
+    ok(api.pet.B >= before, `減っている（${before} → ${api.pet.B}）`);
+  });
+  //  ただし ごはんでは点も入らない。入れてしまうと、ほめも遊びもしない人が
+  //  旅立ちの線(60)に届き、「なかよしは ふれあいで育つ」という軸が消える
+  it('ごはんだけでは なかよしの点は入らない', () => {
+    const { api, clock, sandbox } = load();
+    pet(api, clock, { B:40, careStreak:4 });
+    const before = api.pet.B;
+    api.pet.hunger = 0;                     // いちばん点が入りそうな状況
+    sandbox.Math.random = () => 0.99;
+    api.doCare('FEED');
+    eq(api.pet.B, before, 'ごはんで なかよしが増えている:');
+  });
+  it('ごはんと そうじだけを続けても、旅立ちの線には届かない', () => {
+    const { api, clock } = load();
+    pet(api, clock, { B:40, careStreak:0 });
+    for(let i=0;i<40;i++) api.closeOneDay({}, 2, false);   // 40日ぶん、毎日2種類
+    ok(api.pet.B < 60, `ふれあい無しで旅立ちの線に届く（${api.pet.B}）`);
+  });
 });
 
 // ══ ふれあいの数え方 ══════════════════════════════════════
