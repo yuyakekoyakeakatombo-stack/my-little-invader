@@ -5478,18 +5478,25 @@
         pet.mealCount = (pet.mealCount||0) + 1;
         pet.total.feed++;                                           // 通算（おもいで用）
         if(asleep){ leavePlate('meal'); }                           // 起こさない。皿を残す（起床後に空腹なら食べる／放置で食べ残し化）
+        // 満腹で食べない子は、わがままより先に見る。どちらも結果は「食べない」だが、
+        //  わがままの拒否を先に出すと、しかって直したのに やはり食べない、という
+        //  分かりにくい流れになる（何が悪かったのか読めない）。
+        //  先に置くことで rollTantrum を呼ばずに済むので、満腹の子にごはんを出して
+        //  わがままを誘発してしまうことも無くなる。
+        //  おっとりは満腹でも食べるので ここは通さない（無反応にならず、混同も起きない）
+        else if(pet.hunger >= HUNGER_MAX && pTrait() > -0.5){
+          leavePlate('meal');                                       // 満腹：無反応で皿だけ残す
+          //  ここで嫌がる仕草を出すと、わがままの拒否と区別がつかなくなる
+        }
         // わがまま：食べないが、ごはんは出す。皿はそのまま残り、わがままが収まってから食べる
         //  （放置すれば他の拒否と同じく食べ残しとして傷む）
         else if(pet.tantrumAt || rollTantrum('feed')){ leavePlate('meal'); setReaction('refuse'); }
-        else if(pet.hunger >= HUNGER_MAX){
-          if(pTrait() <= -0.5){                                     // おっとり：満腹でも食べてしまう
-            pet.fullFeeds++; addA(A_ADJ.feedFull);
-            pet.overAcc = (pet.overAcc||0) + 1;
-            // 食べ過ぎ：あとから効いてくる。続けるほど当たりやすい
-            rollSick(SICK_P.overeat * (1 + overeatSeverity() * SICK_P.overeatMul), true);
-            schedulePoop(); eatReaction('meal');
-          } else { leavePlate('meal'); }                            // 満腹：無反応で皿だけ残す
-            //  ここで嫌がる仕草を出すと、わがままの拒否と区別がつかなくなる
+        else if(pet.hunger >= HUNGER_MAX){                          // おっとり：満腹でも食べてしまう
+          pet.fullFeeds++; addA(A_ADJ.feedFull);
+          pet.overAcc = (pet.overAcc||0) + 1;
+          // 食べ過ぎ：あとから効いてくる。続けるほど当たりやすい
+          rollSick(SICK_P.overeat * (1 + overeatSeverity() * SICK_P.overeatMul), true);
+          schedulePoop(); eatReaction('meal');
         }
         else {
           // ごはんは ふれあいに数えるが、なかよしの点は入らない。
@@ -6735,7 +6742,7 @@
   // 項目はキーで管理（表示ラベルは言語辞書、値は各キーで分岐）
   //  版の番号は sw.js の VERSION と同じもの。tools/bump-sw.sh が両方いっしょに
   //  書き換える（ずれると、テスターの端末に出ている版が分からなくなる）
-  const APP_VERSION = '2026-09-04-01';
+  const APP_VERSION = '2026-09-05-01';
   //  (C) は Press Start 2P に © が無く、別の字体に落ちて1文字だけ形が浮くため
   const APP_COPY = '(C) 2026 Studio M.D.Q.';
   // 天気は Open-Meteo から貰っている。CC BY 4.0 なので、無料で使う場合でも

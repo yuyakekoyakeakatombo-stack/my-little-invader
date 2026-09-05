@@ -226,6 +226,56 @@ describe('ねているあいだの くすり', () => {
     eq(api.pet.mood, before.mood, 'くすりのあとの きげん:');
     eq(api.pet.scoldBadCount || 0, before.scold, 'しかるの失敗に数えられている:');
   });
+  //  満腹とわがままが重なった日。どちらも「食べない」で終わるが、拒否の仕草を出すと
+  //  しかって直したのに やはり食べない、という分かりにくい流れになる。
+  //  満腹の無反応を先に見せて、原因が読めるようにする
+  it('満腹＋わがまま中は、満腹の無反応が優先される', () => {
+    const { api, clock, sandbox } = load();
+    pet(api, clock, { P:0 });                       // 性格ふつう（満腹なら食べない）
+    api.pet.hunger = api.HUNGER_MAX;
+    api.pet.tantrumAt = clock.now();
+    api.pet.plateAt = 0;
+    sandbox.Math.random = () => 0.99;
+    api.doCare('FEED');
+    ok(api.reactType !== 'refuse', `満腹なのに拒否の仕草が出ている（${api.reactType}）`);
+    ok(api.pet.plateAt, '皿が残らない');
+  });
+  it('空腹＋わがまま中は、これまで通り拒む', () => {
+    const { api, clock, sandbox } = load();
+    pet(api, clock, { P:0 });
+    api.pet.hunger = 1;
+    api.pet.tantrumAt = clock.now();
+    api.pet.plateAt = 0;
+    sandbox.Math.random = () => 0.99;
+    api.doCare('FEED');
+    eq(api.reactType, 'refuse', '空腹のわがままの反応:');
+  });
+  //  おっとりは満腹でも食べてしまう。満腹を先に見る変更で、ここまで
+  //  食べなくなってしまうと、食べ過ぎ→病気 という筋道が消える
+  it('おっとりは、満腹でも食べてしまう', () => {
+    const { api, clock, sandbox } = load();
+    pet(api, clock, { P:-100 });                    // おっとり
+    api.pet.hunger = api.HUNGER_MAX;
+    api.pet.tantrumAt = 0;
+    api.pet.plateAt = 0;
+    const before = api.pet.overAcc || 0;
+    sandbox.Math.random = () => 0.99;
+    api.doCare('FEED');
+    ok((api.pet.overAcc || 0) > before, 'おっとりが満腹で食べていない');
+    eq(api.reactType, 'eat', 'おっとりが満腹で食べたときの反応:');
+  });
+  //  満腹の子にごはんを出しても、わがままの抽選を引かない。
+  //  引いていた頃は、食べない子に出すだけで わがままを増やせてしまった
+  it('満腹の子にごはんを出しても、わがままを誘発しない', () => {
+    const { api, clock, sandbox } = load();
+    pet(api, clock, { P:0 });
+    api.pet.hunger = api.HUNGER_MAX;
+    api.pet.tantrumAt = 0;
+    api.pet.plateAt = 0;
+    sandbox.Math.random = () => 0;                  // かならず わがままになる目
+    api.doCare('FEED');
+    eq(api.pet.tantrumAt, 0, '満腹の子に出して わがままが起きている:');
+  });
   //  寝ている子は わがままを言えない。拒まれると 起こすしか手が無くなる
   it('寝ている子は、くすりを拒まない', () => {
     let cured = 0;

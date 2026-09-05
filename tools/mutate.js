@@ -31,6 +31,14 @@ const TEST = path.join(__dirname, 'test.js');
 // [名前, 置換前, 置換後, 期待]  期待='caught' … 検出できるべき
 //                               期待='equivalent' … 壊しても挙動が変わらない（検出できなくてよい）
 const MUTATIONS = [
+  ['わがままを満腹より先に見る（しかって直しても結局食べず、原因が読めない）',
+   "        else if(pet.hunger >= HUNGER_MAX && pTrait() > -0.5){",
+   "        else if(pet.tantrumAt || rollTantrum('feed')){ leavePlate('meal'); setReaction('refuse'); }\n        else if(pet.hunger >= HUNGER_MAX && pTrait() > -0.5){", 'caught'],
+  ['満腹でも 嫌がる仕草を出す（わがままの拒否と区別がつかない）',
+   "          leavePlate('meal');                                       // 満腹：無反応で皿だけ残す",
+   "          leavePlate('meal'); setReaction('refuse');", 'caught'],
+  ['満腹の判定から性格を外す（おっとりも満腹で食べなくなる）',
+   "pet.hunger >= HUNGER_MAX && pTrait() > -0.5", "pet.hunger >= HUNGER_MAX", 'caught'],
   ['ごはんを ふれあいに数えない（毎日世話をしても なかよしが下がる）',
    "          markTouch('feed');\n", "", 'caught'],
   ['ごはんで なかよしの点が入る（ふれあい無しでも旅立ちに届く）',
