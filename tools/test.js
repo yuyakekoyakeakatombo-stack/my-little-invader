@@ -4470,6 +4470,58 @@ describe('お世話アイコン', () => {
       ok(g.every(r => r.length === g[0].length), `${k}: 行の長さが そろっていない`);
     }
   });
+  //  ゲームはパッドの形。左の十字キーと右のボタン4つで「操作するもの」に見えている。
+  //  どちらかが潰れると ただの黒い塊になり、何のアイコンか読めなくなる
+  describe('ゲーム', () => {
+    const game = () => load().api.CARE_ICONS.GAME;
+    //  地の色(0)のかたまりを拾う。外周とつながっているものは背景なので除く
+    const holes = g => {
+      const H=g.length, W=g[0].length, seen=g.map(r=>r.map(()=>false)), out=[];
+      const outside = new Set();
+      const flood = (sy,sx,bag) => {
+        const st=[[sy,sx]];
+        while(st.length){
+          const [y,x]=st.pop();
+          if(y<0||x<0||y>=H||x>=W||seen[y][x]||g[y][x]) continue;
+          seen[y][x]=true; bag.push([y,x]);
+          st.push([y+1,x],[y-1,x],[y,x+1],[y,x-1]);
+        }
+      };
+      for(let x=0;x<W;x++){ flood(0,x,[]); flood(H-1,x,[]); }
+      for(let y=0;y<H;y++){ flood(y,0,[]); flood(y,W-1,[]); }
+      for(let y=0;y<H;y++) for(let x=0;x<W;x++){
+        if(!g[y][x] && !seen[y][x]){ const bag=[]; flood(y,x,bag); if(bag.length) out.push(bag); }
+      }
+      return out;
+    };
+    it('本体の中に、操作する部分が2つある（十字キーとボタン）', () => {
+      const hs = holes(game());
+      ok(hs.length >= 2, `本体の中の空きが ${hs.length} 個しかない（十字キーとボタンが要る）`);
+    });
+    it('左が十字キーの形（縦横に伸びた1かたまり）', () => {
+      const g = game(), W = g[0].length;
+      const left = holes(g).filter(b => b.every(([,x]) => x < W/2));
+      ok(left.length === 1, `左の空きが ${left.length} 個（十字キーは1かたまり）`);
+      const b = left[0];
+      const ys = b.map(([y])=>y), xs = b.map(([,x])=>x);
+      ok(Math.max(...ys)-Math.min(...ys) >= 2, '十字キーが縦に伸びていない');
+      ok(Math.max(...xs)-Math.min(...xs) >= 2, '十字キーが横に伸びていない');
+    });
+    it('右がボタンの並び（離れた点が複数）', () => {
+      const g = game(), W = g[0].length;
+      const right = holes(g).filter(b => b.every(([,x]) => x >= W/2));
+      ok(right.length >= 3, `右の空きが ${right.length} 個（ボタンは離れて複数あること）`);
+    });
+    //  かつては古典的なインベーダーの形だった。戻すと権利面の懸念が復活する
+    it('インベーダーの形に戻っていない', () => {
+      const g = game();
+      //  上端に離れた2本の突起（触角）が無いこと
+      const top = g[0];
+      const runs = top.join('').split(/0+/).filter(s => s.includes('2') || s.includes('1'));
+      ok(!(runs.length === 2 && runs.every(r => r.length <= 2)),
+         '上端に触角のような突起が2本ある');
+    });
+  });
   //  くすりは「片側だけ中身が入ったカプセル」。この形でくすりに見えているので、
   //  片側が空いていること・輪郭が閉じていることを見張る
   describe('くすり', () => {
