@@ -68,7 +68,7 @@ const EXPORTS = `
   buildStory, get lang(){ return lang; }, set lang(v){ lang = v; storyPages = null; },
   get diaryLog(){ return diaryLog; },
   buildDiary, diaryBody, addDiary, clearDiary, trimToShown, DIARY_MAX,
-  diaryWriting, diaryLevel, diaryStyle, writeRatio, diaryFontSize,
+  diaryWriting, diaryLevel, diaryStyle, writeRatio,
   LV_NEW, LV_BABY, LV_CHILD, LV_ADULT,
   bodyRows, DBODY_TOP, DBODY_BOT,
   ensureAudio, playClick, playSeq, playSnd, SND, REACT_SND, EAT_T, EAT_STEP, biteFrame, CLEAN_T, AC_RETRY, get ac(){ return ac; }, setSound, get soundOn(){ return soundOn; },

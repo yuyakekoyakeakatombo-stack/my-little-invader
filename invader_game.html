@@ -6742,7 +6742,7 @@
   // 項目はキーで管理（表示ラベルは言語辞書、値は各キーで分岐）
   //  版の番号は sw.js の VERSION と同じもの。tools/bump-sw.sh が両方いっしょに
   //  書き換える（ずれると、テスターの端末に出ている版が分からなくなる）
-  const APP_VERSION = '2026-09-05-03';
+  const APP_VERSION = '2026-09-05-04';
   //  (C) は Press Start 2P に © が無く、別の字体に落ちて1文字だけ形が浮くため
   const APP_COPY = '(C) 2026 Studio M.D.Q.';
   // 天気は Open-Meteo から貰っている。CC BY 4.0 なので、無料で使う場合でも
@@ -7568,6 +7568,8 @@
   const DBODY_TOP = 20, DBODY_BOT = 50;
   function drawDiaryText(e){
     const body = e ? diaryBody(e) : (lang==='ja' ? DIARY_EMPTY.ja : DIARY_EMPTY.en);
+    // 本文の文字の大きさ。日本語は実フォント10px、英語は Press Start 2P の6px。
+    //  英語の書体は1文字が6pxしかないので、日本語と同じ大きさにすると行が長くなりすぎる
     const fs = (lang === 'ja') ? 10 : 6;
     const { y0, lh } = bodyRows(body.length, fs, body.length <= 5 ? 14 : 10);   // 行数が多い時だけ詰める
     ctxT.font = (lang==='ja') ? (fs+'px '+JP_FONT) : fs+'px "Press Start 2P"';
@@ -7584,17 +7586,6 @@
     const y0 = Math.max(top, Math.round((top + bot)/2 - ((n-1)*lh + hRow)/2));
     return { y0, lh };
   }
-  // あかちゃん・こども：単語ごとに、日本語か自分の文字か。
-  //  自分の文字は「その単語の字数ぶん」置くので、書けなかった単語の長さがそのまま残る
-  // 1ページぶんの行。あかちゃんのうちは、その日の出来事の絵が上に1行だけ残る
-  //  （いきなり全部が文字になるより、絵から言葉へ移っていくほうが自然）
-  // 本文の文字の大きさ。日本語は実フォント10px、英語は Press Start 2P の6px
-  function diaryFontSize(){ return (lang === 'ja') ? 10 : 6; }
-  // 宇宙文字・絵記号の1ドットの大きさ。
-  //  言葉が混ざる段階（こども）では、文字と同じ高さに収まる大きさまで落とす。
-  //  英語は文字が6pxしかないので、日本語と同じ2ドット（＝10px）だと
-  //  宇宙文字だけが文字の倍近く大きくなって浮いてしまう。
-  //  あかちゃんまでは1文字も混ざらないので、大きいまま（そのほうが幼く見える）
 
   function tickDiary(){
     if(scene !== 'diary') return;

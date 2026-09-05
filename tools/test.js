@@ -2884,11 +2884,23 @@ describe('にっきの字', () => {
     const old = Object.assign({}, base, { lv: api.LV_NEW, wr: 0 });
     ok(api.diaryBody(old).length > 0, 'うまれたての日記の本文が出ない');
   });
+  //  実際に描いている値を見る。以前は同じ判定を持つ別の関数（diaryFontSize）を
+  //  調べていたが、その関数はどこからも呼ばれておらず、描画側を壊しても素通りしていた
   it('本文の大きさは 言語で変わる', () => {
-    for(const [lg, expect] of [['ja', 10], ['en', 6]]){
-      const { api } = load({ storage:{ myvader_lang: lg } });
-      eq(api.diaryFontSize(), expect, `${lg} の本文の大きさ:`);
-    }
+    const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'invader_game.html'), 'utf8');
+    const at = src.indexOf('function drawDiaryText');
+    ok(at > 0, '本文を描くところが見つからない');
+    const body = src.slice(at, at + 700);
+    const m = body.match(/const fs = \(lang === 'ja'\) \? (\d+) : (\d+);/);
+    ok(m, `本文の大きさを決めるところが見つからない`);
+    eq(+m[1], 10, '日本語の本文の大きさ:');
+    eq(+m[2], 6,  '英語の本文の大きさ:');
+    //  書体もそれぞれに合わせて切り替えていること
+    const fontLine = body.split('\n').find(l => l.includes('ctxT.font'));
+    ok(fontLine, '書体を決めているところが見つからない');
+    ok(/lang\s*===\s*'ja'/.test(fontLine), `言語で書体を切り替えていない: ${fontLine.trim()}`);
+    ok(fontLine.includes('JP_FONT') && fontLine.includes('Press Start 2P'),
+       `両方の書体を使っていない: ${fontLine.trim()}`);
   });
   //  初日の一言が読めることが目的なので、段階で描き分けないこと。
   //  絵記号に戻すと、いちばん短い日の日記だけが読めなくなる
