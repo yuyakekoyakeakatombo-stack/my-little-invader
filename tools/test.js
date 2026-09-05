@@ -4514,25 +4514,35 @@ describe('お世話アイコン', () => {
       //  くっつくと ひとかたまりの穴になり、ボタンに見えない
       ok(right.every(b => b.length <= 2), `ボタンが ${Math.max(...right.map(b=>b.length))} マスに広がっている`);
     });
-    //  下は中央がへこんで、両側がグリップ。グリップが細いと持ち手に見えず、
-    //  切れ込みだけが目立って「割れた四角」になる
-    it('下の両側にグリップがあり、細すぎない', () => {
-      const g = game();
-      const last = g[g.length-1];
-      const runs = [];                       // 濃い所・薄い所を、端から順に長さで並べる
-      let n = 1;
-      for(let i = 1; i <= last.length; i++){
-        if(i < last.length && !!last[i] === !!last[i-1]){ n++; continue; }
-        runs.push({ on: !!last[i-1], n }); n = 1;
+    //  下は中央がへこんで、両側がグリップ。1つに繋がると「割れていない四角」に、
+    //  3つ以上に割れると脚が生えたように見える。
+    //  太さは見張らない（下へ向かって細く絞り込むのが今の形）
+    //  濃い所・薄い所を、端から順に長さで並べる
+    const runsOf = row => {
+      const out = []; let n = 1;
+      for(let i = 1; i <= row.length; i++){
+        if(i < row.length && !!row[i] === !!row[i-1]){ n++; continue; }
+        out.push({ on: !!row[i-1], n }); n = 1;
       }
-      const grips = runs.filter(r => r.on);
+      return out;
+    };
+    //  中央の切れ込み（外側の余白は数えない）
+    const notchOf = row => {
+      const rs = runsOf(row), gi = rs.findIndex(r => r.on);
+      return gi < 0 ? null : (rs.slice(gi + 1).find(r => !r.on) || null);
+    };
+    it('下の両側にグリップが2つある', () => {
+      const g = game();
+      const grips = runsOf(g[g.length-1]).filter(r => r.on);
       eq(grips.length, 2, 'いちばん下の段の かたまりの数（左右のグリップ）:');
-      //  切れ込みは、2つのグリップに挟まれた薄い所だけ。外側の余白は数えない
-      const gi = runs.findIndex(r => r.on);
-      const notch = runs.slice(gi + 1).find(r => !r.on);
-      ok(notch, '中央の切れ込みが見つからない');
-      ok(grips.every(r => r.n >= notch.n),
-         `グリップ(${grips.map(r=>r.n).join('/')}) が 切れ込み(${notch.n}) より細い`);
+    });
+    //  グリップは下へ向かって細く絞り込まれる＝切れ込みは下ほど広い。
+    //  ここが逆になると、末広がりになって持ち手に見えない
+    it('切れ込みは、下の段ほど広い', () => {
+      const g = game();
+      const a = notchOf(g[g.length-2]), b = notchOf(g[g.length-1]);
+      ok(a && b, '切れ込みが見つからない');
+      ok(b.n >= a.n, `いちばん下の切れ込み(${b.n})が、その上(${a.n})より狭い`);
     });
     //  十字キーとボタンの段以外が左右でずれると、パッドが傾いて見える
     it('十字キーとボタンの段をのぞいて、左右対称', () => {
