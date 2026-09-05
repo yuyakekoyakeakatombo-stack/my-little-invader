@@ -2161,6 +2161,29 @@ describe('世話の音', () => {
     const bite = api.SND.bite.reduce((a,n)=>a+n[1], 0);
     ok(bite < api.EAT_STEP / 10, `ひと口の音が長すぎて次の口に重なる: ${bite}秒`);
   });
+  //  食事中の口は描かない。口は地の色で穴を開ける作りだったので、目や脚のすき間と
+  //  繋がって、目と口が一体になったり 脚が消えたりしていた（15体中11体）。
+  //  戻すなら同じ壊れ方をしない作りにする必要があるので、戻ったことに気づけるようにする
+  it('食べている間、口は描かない', () => {
+    const { api } = load();
+    const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'invader_game.html'), 'utf8');
+    ok(api.EAT_MOUTH === undefined, '口の位置表が残っている');
+    ok(!src.includes('EAT_MOUTH'), 'EAT_MOUTH がソースに残っている');
+    //  地の色で穴を開ける描き方そのものが戻っていないこと
+    ok(!/reactType === 'eat'[\s\S]{0,200}?dot\([^)]*BG\)/.test(src),
+       '食事中に地の色で穴を開けている（口が戻っている）');
+  });
+  //  口をやめても、食べていることは伝わり続けること
+  it('食べていることは、目線・皿の減り・噛む音で伝わる', () => {
+    const { api } = load();
+    const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'invader_game.html'), 'utf8');
+    ok(/grid = eatSprite\(\);/.test(src), '食事中に目線が皿の方を向かない');
+    ok(/drawFoodPlate\(/.test(src), '皿を描いていない');
+    ok(/if\(biteFrame\(reactT\)\) playSnd\('bite'\);/.test(src), '噛む音を鳴らしていない');
+    //  目線の差し替えは、口を持たない子（g3・i3）以外には用意されていること
+    const empty = Object.entries(api.EAT_FACE).filter(([,v]) => !v || !v.length).map(([k]) => k);
+    eq(empty.sort(), ['g3','i3'], '目線を動かさない子:');
+  });
   it('音が消えていない（鳴らす場所がソースにある）', () => {
     const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'invader_game.html'), 'utf8');
     //  仕草ぶんは setReaction が一括で鳴らす

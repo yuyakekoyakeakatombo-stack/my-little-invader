@@ -38,6 +38,7 @@ const EXPORTS = `
   get weather(){ return weather; }, set weather(v){ weather = v; },
   get weatherFetched(){ return weatherFetched; }, set weatherFetched(v){ weatherFetched = v; },
   sleepConfig, isAsleep, birthPet, ARRIVE_AWAKE_MS, rewindClock, PET_TIMES, sleepKind, stayingUpLate, effectiveAsleep, owlShift,
+  EAT_FACE, eatKey, eatSprite,
   pickForm, pickLineage, pickVoice, voice, voiceIdx, pTrait,
   todayKey, petDay, dayLabel, daysBetweenKeys,
   formLabel, endLabel, typeLabel, stageLabel, menuList, menuCols, MENU_RIGHT,
