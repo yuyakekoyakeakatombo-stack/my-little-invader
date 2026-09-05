@@ -2246,6 +2246,37 @@ describe('くすりの演出', () => {
        '左下が塗りつぶされていて、輪郭になっていない');
     ok(dots(P) < dots(I), 'アイコンより点が多い');
   });
+  //  塗り分けもアイコンと同じにする。全部を濃色で描くと、飛んでくるのが
+  //  ただの黒い塊になり、押したアイコンと結びつかない
+  it('薬の絵は、アイコンと同じ2色（輪郭が濃色・中身が薄色）', () => {
+    const { api } = load();
+    const P = api.MED_PILL, I = api.CARE_ICONS.MED;
+    const vals = g => new Set(g.flat());
+    ok(vals(P).has(2) && vals(P).has(1),
+       `2色になっていない（使っている値: ${[...vals(P)].sort().join(',')}）`);
+    ok(vals(I).has(2) && vals(I).has(1), 'アイコンが2色でない');
+    //  外に接しているマスが輪郭(2)、囲まれているマスが中身(1)。
+    //  この規則が崩れると、輪郭が途切れたり 中身が外へ漏れたりする
+    const H = P.length, W = P[0].length;
+    const bad = [];
+    for(let y = 0; y < H; y++) for(let x = 0; x < W; x++){
+      if(!P[y][x]) continue;
+      const edge = [[1,0],[-1,0],[0,1],[0,-1]].some(([dy,dx]) => {
+        const ny = y+dy, nx = x+dx;
+        return ny < 0 || nx < 0 || ny >= H || nx >= W || !P[ny][nx];
+      });
+      const want = edge ? 2 : 1;
+      if(P[y][x] !== want) bad.push(`(${x},${y})は${edge?'輪郭':'中身'}なのに${P[y][x]}`);
+    }
+    ok(bad.length === 0, `塗り分けが規則どおりでない: ${bad.slice(0,4).join(' / ')}`);
+  });
+  //  描く側が2色を扱えること。片方だけ直しても絵は変わらない
+  it('2色の絵を描けるようになっている', () => {
+    const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'invader_game.html'), 'utf8');
+    ok(/function stamp\(ctx,grid,ox,oy,col,dimCol\)/.test(src), 'stamp が2色を受け取らない');
+    ok(/stamp\(ctxM, MED_PILL, pos\.x, pos\.y, NK, DM\)/.test(src),
+       '飛んでくる薬に、薄色を渡していない');
+  });
 });
 
 // ══ 日記 ══════════════════════════════════════════════════
