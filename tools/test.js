@@ -4510,7 +4510,42 @@ describe('お世話アイコン', () => {
     it('右がボタンの並び（離れた点が複数）', () => {
       const g = game(), W = g[0].length;
       const right = holes(g).filter(b => b.every(([,x]) => x >= W/2));
-      ok(right.length >= 3, `右の空きが ${right.length} 個（ボタンは離れて複数あること）`);
+      ok(right.length >= 2, `右の空きが ${right.length} 個（ボタンは離れて複数あること）`);
+      //  くっつくと ひとかたまりの穴になり、ボタンに見えない
+      ok(right.every(b => b.length <= 2), `ボタンが ${Math.max(...right.map(b=>b.length))} マスに広がっている`);
+    });
+    //  下は中央がへこんで、両側がグリップ。グリップが細いと持ち手に見えず、
+    //  切れ込みだけが目立って「割れた四角」になる
+    it('下の両側にグリップがあり、細すぎない', () => {
+      const g = game();
+      const last = g[g.length-1];
+      const runs = [];                       // 濃い所・薄い所を、端から順に長さで並べる
+      let n = 1;
+      for(let i = 1; i <= last.length; i++){
+        if(i < last.length && !!last[i] === !!last[i-1]){ n++; continue; }
+        runs.push({ on: !!last[i-1], n }); n = 1;
+      }
+      const grips = runs.filter(r => r.on);
+      eq(grips.length, 2, 'いちばん下の段の かたまりの数（左右のグリップ）:');
+      //  切れ込みは、2つのグリップに挟まれた薄い所だけ。外側の余白は数えない
+      const gi = runs.findIndex(r => r.on);
+      const notch = runs.slice(gi + 1).find(r => !r.on);
+      ok(notch, '中央の切れ込みが見つからない');
+      ok(grips.every(r => r.n >= notch.n),
+         `グリップ(${grips.map(r=>r.n).join('/')}) が 切れ込み(${notch.n}) より細い`);
+    });
+    //  十字キーとボタンの段以外が左右でずれると、パッドが傾いて見える
+    it('十字キーとボタンの段をのぞいて、左右対称', () => {
+      const g = game(), W = g[0].length;
+      //  操作部のある段は、左右で中身が違うのが正しい
+      const ctrl = new Set();
+      for(const b of holes(g)) for(const [y] of b) ctrl.add(y);
+      const bad = [];
+      g.forEach((row, y) => {
+        if(ctrl.has(y)) return;
+        for(let x = 0; x < W; x++) if(row[x] !== row[W-1-x]){ bad.push(y); return; }
+      });
+      ok(bad.length === 0, `左右がずれている段: ${bad.join(', ')}`);
     });
     //  かつては古典的なインベーダーの形だった。戻すと権利面の懸念が復活する
     it('インベーダーの形に戻っていない', () => {
