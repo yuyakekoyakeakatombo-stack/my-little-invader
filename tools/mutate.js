@@ -800,8 +800,8 @@ const MUTATIONS = [
 
   // ── 説明書 ──
   ['タイプの呼び名を変える（説明書だけ古いまま残る）',
-   "      gray:'グレイ', martian:'マーシャン', invader:'インベーダー',",
-   "      gray:'グレイ', martian:'カセイジン', invader:'インベーダー',", 'caught'],
+   "      gray:'グレイ', martian:'マーシャン', invader:'ノーマル',",
+   "      gray:'グレイ', martian:'カセイジン', invader:'ノーマル',", 'caught'],
   ['さいごの分岐を2つに減らす（説明書の「9とおり」と食い違う）',
    "    return n === '1' ? T('plump') : n === '2' ? T('sleek') : n === '3' ? T('prickly') : '';",
    "    return n === '1' ? T('plump') : n === '2' ? T('sleek') : n === '3' ? T('sleek') : '';", 'caught'],
