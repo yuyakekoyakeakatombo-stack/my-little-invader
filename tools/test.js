@@ -2173,6 +2173,39 @@ describe('世話の音', () => {
     ok(!/reactType === 'eat'[\s\S]{0,200}?dot\([^)]*BG\)/.test(src),
        '食事中に地の色で穴を開けている（口が戻っている）');
   });
+  //  口のかわりに屈伸で食べているのを見せる。すべてのキャラで縮むこと
+  it('食べている間は、屈伸する', () => {
+    const { api } = load();
+    const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'invader_game.html'), 'utf8');
+    ok(/if\(fM % EAT_BOB < EAT_BOB\/2\) grid = squatFrame\(grid\);/.test(src),
+       '食事中に屈伸していない');
+    //  上下に動かす（yOff）と浮いて見えるので、縮めること
+    const at = src.indexOf("if(reactType==='eat')");
+    ok(at > 0, '食事の分岐が見つからない');
+    ok(!/yOff = \(fM/.test(src.slice(at, at + 500)), '食事中に体を持ち上げている（浮いて見える）');
+    //  歩きより速いこと。おなじだと食べている感じが出ない
+    ok(api.EAT_BOB < 6, `屈伸が遅い（${api.EAT_BOB}コマ）`);
+    ok(api.EAT_BOB >= 2, `屈伸が速すぎてちらつく（${api.EAT_BOB}コマ）`);
+  });
+  //  15体すべてで縮むこと。縮まない子がいると、その子だけ食事中に止まって見える
+  it('どのキャラも屈伸で1段縮み、足は接地したまま', () => {
+    const { api } = load();
+    const CASES = [['egg',{stage:'egg'}],['mid',{stage:'mid'}],['larva',{stage:'larva'}],
+      ['grey',{stage:'adult',lineage:'grey'}],['tako',{stage:'adult',lineage:'tako'}],['inv',{stage:'adult',lineage:'inv'}],
+      ['g1',{stage:'final',lineage:'grey',form:'g1'}],['g2',{stage:'final',lineage:'grey',form:'g2'}],['g3',{stage:'final',lineage:'grey',form:'g3'}],
+      ['t1',{stage:'final',lineage:'tako',form:'t1'}],['t2',{stage:'final',lineage:'tako',form:'t2'}],['t3',{stage:'final',lineage:'tako',form:'t3'}],
+      ['i1',{stage:'final',lineage:'inv',form:'i1'}],['i2',{stage:'final',lineage:'inv',form:'i2'}],['i3',{stage:'final',lineage:'inv',form:'i3'}]];
+    for(const [k, p] of CASES){
+      Object.assign(api.pet, { name:'T', ...p });
+      const a = api.eatSprite(), b = api.squatFrame(a);
+      eq(b.length, a.length - 1, `${k}: 屈伸で縮む段数`);
+      //  いちばん下（足）は残る。抜けるのは その1つ上
+      eq(JSON.stringify(b[b.length-1]), JSON.stringify(a[a.length-1]), `${k}: 足の段`);
+    }
+    //  足元は grid の高さから引き直しているので、縮んでも浮かない
+    const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'invader_game.html'), 'utf8');
+    ok(/const charY = MAIN_GY - grid\.length;/.test(src), '足元が縮んだ高さから引き直されていない');
+  });
   //  口をやめても、食べていることは伝わり続けること
   it('食べていることは、目線・皿の減り・噛む音で伝わる', () => {
     const { api } = load();
