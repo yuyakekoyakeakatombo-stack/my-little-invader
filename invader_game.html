@@ -1128,6 +1128,8 @@
   const RET_PLAY_RATE   = 0.1;    // ミニゲーム回数／日 がこれ未満で兆候（10日に1回未満）
   const RET_SCOLD_RATE  = 2.0;    // しかるの失敗／日 がこれ超で兆候
   const RET_NOTOUCH_DAYS= 5;      // ふれあいゼロがこの日数続くと兆候
+  const RET_LOWB_DAYS   = 5;      // なつき度が低いまま続いた日数（単独で家出が成立する）
+  const DEPART_B        = 60;     // 旅立ちに要るなかよし度。ここに届かないと迎えが来る
 
   function addA(n){ pet.A = Math.max(-9999, Math.min(9999, (pet.A||0) + n)); }
   const D_SMOOTH = 0.3;           // しつけ度の移動平均に、その日の値を取り込む割合
@@ -1239,6 +1241,50 @@
     const byAll  = s.lineageAt ? s.lineageAt + FINAL_CAP * 86400000 : Infinity;
     return Math.min(byForm, byAll);
   }
+  // 幕引きを確定させる。日付が変わったあと、1日1回だけ通る。
+  //  ここで立てるのは「印」だけで、演出は描画側が印を見て始める。
+  //  順番に意味がある：**成体の時間切れ → 最終形態の幕引き**。
+  //  先に成体を見るのは、最終形態に届かなかった子を取りこぼさないため
+  function settleEnding(now){
+    // 旅立ちエンド（E4）：最終形態から14日・なつき度60以上・健康
+    // 帰還（時間切れ）：育ちきらないまま成体でとどまり続けた子。
+    //  中途半端な育て方では最終形態にならない仕組みにしたので、そのままだと
+    //  物語が終わらなくなる。世話をしなかったわけではないので家出にはせず、
+    //  迎えが来て連れ帰られる形で区切る
+    if(pet.stage==='adult' && pet.lineageAt && !pet.ufoFlag && !pet.homeFlag && !pet.invadeFlag &&
+       now - pet.lineageAt >= STUCK_DAYS*86400000){
+      pet.homeFlag = true; pet.homeRedeem = false;
+      addDiary({ d: petDay(), n: pet.name, t: ['broughtHome'], v: [voiceIdx()], c: '', ts: Date.now(), cd: todayKey() });
+    }
+    // 最終形態の幕引き。最終形態から14日、ただし成体到達から30日を超えない。
+    //  上限を後から入れたので、すでに育っている子には猶予（endGrace）を与える
+    if(pet.stage==='final' && pet.finalAt && !pet.ufoFlag && !pet.homeFlag &&
+       !pet.invadeFlag && !pet.departFlag && now >= (pet.endGrace||0) && now >= finalDue()){
+      if(isWild()){
+        // とげとげの行き先。立て直せたかどうかで、迎えが来るか、黙って出ていくかが分かれる
+        if(invadeSigns()){ /* 侵攻の条件がそろっている間は、そちらに譲る */ }
+        else if(redeemed()){
+          pet.homeFlag = true; pet.homeRedeem = true;
+          addDiary({ d: petDay(), n: pet.name, t: ['redeemed'], v: [voiceIdx()], c: '', ts: Date.now(), cd: todayKey() });
+        } else {
+          pet.ufoFlag = true;
+          addDiary({ d: petDay(), n: pet.name, t: ['farewellWild'], v: [voiceIdx()], c: '', ts: Date.now(), cd: todayKey() });
+        }
+      } else if(pet.B >= DEPART_B && pet.health === 'GOOD'){
+        pet.departFlag = true;
+        // 帰還エンドと同じく、最後の一言を日記に書き残してから旅立つ。
+        //  演出のあとは主のいない画面で止まるので、読み返せるものが無いと画面が空のまま残ってしまう
+        addDiary({ d: petDay(), n: pet.name, t: ['departed'], v: [voiceIdx()], c: '', ts: Date.now(), cd: todayKey() });
+      } else {
+        // 最終形態にはなったが、なかよしが旅立ちの線に届かなかった／病気のまま。
+        //  ここが無いと、なかよし20〜59で固まった子がどの結末にも辿り着けない
+        //  （20未満は家出の lowB で拾われる）。成体の時間切れと同じ「迎えが来る」で区切る
+        pet.homeFlag = true; pet.homeRedeem = false;
+        addDiary({ d: petDay(), n: pet.name, t: ['broughtHome'], v: [voiceIdx()], c: '', ts: Date.now(), cd: todayKey() });
+      }
+    }
+  }
+
   function returnSigns(){
     if(!pet.larvaAt || !pet.snapL) return [];                // 幼体前は判定しない
     const days = daysSince(pet.larvaAt);
@@ -1252,7 +1298,7 @@
     if(praise < days * RET_PRAISE_RATE)                sg.push('praise');  // ほめる回数が極端に少ない
     if(plays  < days * RET_PLAY_RATE)                  sg.push('play');    // 遊ぶ回数が極端に少ない
     if(bad > days * RET_SCOLD_RATE && bad > praise*3)  sg.push('scold');   // しかるの失敗が多すぎる
-    if(pet.lowBDays >= 5)                              sg.push('lowB');    // なつき度が低いまま続いた
+    if(pet.lowBDays >= RET_LOWB_DAYS)                  sg.push('lowB');    // なつき度が低いまま続いた
     return sg;
   }
   // ── 侵攻エンド（E5）：怒りと恨みを伴った「反逆」 ──
@@ -3711,43 +3757,7 @@
       pet.touchedToday = false; pet.touchCount = 0; pet.touchKinds = {};
       pet.nightPlayToday = false; pet.nightCareToday = false;
     }
-    // 旅立ちエンド（E4）：最終形態から14日・なつき度60以上・健康
-    // 帰還（時間切れ）：育ちきらないまま成体でとどまり続けた子。
-    //  中途半端な育て方では最終形態にならない仕組みにしたので、そのままだと
-    //  物語が終わらなくなる。世話をしなかったわけではないので家出にはせず、
-    //  迎えが来て連れ帰られる形で区切る
-    if(pet.stage==='adult' && pet.lineageAt && !pet.ufoFlag && !pet.homeFlag && !pet.invadeFlag &&
-       now - pet.lineageAt >= STUCK_DAYS*86400000){
-      pet.homeFlag = true; pet.homeRedeem = false;
-      addDiary({ d: petDay(), n: pet.name, t: ['broughtHome'], v: [voiceIdx()], c: '', ts: Date.now(), cd: todayKey() });
-    }
-    // 最終形態の幕引き。最終形態から14日、ただし成体到達から30日を超えない。
-    //  上限を後から入れたので、すでに育っている子には猶予（endGrace）を与える
-    if(pet.stage==='final' && pet.finalAt && !pet.ufoFlag && !pet.homeFlag &&
-       !pet.invadeFlag && !pet.departFlag && now >= (pet.endGrace||0) && now >= finalDue()){
-      if(isWild()){
-        // とげとげの行き先。立て直せたかどうかで、迎えが来るか、黙って出ていくかが分かれる
-        if(invadeSigns()){ /* 侵攻の条件がそろっている間は、そちらに譲る */ }
-        else if(redeemed()){
-          pet.homeFlag = true; pet.homeRedeem = true;
-          addDiary({ d: petDay(), n: pet.name, t: ['redeemed'], v: [voiceIdx()], c: '', ts: Date.now(), cd: todayKey() });
-        } else {
-          pet.ufoFlag = true;
-          addDiary({ d: petDay(), n: pet.name, t: ['farewellWild'], v: [voiceIdx()], c: '', ts: Date.now(), cd: todayKey() });
-        }
-      } else if(pet.B >= 60 && pet.health === 'GOOD'){
-        pet.departFlag = true;
-        // 帰還エンドと同じく、最後の一言を日記に書き残してから旅立つ。
-        //  演出のあとは主のいない画面で止まるので、読み返せるものが無いと画面が空のまま残ってしまう
-        addDiary({ d: petDay(), n: pet.name, t: ['departed'], v: [voiceIdx()], c: '', ts: Date.now(), cd: todayKey() });
-      } else {
-        // 最終形態にはなったが、なかよしが旅立ちの線に届かなかった／病気のまま。
-        //  ここが無いと、なかよし20〜59で固まった子がどの結末にも辿り着けない
-        //  （20未満は家出の lowB で拾われる）。成体の時間切れと同じ「迎えが来る」で区切る
-        pet.homeFlag = true; pet.homeRedeem = false;
-        addDiary({ d: petDay(), n: pet.name, t: ['broughtHome'], v: [voiceIdx()], c: '', ts: Date.now(), cd: todayKey() });
-      }
-    }
+    settleEnding(now);   // 幕引き（旅立ち・帰還・とげとげの行き先）
 
     maybeEvolve();   // 進化条件チェック（起きている時のみ発動）
     savePet();
@@ -6755,7 +6765,7 @@
   // 項目はキーで管理（表示ラベルは言語辞書、値は各キーで分岐）
   //  版の番号は sw.js の VERSION と同じもの。tools/bump-sw.sh が両方いっしょに
   //  書き換える（ずれると、テスターの端末に出ている版が分からなくなる）
-  const APP_VERSION = '2026-09-06-01';
+  const APP_VERSION = '2026-09-07-01';
   //  (C) は Press Start 2P に © が無く、別の字体に落ちて1文字だけ形が浮くため
   const APP_COPY = '(C) 2026 Studio M.D.Q.';
   // 天気は Open-Meteo から貰っている。CC BY 4.0 なので、無料で使う場合でも
