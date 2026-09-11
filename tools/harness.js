@@ -54,6 +54,8 @@ const EXPORTS = `
 
   set inSettings(v){ inSettings = v; }, set inStatus(v){ inStatus = v; },
   set inFeed(v){ inFeed = v; }, set inPlay(v){ inPlay = v; },
+  get feedSel(){ return feedSel; }, set feedSel(v){ feedSel = v; },
+  FEED_ITEMS,
   isWeak, isWeakStarve, isWeakSick, WEAK_STARVE_MIN, WEAK_SICK_MIN, plateOnScreen, needsMed, hungerMin, feedGain, feedFill, HUNGER_MAX,
    gaugeHunger, gaugeMood, raiseMood, MOOD_MIN,
   get walkX(){ return walkX; }, set walkX(v){ walkX = v; },
