@@ -6796,7 +6796,7 @@
   // 項目はキーで管理（表示ラベルは言語辞書、値は各キーで分岐）
   //  版の番号は sw.js の VERSION と同じもの。tools/bump-sw.sh が両方いっしょに
   //  書き換える（ずれると、テスターの端末に出ている版が分からなくなる）
-  const APP_VERSION = '2026-09-11-02';
+  const APP_VERSION = '2026-09-11-03';
   //  (C) は Press Start 2P に © が無く、別の字体に落ちて1文字だけ形が浮くため
   const APP_COPY = '(C) 2026 Studio M.D.Q.';
   // 天気は Open-Meteo から貰っている。CC BY 4.0 なので、無料で使う場合でも
@@ -6817,6 +6817,58 @@
   }
   function weatherSelIndex(){
     return weatherMode==='off' ? 0 : weatherMode==='here' ? 1 : 2 + cityIdx;
+  }
+
+
+  // ── せっていの操作。**音と実行は呼び出し側**に残し、状態の書き換えだけ行う ──
+  //  ダイアログ・説明・バージョンを出しているあいだは動かせない（A/Bだけを受ける）
+  function settingsMove(dir){
+    if(confirmReset || locPrime || inAbout) return;
+    if(inWeather){                         // 天気リストの上下移動
+      if(dir==='up')   wSel = Math.max(0, wSel-1);
+      if(dir==='down') wSel = Math.min(weatherOptions().length-1, wSel+1);
+      return;
+    }
+    if(dir==='up')   settingsSel=Math.max(0, settingsSel-1);
+    if(dir==='down') settingsSel=Math.min(SETTINGS_KEYS.length-1, settingsSel+1);
+    // 左右で値変更
+    if(dir==='left' || dir==='right'){
+      const key = SETTINGS_KEYS[settingsSel], right = (dir==='right');
+      if(key==='sound')     setSound(!soundOn);
+      if(key==='language')  toggleLang();
+      if(key==='bodycolor'){ bodyColorIdx=(right?bodyColorIdx+1:bodyColorIdx-1+BODY_COLORS.length)%BODY_COLORS.length; applyBodyColor(); }
+      // 天気は選択肢が多いので左右では変えない。Aでリストを開いて選ぶ
+    }
+  }
+  //  戻り値：'reset' のときだけ、呼び出し側が実際の消去を行う
+  function settingsPressA(){
+    if(locPrime){ locPrime=false; setWeatherMode('here'); return 'here'; }   // 用途説明のあと、A で許可要求
+    if(inWeather){
+      const o = weatherOptions()[wSel];
+      inWeather = false;
+      if(o.k === 'off')       setWeatherMode('off');
+      else if(o.k === 'here') locPrime = true;                         // 説明を読んでからAで許可
+      else { cityIdx = o.i; setWeatherMode('city'); }                  // 都市は位置情報を使わない
+      return 'weather';
+    }
+    // バージョンを開いているあいだは、A では閉じない（Bだけで戻る）
+    const key = SETTINGS_KEYS[settingsSel];
+    if(key==='sound') setSound(!soundOn);
+    if(key==='language') toggleLang();
+    if(key==='bodycolor'){ bodyColorIdx=(bodyColorIdx+1)%BODY_COLORS.length; applyBodyColor(); }
+    if(key==='weather'){ inWeather=true; wSel=weatherSelIndex(); }     // 選択肢をリストで見せる
+    if(key==='version') inAbout=true;                                 // 題と著作権もここで見せる
+    if(key==='reset' && !confirmReset){ confirmReset = true; return 'confirm'; }  // まず確認
+    if(key==='reset') return 'reset';                                 // 確認中のA = 実行
+    return key;
+  }
+  //  Bで1階層もどる。戻り値 false なら せってい自体を閉じる
+  function settingsPressB(){
+    if(inAbout){ inAbout=false; return true; }
+    if(inWeather){ inWeather=false; return true; }
+    if(locPrime){ locPrime=false; return true; }
+    if(confirmReset){ confirmReset=false; return true; }
+    return false;
   }
 
   function applyBodyColor() {
@@ -7136,23 +7188,9 @@
     onPress(el,()=>{
       playClick(900); dpadAnim(el);
       if(inSettings){
-        if(confirmReset || locPrime || inAbout) return;   // ダイアログ/説明/バージョン表示中は移動不可（A/Bのみ）
-        if(inWeather){                         // 天気リストの上下移動
-          if(el.classList.contains('up'))   wSel = Math.max(0, wSel-1);
-          if(el.classList.contains('down')) wSel = Math.min(weatherOptions().length-1, wSel+1);
-          return;
-        }
-        if(el.classList.contains('up'))   settingsSel=Math.max(0, settingsSel-1);
-        if(el.classList.contains('down')) settingsSel=Math.min(SETTINGS_KEYS.length-1, settingsSel+1);
-        // 左右で値変更
-        if(locPrime){ /* 用途説明中は左右無効 */ }
-        else if(el.classList.contains('left')||el.classList.contains('right')){
-          const key = SETTINGS_KEYS[settingsSel], right = el.classList.contains('right');
-          if(key==='sound')     setSound(!soundOn);
-          if(key==='language')  toggleLang();
-          if(key==='bodycolor'){ bodyColorIdx=(right?bodyColorIdx+1:bodyColorIdx-1+BODY_COLORS.length)%BODY_COLORS.length; applyBodyColor(); }
-          // 天気は選択肢が多いので左右では変えない。Aでリストを開いて選ぶ
-        }
+        const dir = el.classList.contains('up')?'up' : el.classList.contains('down')?'down'
+                  : el.classList.contains('left')?'left' : 'right';
+        settingsMove(dir);
       } else if(inStatus){
         // STATUSに選択項目なし
       } else if(inFeed){
@@ -7182,35 +7220,9 @@
     playClick(onDisabledCare() ? 300 : 900);
     btnAnim(document.getElementById('na'));
     if(inSettings){
-      if(locPrime){ locPrime=false; setWeatherMode('here'); return; }   // 用途説明のあと、A で許可要求
-      if(inWeather){
-        const o = weatherOptions()[wSel];
-        inWeather = false;
-        if(o.k === 'off')       setWeatherMode('off');
-        else if(o.k === 'here') locPrime = true;                         // 説明を読んでからAで許可
-        else { cityIdx = o.i; setWeatherMode('city'); }                  // 都市は位置情報を使わない
-        return;
-      }
-      const key = SETTINGS_KEYS[settingsSel];
-      if(key==='sound') setSound(!soundOn);
-      if(key==='language') toggleLang();
-      if(key==='bodycolor'){ bodyColorIdx=(bodyColorIdx+1)%BODY_COLORS.length; applyBodyColor(); }
-      if(key==='weather'){ inWeather=true; wSel=weatherSelIndex(); }     // 選択肢をリストで見せる
-      if(key==='version') inAbout=true;                                 // 題と著作権もここで見せる
-      if(key==='debug'){
-        debugMode=!debugMode;
-        if(debugMode){
-          debugTimer=setInterval(cycleDebug, DEBUG_INTERVAL);
-        } else {
-          clearInterval(debugTimer);
-          timeOfDay=getTimeOfDay();
-        }
-      }
-      if(key==='reset'){
-        if(!confirmReset){
-          confirmReset = true;             // まず確認ダイアログを表示
-        } else {
-          // 確認中のA = 実行
+      // 'reset' が返った時だけ、実際に消す（確認は settingsPressA の中で出す）
+      if(settingsPressA() !== 'reset') return;
+      {
           confirmReset = false; locPrime = false;
           menuSel=0; menuScroll=0; settingsSel=0; inSettings=false; inPlay=false; inFeed=false; inStatus=false; bodyColorIdx=1; setSound(true);  // カラーはデフォルトのONYX（黒）
           weatherFetched=false; weather='clear'; debugMode=false;
@@ -7228,7 +7240,6 @@
           //  いきなりタイトルと選択肢が出てしまう
           applyBodyColor(); showView('opening');
           fO=0; openingReady=false; openingDone=false; titleWait=0; openStep=0; openSel=0; langSel=0;
-        }
       }
     } else if(inStatus){
       // STATUSでは決定操作なし
@@ -7281,11 +7292,7 @@
   onPress(document.getElementById('nb'),()=>{
     playClick(); btnAnim(document.getElementById('nb'));
     if(inSettings){
-      if(inAbout){ inAbout=false; }             // バージョンを閉じる
-      else if(inWeather){ inWeather=false; }    // 天気の選択をキャンセル
-      else if(locPrime){ locPrime=false; }      // 用途説明をキャンセル（許可を求めない）
-      else if(confirmReset){ confirmReset=false; }   // 確認ダイアログをキャンセル
-      else inSettings=false;
+      if(!settingsPressB()) inSettings=false;
     }
     else if(inStatus){ inStatus=false; }
     else if(inFeed){ inFeed=false; }  // MENUのFEEDアイコンから入るためグリッドへ戻る
