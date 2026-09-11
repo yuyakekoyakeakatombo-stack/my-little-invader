@@ -4004,29 +4004,30 @@
       if(el.classList.contains('right')) nameMove('right');
     });
   });
+  // Aを押したときの中身。**音と画面の切り替えは呼び出し側**に残し、
+  //  ここは状態の書き換えだけを行う（移植側と突き合わせるため）。
+  //  戻り値＝何が起きたか
+  function namePressA(){
+    if(onSlots){ onSlots=false; nameR=0; return 'toGrid'; }         // スロットを選んだら文字グリッドへ
+    if(onDel){ return nameDelete() ? 'delOk' : 'delNg'; }           // 画面上の「けす」
+    if(onDone) return (nameBuf.length >= 1) ? 'commit' : 'commitNg';
+    const ch = nameLayout().cells[nameR][nameC];
+    if(!ch) return 'none';
+    const append = (nameCur >= nameBuf.length);
+    if(append && nameBuf.length >= NAME_MAX) return 'full';         // 満杯で追記位置なし
+    // カーソル位置に書き込む：既存文字の上なら差し替え（＝打った文字の修正）、末尾なら追記
+    nameBuf = append ? (nameBuf + ch)
+                     : (nameBuf.slice(0,nameCur) + ch + nameBuf.slice(nameCur+1));
+    if(nameCur < NAME_MAX-1) nameCur++;
+    else if(append) onDone = true;   // 末尾まで埋め切ったときだけDONEへ送る
+    return 'put';
+  }
   onPress(document.getElementById('ga'),()=>{
     btnAnim(document.getElementById('ga'));
-    if(onSlots){ playClick(900); onSlots=false; nameR=0; return; }   // スロットを選んだら文字グリッドへ
-    if(onDel){ playClick(nameDelete() ? 900 : 300); return; }        // 画面上の「けす」
-    if(onDone){
-      if(nameBuf.length >= 1){
-        playClick(1400);
-        birthPet(nameBuf);
-        showView('main');
-      } else { playClick(300); }
-    } else {
-      const ch = nameLayout().cells[nameR][nameC];
-      if(ch){
-        const append = (nameCur >= nameBuf.length);
-        if(append && nameBuf.length >= NAME_MAX){ playClick(300); return; }   // 満杯で追記位置なし
-        playClick(900);
-        // カーソル位置に書き込む：既存文字の上なら差し替え（＝打った文字の修正）、末尾なら追記
-        nameBuf = append ? (nameBuf + ch)
-                         : (nameBuf.slice(0,nameCur) + ch + nameBuf.slice(nameCur+1));
-        if(nameCur < NAME_MAX-1) nameCur++;
-        else if(append) onDone = true;   // 末尾まで埋め切ったときだけDONEへ送る
-      }
-    }
+    const r = namePressA();
+    if(r === 'commit'){ playClick(1400); birthPet(nameBuf); showView('main'); return; }
+    if(r === 'none') return;                    // 文字の無いマス。元から音も鳴らさない
+    playClick(({ toGrid:900, delOk:900, put:900, delNg:300, commitNg:300, full:300 })[r]);
   });
   // 打った文字を1つ消す。消せた時は true（画面の「けす」とBボタンで共用）
   function nameDelete(){
@@ -6765,7 +6766,7 @@
   // 項目はキーで管理（表示ラベルは言語辞書、値は各キーで分岐）
   //  版の番号は sw.js の VERSION と同じもの。tools/bump-sw.sh が両方いっしょに
   //  書き換える（ずれると、テスターの端末に出ている版が分からなくなる）
-  const APP_VERSION = '2026-09-07-01';
+  const APP_VERSION = '2026-09-11-01';
   //  (C) は Press Start 2P に © が無く、別の字体に落ちて1文字だけ形が浮くため
   const APP_COPY = '(C) 2026 Studio M.D.Q.';
   // 天気は Open-Meteo から貰っている。CC BY 4.0 なので、無料で使う場合でも
