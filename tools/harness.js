@@ -80,7 +80,17 @@ const EXPORTS = `
   APP_VERSION, APP_COPY, APP_WEATHER_CREDIT, LOC_NOTE, SETTINGS_KEYS,
   CARE_ICONS, CARE_ORDER,
   endedShowMemory, MEM_CHAR_BOT, GHOST_MEM_DELAY,
-  healthState, statusAlert, headIcons, headIconX, headAlert, headDefault, HEAD_ICON_W,
+  // ── 画面を描かせる（移植側と突き合わせるため）──
+  tickMain, tickMenu, tickNaming, tickMemory, tickDiary,
+  get scene(){ return scene; }, set scene(v){ scene = v; },
+  get memPage(){ return memPage; }, set memPage(v){ memPage = v; },
+  get diaryPage(){ return diaryPage; }, set diaryPage(v){ diaryPage = v; },
+  get fM(){ return fM; }, set fM(v){ fM = v; },
+  get fN(){ return fN; }, set fN(v){ fN = v; },
+  get fG(){ return fG; }, set fG(v){ fG = v; },
+  get fR(){ return fR; }, set fR(v){ fR = v; },
+  healthState, statusAlert, isWeakStarve, isWeakSick, poopHasFlies, needsMed,
+  WEAK_STARVE_MIN, WEAK_SICK_MIN, headIcons, headIconX, headAlert, headDefault, HEAD_ICON_W,
   DIARY_ICON, STATUS_ICON, GEAR_ICON, HEAD_FONT, HEAD_TEXT_Y, HEAD_IY, HEAD_ICON_H, HEADER_Y, HEAD_ICON_GAP,
   get nameSelActive(){ return nameSelActive; }, set nameSelActive(v){ nameSelActive = v; },
   get headSel(){ return headSel; }, set headSel(v){ headSel = v; },
@@ -137,8 +147,18 @@ function makeSandbox(opts){
     removeItem: k => store.delete(k),
     clear: () => store.clear(),
   };
+  // 描いたものを記録する。移植側と画面を突き合わせるために使う。
+  //  opts.recordDraw を立てたときだけ溜める（ふだんは何もしない）
+  const drawLog = [];
+  const rec = (op) => { if(opts.recordDraw) drawLog.push(op); };
+
   const ctx = new Proxy({}, {
     get(t, p){
+      if(p === 'fillRect') return (x, y, w, h) => rec({ op:'rect', x, y, w, h, fill: t.fillStyle });
+      if(p === 'fillText') return (s, x, y) => rec({ op:'text', s: String(s), x, y,
+        font: t.font, align: t.textAlign || 'left', base: t.textBaseline || 'alphabetic',
+        fill: t.fillStyle });
+      if(p === 'clearRect') return (x, y, w, h) => rec({ op:'clear', x, y, w, h });
       // 実物の字幅は測れないので、字送りで近似する。Press Start 2P は
       //  正方形なので1文字＝文字の大きさ。日本語のフォントは全角が1文字ぶん、
       //  半角がその半分。ページ割りが均されているかを測るのに使う
@@ -209,7 +229,7 @@ function makeSandbox(opts){
   sandbox.globalThis = sandbox;
   sandbox.self = sandbox;
   Object.assign(win, { localStorage, document });
-  return { sandbox, store, timers, audioLog };
+  return { sandbox, store, timers, audioLog, drawLog };
 }
 
 // ── 止められる時計 ─────────────────────────────────────────
@@ -234,12 +254,13 @@ function makeClock(startMs){
 function load(opts = {}){
   const start = opts.at != null ? opts.at : new Date(2026, 5, 15, 12, 0, 0).getTime();
   const clock = makeClock(start);
-  const { sandbox, store, timers, audioLog } = makeSandbox({ storage: opts.storage, Date: clock.Date });
+  const { sandbox, store, timers, audioLog, drawLog } =
+    makeSandbox({ storage: opts.storage, Date: clock.Date, recordDraw: opts.recordDraw });
   vm.createContext(sandbox);
   vm.runInContext(mainScript(), sandbox, { filename: 'invader_game.html' });
   const api = sandbox.__api;
   if(!api) throw new Error('内部の取り出しに失敗');
-  return { api, clock, store, timers, sandbox, audioLog };
+  return { api, clock, store, timers, sandbox, audioLog, drawLog };
 }
 
 module.exports = { load, mainScript };
