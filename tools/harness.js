@@ -36,6 +36,7 @@ const EXPORTS = `
   get onDel(){ return onDel; },     set onDel(v){ onDel = v; },
   get onSlots(){ return onSlots; }, set onSlots(v){ onSlots = v; },
   get menuSel(){ return menuSel; }, set menuSel(v){ menuSel = v; },
+  menuMove, menuCols, menuList, MENU_BASE, MENU_RIGHT, SETTINGS_KEYS, diaryUnlocked,
   set inSettings(v){ inSettings = v; }, set inStatus(v){ inStatus = v; },
   set inFeed(v){ inFeed = v; }, set inPlay(v){ inPlay = v; },
   isWeak, isWeakStarve, isWeakSick, WEAK_STARVE_MIN, WEAK_SICK_MIN, plateOnScreen, needsMed, hungerMin, feedGain, feedFill, HUNGER_MAX,

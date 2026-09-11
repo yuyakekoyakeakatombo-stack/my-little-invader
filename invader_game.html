@@ -6713,6 +6713,36 @@
   //  ここに並べるとそのまま右の列のいちばん上（ストーリーの上）に入る
   //  返すのは menuList() の添字なので、選択位置（menuSel）の意味は変えなくてよい
   const MENU_RIGHT = ['memory', 'story', 'manual'];
+  // アイコングリッド(0..5) ⇔ サブ項目(6..) のあいだの移動。
+  //  **行き止まりを作らない**のが要点で、端では回り込ませる
+  function menuMove(dir){
+    const { left, right } = menuCols();
+    //  アイコンとの行き来は左の列を入口にする。おもいでが出ている時、
+    //  6番（＝一覧の先頭）は右の列のいちばん上なので、そこへ降りると不自然になる
+    const topLeft  = 6 + left[0];
+    const lastLeft = 6 + left[left.length-1];
+    if(menuSel < 6){
+      const r = Math.floor(menuSel/3);
+      // 左右は6アイコンを一列としてループ（くすり→ほめる、ゲーム→ごはん）
+      if(dir==='left')  menuSel = (menuSel+5)%6;
+      if(dir==='right') menuSel = (menuSel+1)%6;
+      // 上下もループ：上段から上で左の列のいちばん下へ、下段から下で左の列の先頭へ
+      if(dir==='up')    menuSel = (r===1) ? menuSel-3 : lastLeft;
+      if(dir==='down')  menuSel = (r===0) ? menuSel+3 : topLeft;
+    } else {
+      // サブ項目は2列。上下は同じ列の中を動き、左右で列を移る
+      const cur = menuSel - 6;
+      const inR = right.includes(cur);
+      const col = inR ? right : left, other = inR ? left : right;
+      const row = col.indexOf(cur);
+      if(dir==='up')    menuSel = (row === 0) ? 4 : 6 + col[row-1];              // 先頭から上でグリッド下段中央へ
+      if(dir==='down')  menuSel = (row === col.length-1) ? 0 : 6 + col[row+1];   // 末尾から下で先頭アイコンへループ
+      // 移った先に同じ行が無ければ、その列のいちばん下に着く
+      if((dir==='left' || dir==='right') && other.length)
+        menuSel = 6 + other[Math.min(row, other.length-1)];
+    }
+  }
+
   function menuCols(){
     const list = menuList(), left = [], right = [];
     list.forEach((it, i) => (MENU_RIGHT.includes(it[1]) ? right : left).push(i));
@@ -6766,7 +6796,7 @@
   // 項目はキーで管理（表示ラベルは言語辞書、値は各キーで分岐）
   //  版の番号は sw.js の VERSION と同じもの。tools/bump-sw.sh が両方いっしょに
   //  書き換える（ずれると、テスターの端末に出ている版が分からなくなる）
-  const APP_VERSION = '2026-09-11-01';
+  const APP_VERSION = '2026-09-11-02';
   //  (C) は Press Start 2P に © が無く、別の字体に落ちて1文字だけ形が浮くため
   const APP_COPY = '(C) 2026 Studio M.D.Q.';
   // 天気は Open-Meteo から貰っている。CC BY 4.0 なので、無料で使う場合でも
@@ -7132,34 +7162,9 @@
         if(el.classList.contains('up'))   playSel=Math.max(0, playSel-1);
         if(el.classList.contains('down')) playSel=Math.min(PLAY_ITEMS.length-1, playSel+1);
       } else {
-        // アイコングリッド(0..5) ⇔ サブ項目(6..8) のナビゲーション
         const dir = el.classList.contains('up')?'up' : el.classList.contains('down')?'down'
                   : el.classList.contains('left')?'left' : 'right';
-        const { left, right } = menuCols();
-        //  アイコンとの行き来は左の列を入口にする。おもいでが出ている時、
-        //  6番（＝一覧の先頭）は右の列のいちばん上なので、そこへ降りると不自然になる
-        const topLeft  = 6 + left[0];
-        const lastLeft = 6 + left[left.length-1];
-        if(menuSel < 6){
-          const r = Math.floor(menuSel/3);
-          // 左右は6アイコンを一列としてループ（くすり→ほめる、ゲーム→ごはん）
-          if(dir==='left')  menuSel = (menuSel+5)%6;
-          if(dir==='right') menuSel = (menuSel+1)%6;
-          // 上下もループ：上段から上で左の列のいちばん下へ、下段から下で左の列の先頭へ
-          if(dir==='up')    menuSel = (r===1) ? menuSel-3 : lastLeft;
-          if(dir==='down')  menuSel = (r===0) ? menuSel+3 : topLeft;
-        } else {
-          // サブ項目は2列。上下は同じ列の中を動き、左右で列を移る
-          const cur = menuSel - 6;
-          const inR = right.includes(cur);
-          const col = inR ? right : left, other = inR ? left : right;
-          const row = col.indexOf(cur);
-          if(dir==='up')    menuSel = (row === 0) ? 4 : 6 + col[row-1];              // 先頭から上でグリッド下段中央へ
-          if(dir==='down')  menuSel = (row === col.length-1) ? 0 : 6 + col[row+1];   // 末尾から下で先頭アイコンへループ
-          // 移った先に同じ行が無ければ、その列のいちばん下に着く
-          if((dir==='left' || dir==='right') && other.length)
-            menuSel = 6 + other[Math.min(row, other.length-1)];
-        }
+        menuMove(dir);
       }
     });
   });
