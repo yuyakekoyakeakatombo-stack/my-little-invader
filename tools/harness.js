@@ -62,7 +62,13 @@ const EXPORTS = `
   pushOutOfObjects, freeSegments, objectSpans, POOP_X, POOP_W, PLATE_X,
   codeToWeather, weatherBase, WEATHER_BASE, isBadWeather, CLOUD_N, CLOUD_THIN, RAIN_STYLE, SNOW_STYLE, RAIN_MAX, SNOW_MAX, DEBUG_STATES,
   FLOWER_DAY, FLOWER_SPAN, FLOWERS, flowerCount, FLOWER_SPR,
-  pickTopics, warmCands, DIARY_ROUTINE, SND, REACT_SND, lastWritten, warmth, warmLevel, WARM_WINDOW, WARM_KINDS, WARM_LINE, DIARY_LINES, DIARY_MUSINGS, DIARY_CLOSE, DIARY_PRIORITY, DIARY_NOREPEAT_DAYS, DIARY_MUSING_RATE, diaryStyle, buildDiary, pickMusing, S4_SPR, S4_SLEEP, S4_SHUT, S3_SHUT, G_LIE, CLAMP_SLIDE, eyeRows, sickSprite, charSprites, S3_SPR, S3_SLEEP, lie, withRows, BIRD_UP, BIRD_DOWN, BIRD_FAR_UP, BIRD_FAR_DOWN, BIRD_FAR_X, birdSprite, BIRD_FLAP, BIRD_SPEED, BIRD_GAP, SHOOT_CHANCE, SHOOT_LEN, BIRD_BOB,
+  pickTopics, warmCands, DIARY_ROUTINE, SND, REACT_SND, lastWritten, warmth, warmLevel, WARM_WINDOW, WARM_KINDS, WARM_LINE, DIARY_LINES, DIARY_MUSINGS, DIARY_CLOSE, DIARY_PRIORITY, DIARY_NOREPEAT_DAYS, DIARY_MUSING_RATE, diaryStyle, buildDiary, pickMusing,
+  // ひとりごとの出す条件は関数なので、そのままでは移植側へ渡せない。
+  //  **原文の文字列**を渡し、向こうで同じ字面を鍵にして突き合わせる
+  musingWhenText: () => Object.fromEntries(
+    Object.entries(DIARY_MUSINGS).map(([k, m]) => [k, String(m.when).replace(/\\s+/g, '')])),
+  musingKeysFor: (st) => Object.keys(DIARY_MUSINGS).filter(k => DIARY_MUSINGS[k].when(st)),
+ S4_SPR, S4_SLEEP, S4_SHUT, S3_SHUT, G_LIE, CLAMP_SLIDE, eyeRows, sickSprite, charSprites, S3_SPR, S3_SLEEP, lie, withRows, BIRD_UP, BIRD_DOWN, BIRD_FAR_UP, BIRD_FAR_DOWN, BIRD_FAR_X, birdSprite, BIRD_FLAP, BIRD_SPEED, BIRD_GAP, SHOOT_CHANCE, SHOOT_LEN, BIRD_BOB,
   UFO_N_SPEED, UFO_N_Y, UFO_N_BOB,
   updateRain, updateSnow, updateBirds, updateShootingStar, updateNightUfo, drawClouds,
   rainDrops, snowFlakes,
