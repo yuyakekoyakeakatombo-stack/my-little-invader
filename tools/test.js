@@ -863,6 +863,111 @@ describe('お世話', () => {
 });
 
 // ══ おなかの段階差 ════════════════════════════════════════
+describe('うんち', () => {
+  //  **放置すると溜まる**のが要点。以前は「ごはん1回＝うんち1個」で、
+  //  予約が単一の数値だったため、何時間空けても2個目が出なかった。
+  //  うんちが出ているのにごはんをあげる人はまずいないので、
+  //  汚れが溜まる仕掛けとして働いていなかった
+  const HOUR = 3600000;
+  //  昼の12時に置く（寝ているあいだは出ないので、夜だと何も起きない）
+  const noon = () => new Date(2026, 5, 15, 12, 0, 0).getTime();
+  const setup = (over = {}) => {
+    const { api, clock } = load({ at: noon() });
+    pet(api, clock, Object.assign({ W:0, poopAt:0, poopSince:0, hunger:4,
+                                    wokeUntil:0, dirtAcc:0 }, over));
+    return { api, clock };
+  };
+
+  it('食べてから放置した時間ぶん、上限まで溜まる', () => {
+    //  1個あたり 45〜75分。ただし**昼寝のあいだは止まる**ので、
+    //  3個そろうまでの実時間は日によって伸びる（幼体は昼寝あり）。
+    //  ここは「時間なりに増えて、上限で止まる」ことだけを見る
+    const cases = [[0.5, 0], [1.5, 1], [8, 3], [24, 3]];
+    for(const [h, want] of cases){
+      const { api, clock } = setup();
+      api.schedulePoop();
+      clock.advance(h * HOUR);
+      api.advancePet();
+      eq(api.pet.W, want, `${h}時間:`);
+    }
+  });
+
+  it('上限までいったら、それ以上は増えないし予約も入らない', () => {
+    const { api, clock } = setup();
+    api.schedulePoop();
+    clock.advance(6 * HOUR);
+    api.advancePet();
+    eq(api.pet.W, api.POOP_MAX, '上限:');
+    eq(api.pet.poopAt, 0, '予約が空であること:');
+  });
+
+  it('掃除すると、そこから数え直して次が予約される', () => {
+    const { api, clock } = setup();
+    api.schedulePoop();
+    clock.advance(6 * HOUR);
+    api.advancePet();
+    api.doCare('CLEAN');
+    eq(api.pet.W, 0, '片づいたこと:');
+    ok(api.pet.poopAt > clock.now(), '次の予約が入っていること');
+  });
+
+  //  お腹に何も無ければ出ない。食べれば再開する
+  it('おなかが空っぽのあいだは出ない', () => {
+    const { api, clock } = setup({ hunger:0 });
+    api.schedulePoop();
+    eq(api.pet.poopAt, 0, '予約が入らないこと:');
+    clock.advance(6 * HOUR);
+    api.advancePet();
+    eq(api.pet.W, 0, 'うんち:');
+  });
+
+  //  以前は「食べるたびに上書き」だったので、こまめに食べさせると
+  //  いつまでも出なかった
+  it('食べても、すでに入っている予約は先へずれない', () => {
+    const { api, clock } = setup();
+    api.schedulePoop();
+    const first = api.pet.poopAt;
+    clock.advance(30 * 60000);
+    api.schedulePoop();
+    eq(api.pet.poopAt, first, '予約の時刻:');
+  });
+
+  it('寝ているあいだは出ない。起きてから出る', () => {
+    const at = new Date(2026, 5, 15, 22, 0, 0).getTime();
+    const { api, clock } = load({ at });
+    pet(api, clock, { W:0, poopAt:0, poopSince:0, hunger:4, wokeUntil:0, dirtAcc:0 });
+    api.schedulePoop();
+    clock.advance(8 * HOUR);        // 22時 → 翌6時（まだ寝ている）
+    api.advancePet();
+    eq(api.pet.W, 0, '寝ているあいだ:');
+    ok(api.pet.poopAt > 0, '予約は持ち越されていること');
+    clock.advance(6 * HOUR);        // 昼まで進める
+    api.advancePet();
+    ok(api.pet.W > 0, '起きてから出ること');
+  });
+
+  //  ハエの起点は1個目。2個目3個目で更新すると、放置しているのに
+  //  いつまでもハエが出ない
+  it('ハエの起点は1個目が出た時刻のまま', () => {
+    const { api, clock } = setup();
+    api.schedulePoop();
+    clock.advance(1.5 * HOUR);
+    api.advancePet();
+    eq(api.pet.W, 1, '1個目:');
+    const since = api.pet.poopSince;
+    ok(since > 0, '起点が入っていること');
+    clock.advance(2 * HOUR);
+    api.advancePet();
+    ok(api.pet.W >= 2, '2個目が出ていること');
+    eq(api.pet.poopSince, since, '起点:');
+  });
+
+  it('置き場所は上限と同じ数だけある', () => {
+    const { api } = setup();
+    eq(api.POOP_X.length, api.POOP_MAX, '置き場所の数:');
+  });
+});
+
 describe('おなか', () => {
   const feeds = (api) => { let n = 0; api.pet.hunger = 0;
     while(api.pet.hunger < api.HUNGER_MAX && n < 20){ api.feedFill(); n++; } return n; };

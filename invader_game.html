@@ -806,6 +806,9 @@
   // セーブデータの形式。項目を足したり意味を変えたら1つ上げて、MIGRATIONS に手当てを書く。
   //  既定値まかせにすると、育っている途中の子に合わない値が入る（後述の v1 参照）
   const SAVE_V = 3;
+  //  画面に出せるうんちの数。**放置すると、ここまで溜まる**。
+  //  セーブの読み込み（migratePet）で古い値を丸めるので、ここで先に決めておく
+  const POOP_MAX = 3;
   function defaultPet(){ return {
     v: SAVE_V,
     name:'', birth:0, lastTick:0,
@@ -916,6 +919,9 @@
     // 数えるはずの値が壊れていたら既定に戻す（NaN が入ると比較が全部falseになって静かに壊れる）
     for(const k of ['B','C','D','Dm','P','M','A','EP','W','hunger','mood','careStreak'])
       if(!Number.isFinite(p[k])) p[k] = defaultPet()[k];
+    //  上限を4個から3個へ下げたので、古いセーブを合わせる。
+    //  置き場所が3か所しかないので、4個目は見えないまま汚れとして残ってしまう
+    p.W = Math.max(0, Math.min(POOP_MAX, p.W));
     const from = Number.isFinite(sv.v) ? sv.v : 0;
     for(let v = from + 1; v <= SAVE_V; v++) if(MIGRATIONS[v]) MIGRATIONS[v](p, sv);
     p.v = SAVE_V;
@@ -3580,12 +3586,14 @@
   }
   // 実効睡眠（しかられて起きた直後は起きている）
   // DEBUG中は常に起きている扱い（3秒サイクルの夜に操作がランダムに弾かれるのを防ぎ、いつでも検証可能に）
-  function effectiveAsleep(){
+  //  at を渡すとその時刻で見る（追いつき計算の中から使う）
+  function effectiveAsleep(at){
     if(debugMode) return false;
     // 瀕死のあいだは眠らない。眠っていると くすり・ごはんの手が制限されるうえ、
     //  あと半日で死ぬ状態が「ただ寝ているだけ」に見えてしまう
     if(isWeak()) return false;
-    return isAsleep(new Date()) && Date.now() >= (pet.wokeUntil || 0);
+    const t = at || Date.now();
+    return isAsleep(new Date(t)) && t >= (pet.wokeUntil || 0);
   }
 
   // この子の記録のうち、実時刻をそのまま持っているもの。
@@ -3618,7 +3626,16 @@
       const sleeping = isAsleep(new Date(vt));
       // 残しておいた皿：起きていて空腹なら食べる（傷んだ皿は食べない）。
       //  わがまま中は目の前にあっても食べない＝しかって収まってから食べる
-      if(pet.plateAt && !pet.plateSpoiled && !sleeping && !pet.tantrumAt && pet.hunger < HUNGER_MAX){ pet.plateAt = 0; feedFill(); schedulePoop(); }
+      if(pet.plateAt && !pet.plateSpoiled && !sleeping && !pet.tantrumAt && pet.hunger < HUNGER_MAX){ pet.plateAt = 0; feedFill(); schedulePoop(vt); }
+      // うんち発生。**寝ている間はしない**（時間が来ていても起きるまで持ち越す）。
+      //  ここが1分きざみのループの中にあるのは、**留守のあいだに溜まる**ため。
+      //  ループの外で1回だけ見ていたので、何時間空けても1個しか出なかった
+      if(pet.poopAt && vt >= pet.poopAt && !effectiveAsleep(vt)){
+        pet.poopAt = 0;
+        pet.W = Math.min(POOP_MAX, (pet.W||0) + 1);
+        if(!pet.poopSince) pet.poopSince = vt;   // ハエの起点は1個目が出た時刻
+        schedulePoop(vt);                        // 次のぶん。上限に達していれば入らない
+      }
       const rate = sleeping ? 1/3 : 1;
       const gameMin = mult * rate;
       const dirtN = dirtCount();                          // 汚れ総数（うんち＋食べ残し）
@@ -3677,9 +3694,6 @@
     // 皿の放置 → 食べ残し汚れ化（2時間。DEBUG中は2分）。皿は残したまま「傷んだ皿」にする
     const PLATE_MS = debugMode ? 120000 : 7200000;
     if(pet.plateAt && !pet.plateSpoiled && now - pet.plateAt >= PLATE_MS){ pet.plateSpoiled = true; }
-    // うんち発生
-    // 寝ている間はうんちをしない。時間が来ていても起きるまで持ち越す
-    if(pet.poopAt && now >= pet.poopAt && !effectiveAsleep()){ pet.poopAt = 0; pet.W = Math.min(4, pet.W + 1); if(!pet.poopSince) pet.poopSince = now; }
     // 潜伏していた病気の発症
     if(pet.incubAt && now >= pet.incubAt){
       pet.incubAt = 0;
@@ -4921,7 +4935,7 @@
     const el = EAT_T - reactT;
     return el >= EAT_STEP && el % EAT_STEP === 0;
   }
-  const POOP_X=[6,48,12,1];  // 汚れの表示位置（発生順。皿の位置と重ならない配置）
+  const POOP_X=[6,48,12];    // 汚れの表示位置（発生順。皿の位置と重ならない配置）
   const PLATE_X = 36, POOP_W = 5;                 // 皿・うんちの占有幅（皿幅はごはん11/おやつ9）
 
   // 地面上のオブジェクト（皿・うんち）が占めるx区間 [a,b)
@@ -5457,9 +5471,18 @@
   }
   // 食後どれくらいで出るか（分）。DEBUG中は同じ数字を秒として使う
   const POOP_MIN = 45, POOP_JIT = 30;
-  function schedulePoop(){
+  //  次のうんちを予約する。**すでに予約があるときは触らない。**
+  //   以前は食べるたびに上書きしていたので「ごはん1回＝うんち1個」になり、
+  //   放置しても2個目が出なかった。うんちが出ているのにごはんをあげる人は
+  //   まずいないので、汚れが溜まる仕掛けとして働いていなかった。
+  //  上限まで溜まっているあいだも入れない（掃除で空いてから数え直す）。
+  //  お腹が空っぽのときも入れない——出すものが無いので。食べれば再開する
+  function schedulePoop(at){
+    if(pet.poopAt) return;
+    if((pet.W||0) >= POOP_MAX) return;
+    if(pet.hunger <= 0) return;
     const unit = debugMode ? 1000 : 60000;
-    pet.poopAt = Date.now() + (POOP_MIN + Math.random()*POOP_JIT) * unit;
+    pet.poopAt = (at || Date.now()) + (POOP_MIN + Math.random()*POOP_JIT) * unit;
   }
 
   // わがまま拒否（Stage2まで）。しつけDが低いほど起きやすい（基準20%）
@@ -5568,6 +5591,7 @@
           //  自分が拒んだ皿を片づけられて♪を出すと、喜んでいるように見えてしまう
           const onlyFresh = (pet.W === 0 && !!pet.plateAt && !pet.plateSpoiled);
           pet.W = 0; pet.plateAt = 0; pet.plateSpoiled = false; pet.poopSince = 0;
+          schedulePoop();   // 上限で止まっていたぶんを、空いたところから数え直す
           raiseMood();                                              // 汚れを消してから上げるので、病気でなければMAXまで戻せる
           note('cleaned');
           pet.total.clean++;                        // 通算（おもいで用）
@@ -6801,7 +6825,7 @@
   // 項目はキーで管理（表示ラベルは言語辞書、値は各キーで分岐）
   //  版の番号は sw.js の VERSION と同じもの。tools/bump-sw.sh が両方いっしょに
   //  書き換える（ずれると、テスターの端末に出ている版が分からなくなる）
-  const APP_VERSION = '2026-09-12-01';
+  const APP_VERSION = '2026-09-12-02';
   //  (C) は Press Start 2P に © が無く、別の字体に落ちて1文字だけ形が浮くため
   const APP_COPY = '(C) 2026 Studio M.D.Q.';
   // 天気は Open-Meteo から貰っている。CC BY 4.0 なので、無料で使う場合でも

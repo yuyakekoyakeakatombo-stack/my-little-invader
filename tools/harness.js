@@ -61,7 +61,7 @@ const EXPORTS = `
   isWeak, isWeakStarve, isWeakSick, WEAK_STARVE_MIN, WEAK_SICK_MIN, plateOnScreen, needsMed, hungerMin, feedGain, feedFill, HUNGER_MAX,
    gaugeHunger, gaugeMood, raiseMood, MOOD_MIN,
   get walkX(){ return walkX; }, set walkX(v){ walkX = v; },
-  pushOutOfObjects, freeSegments, objectSpans, POOP_X, POOP_W, PLATE_X,
+  pushOutOfObjects, freeSegments, objectSpans, POOP_X, POOP_W, POOP_MAX, PLATE_X,
   codeToWeather, weatherBase, WEATHER_BASE, isBadWeather, CLOUD_N, CLOUD_THIN, RAIN_STYLE, SNOW_STYLE, RAIN_MAX, SNOW_MAX, DEBUG_STATES,
   FLOWER_DAY, FLOWER_SPAN, FLOWERS, flowerCount, FLOWER_SPR,
   pickTopics, warmCands, DIARY_ROUTINE, SND, REACT_SND, lastWritten, warmth, warmLevel, WARM_WINDOW, WARM_KINDS, WARM_LINE, DIARY_LINES, DIARY_MUSINGS, DIARY_CLOSE, DIARY_PRIORITY, DIARY_NOREPEAT_DAYS, DIARY_MUSING_RATE, diaryStyle, buildDiary, pickMusing,
