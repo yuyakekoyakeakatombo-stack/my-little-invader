@@ -326,4 +326,4 @@ function load(opts = {}){
   return { api, clock, store, timers, sandbox, audioLog, drawLog };
 }
 
-module.exports = { load, mainScript };
+module.exports = { load, mainScript, makeSandbox, makeClock };
