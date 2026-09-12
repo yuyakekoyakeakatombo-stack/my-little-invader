@@ -77,6 +77,10 @@ const EXPORTS = `
   MID_SLEEP, LARVA_SLEEP,
   EAT_FACE, eatKey, eatSprite, squatFrame, EAT_BOB,
   pickForm, pickLineage, pickVoice, voice, voiceIdx, pTrait,
+  evolveTo, rollEggTarget, EGG_H_BASE, EGG_H_JITTER, EP_LARVA, EP_ADULT, EP_FINAL,
+  schedulePoop, POOP_MIN, POOP_JIT,
+  get evoT(){ return evoT; }, set evoT(v){ evoT = v; },
+
   todayKey, petDay, dayLabel, daysBetweenKeys,
   formLabel, endLabel, typeLabel, stageLabel, menuList, menuCols, MENU_RIGHT,
   bestText, playText, PLAY_ITEMS, PLAY_KEYS, MEM_PAGES,
