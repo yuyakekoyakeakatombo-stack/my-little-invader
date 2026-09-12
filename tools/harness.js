@@ -140,7 +140,7 @@ const EXPORTS = `
   get arriveT(){ return arriveT; }, set arriveT(v){ arriveT = v; },
   OPEN_OPTS, ARR_TO_NAME, get nameOpenT(){ return nameOpenT; }, set nameOpenT(v){ nameOpenT = v; },
   LANG_OPTS, setLang, OPT_Y0, OPT_H, selMark, T,
-  OPEN_OPTS, O_PHASES, O_TOTAL, O_UFO_GONE, getPhaseO, easeIn,
+  O_PHASES, O_TOTAL, O_UFO_GONE, getPhaseO, easeIn,
   UFO_START_X, UFO_END_X, UFO_CX, UFO_Y, BEAM_TOP, BABY_END_Y, BABY_X, GROUND_Y,
   tickOpening, openingLocked,
   get fO(){ return fO; }, set fO(v){ fO = v; },
