@@ -115,9 +115,10 @@ function statesOf(over) {
   const sink = (g) => [new Array(g[0].length).fill(0), ...g];
   out.push([crouched ? '休み・雨・雪（沈まない）' : '休み・雨・雪（上下する）',
             crouched ? [sp.rest] : [sp.rest, sink(sp.rest)], 600]);
+  //  具合が悪いときは、病気も瀕死も寝姿で丸まる。**違いはマークと色**
   out.push(['びょうき（動かない）', [api.sickSprite(sp)], 0]);
   out.push(['ねている', [sp.sleep], 0]);
-  out.push(['ひんし', [sp.rest], 0, 1]);
+  out.push(['ひんし（薄色）', [api.sickSprite(sp)], 0, 1]);
   const eat = api.eatSprite();
   out.push(['たべる', [eat, api.squatFrame(eat)], 200]);
   if (over.lineage === 'grey' && over.stage === 'adult') {
@@ -140,7 +141,8 @@ function charBlock(title, sub, over) {
 // ── 並べる ────────────────────────────────────────────────
 const parts = [];
 parts.push(`<h2>STAGE 1〜2 — たまご・あかちゃん・こども</h2>
-<p class="note">系統はまだ決まっていない。<b>病気は寝姿</b>で丸まる（どの段階も同じ）。</p>`);
+<p class="note">系統はまだ決まっていない。
+<b>病気も瀕死も寝姿</b>で丸まる（どのキャラも同じ。違いはマークと色）。</p>`);
 parts.push(charBlock('うまれたて', 'STAGE 1 ／ たまご期', { stage: 'egg' }));
 parts.push(charBlock('あかちゃん', 'STAGE 1.5 ／ 中間体', { stage: 'mid' }));
 parts.push(charBlock('こども', 'STAGE 2 ／ 幼体期。休み姿は専用の絵（雨の日の姿）',
@@ -148,8 +150,9 @@ parts.push(charBlock('こども', 'STAGE 2 ／ 幼体期。休み姿は専用の
 
 parts.push(`<h2>STAGE 3 — 成体（系統が決まる）</h2>
 <p class="note">遊んだミニゲームの偏りで決まり、世話の傾向が弱く足される。
-<b>グレイだけ休み姿が専用</b>（2コマ目の形で足を縮めたもの）で、
-<b>病気も寝姿を使わない</b>——寝姿が仰向けなので、起きているのに寝ているように見えるため。</p>`);
+<b>グレイだけ休み姿が専用</b>（2コマ目の形で足を縮めたもの）。
+グレイの寝姿は仰向けなので、病気・瀕死もその姿になる
+——起きているか寝ているかは、マークと色で分かる。</p>`);
 for (const [L, name, sub] of [
   ['grey', 'グレイ', 'ABDUCTION をよく遊んだ／しつけが通っている'],
   ['tako', 'マーシャン', 'SPACEWALK をよく遊んだ／甘やかし気味'],
@@ -232,10 +235,11 @@ parts.push(`<h2>どの姿が いつ出るか</h2>
 <p class="note">上から順に見て、当てはまった最初のものを出す（本体 tickMain の並びと同じ）。</p>
 <table>
 <tr><th>状態</th><th>姿</th><th>上下動</th><th>備考</th></tr>
-<tr><td>ひんし</td><td>休み姿（薄色）</td><td>しない</td><td>この間は眠らない</td></tr>
-<tr><td>ねている</td><td>寝姿</td><td>しない</td><td>グレイは仰向け</td></tr>
-<tr><td>びょうき</td><td><b>寝姿</b>（グレイ系だけ休み姿＋とじ目）</td><td><b>しない</b></td>
-    <td>沈めると足が地面に埋まるため</td></tr>
+<tr><td>ひんし</td><td><b>寝姿（薄色）</b></td><td>しない</td>
+    <td>この間は眠らない。マークは ドクロ／！ が点滅</td></tr>
+<tr><td>ねている</td><td>寝姿</td><td>しない</td><td>マークは ZZZ</td></tr>
+<tr><td>びょうき</td><td><b>寝姿</b></td><td><b>しない</b></td>
+    <td>マークは 汗。沈めると足が地面に埋まるので上下しない</td></tr>
 <tr><td>雨・雪</td><td>休み姿</td><td>うずくまり姿の子はしない</td><td>歩く速さも落ちる</td></tr>
 <tr><td>くもり</td><td>あるき2コマ</td><td>する</td><td>少しゆっくり</td></tr>
 <tr><td>晴れ</td><td>あるき2コマ</td><td>跳ねる（前に屈伸で溜める）</td><td>—</td></tr>
