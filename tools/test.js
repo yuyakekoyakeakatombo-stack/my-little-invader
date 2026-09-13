@@ -3496,6 +3496,8 @@ describe('系統わけ', () => {
 //  プランプ＝大食い または 甘やかし ／ スリーク＝丁寧なケア かつ ミニゲーム制覇 ／
 //  プリックリー＝ケアが雑。どれにも当たらなければ最終形態にならず、成体のままとどまる
 describe('成体グレイの休み姿', () => {
+  const read2 = (f) => require('fs').readFileSync(
+    require('path').join(__dirname, '..', f), 'utf8');
   //  じっとしている場面（雨・雪／瀕死／病気／迎えを待つあいだ）は休み姿で止まる。
   //  1コマ目のままだと、手が脚と同じ高さに4つ並んで4本脚に見える
   const greySp = (api, clock) => {
@@ -3531,6 +3533,36 @@ describe('成体グレイの休み姿', () => {
     const sp = greySp(api, clock);
     eq(sp.shut.length, sp.rest.length, '閉眼の段数:');
     eq(api.eyeRows(sp).length, 1, '目の段の数:');
+  });
+
+  //  休み姿は足が1段しかない。**沈めたり縮めたりすると足が消える**
+  it('休み姿は、沈ませない・縮めない', () => {
+    const src = read2('invader_game.html');
+    //  雨・雪と病気の上下動は、うずくまり姿のときだけ止める
+    eq([...src.matchAll(/restCrouched\(sp\) \? 0 :/g)].length, 2,
+       '沈む上下動を止めている所:');
+    //  休み姿のときは屈伸を重ねない（3か所とも resting を見る）
+    eq([...src.matchAll(/!resting/g)].length, 3, '屈伸を止めている所:');
+  });
+
+  it('うずくまり姿を持つのは、幼体と成体グレイ', () => {
+    const { api, clock } = load();
+    const eq2 = (x,y) => JSON.stringify(x) === JSON.stringify(y);
+    const cases = [['egg',{stage:'egg'},false], ['mid',{stage:'mid'},false],
+                   ['larva',{stage:'larva'},true],
+                   ['grey',{stage:'adult',lineage:'grey'},true],
+                   ['tako',{stage:'adult',lineage:'tako'},false],
+                   ['inv',{stage:'adult',lineage:'inv'},false],
+                   ['g1',{stage:'final',lineage:'grey',form:'g1'},false]];
+    for(const [name, over, want] of cases){
+      pet(api, clock, Object.assign({ name:'T', lineage:'', form:'' }, over));
+      const sp = api.charSprites();
+      eq(!eq2(sp.rest, sp.a), want, `${name} のうずくまり姿:`);
+      //  うずくまり姿は、足が最下段の1段だけ（沈めると消える形）
+      if(want) ok(sp.rest[sp.rest.length-2].filter(Boolean).length
+                  > sp.rest[sp.rest.length-1].filter(Boolean).length,
+                  `${name}: 最下段より上のほうが細い（足が1段でない）`);
+    }
   });
 
   //  ほかの成体は今までどおり、立ち姿のまま

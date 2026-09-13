@@ -5411,6 +5411,10 @@
   //    垂らした形で、脚と同じ高さに4つ並ぶので、縮めると4本脚に見える。
   //    2コマ目は手を横へ広げた形なので、足だけが縮んで見える。
   //   ほかは今までどおり、歩いている姿のまま縮む
+  //  うずくまり姿を持つ子か（歩き1コマ目をそのまま休み姿にしていない）。
+  //   幼体（雨の日の姿）と成体グレイがこれにあたる。**足が1段しかない**ので、
+  //   1ドット沈めると足が地面の線に埋まり、形が分からなくなる
+  function restCrouched(sp){ return sp.rest !== sp.a; }
   function squatPose(sp, g){
     if(pet.stage === 'egg') return squatFrame(sp.a);
     if(pet.stage === 'adult' && pet.lineage === 'grey') return squatFrame(sp.b);
@@ -6420,14 +6424,16 @@
       grid = sp.sleep;
       yOff = 0;
     } else if (pet.health === 'SICK') {
-      // 病気：丸まってゆっくり上下。目は就寝時と同じ閉じ線
+      // 病気：丸まってゆっくり上下。目は就寝時と同じ閉じ線。
+      //  **うずくまり姿のときは沈ませない**（足が地面に埋まって形が消える）
       grid = sickSprite(sp);
-      yOff = (fM%40<20) ? 0 : 1;
+      yOff = restCrouched(sp) ? 0 : ((fM%40<20) ? 0 : 1);
     } else if (isBadWeather()) {
-      // 雨・雪：動きが遅く、足縮め
+      // 雨・雪：動きが遅く、足縮め。
+      //  **うずくまり姿のときは沈ませない**（足が地面に埋まって形が消える）
       bounceSpeed=60; bounceAmt=1;
       grid = sp.rest;
-      yOff = (fM%bounceSpeed)<(bounceSpeed/2)?0:bounceAmt;
+      yOff = restCrouched(sp) ? 0 : ((fM%bounceSpeed)<(bounceSpeed/2)?0:bounceAmt);
     } else if (weather==='cloudy') {
       // 曇り：少しゆっくり
       bounceSpeed=40;
@@ -6474,6 +6480,9 @@
     //  一度に動かすと瞬間移動に見えるので、少しずつ寄せて 横になる動きに見せる
     const lim = Math.max(minX, Math.min(maxX, walkX));
     if(lim !== walkX) walkX += Math.sign(lim - walkX) * Math.min(CLAMP_SLIDE, Math.abs(lim - walkX));
+    //  いま休み姿（うずくまり）を出しているか。**そこへ屈伸を重ねない。**
+    //   足が1段しかないので、そこから縮めると形が分からなくなる
+    const resting = (grid === sp.rest);
     const moving = !(asleep || isWeak() || pet.health==='SICK' || reactT>0 || evoT>0);
     let airOff = 0;   // ジャンプ/浮遊の上方向オフセット
     if(moving){
@@ -6486,7 +6495,7 @@
       } else if(squatT > 0){
         // その場屈伸：しゃがみ↔立ちを周期で切り替え（数回。足は地面に固定して跳ねの浮きを止める）
         squatT--; yOff = 0;
-        if(Math.floor((42 - squatT) / 7) % 2 === 1) grid = squatPose(sp, grid);
+        if(!resting && Math.floor((42 - squatT) / 7) % 2 === 1) grid = squatPose(sp, grid);
       } else {
       if(walkTimer <= 0 && !squatWalkT && !preJumpT && !jumpT && !floatT && !lookT && !dashT){
         // 次の行動を決める（実行中のアクションが終わってから）：左へ／右へ／ひとやすみ
@@ -6521,7 +6530,7 @@
       walkTimer--;
       if(preJumpT > 0){
         // ジャンプ前の溜め：しゃがんでから発射
-        preJumpT--; yOff = 0; grid = squatPose(sp, grid);
+        preJumpT--; yOff = 0; if(!resting) grid = squatPose(sp, grid);
         if(preJumpT === 0) startJump(prof);
       } else if(lookT > 0){
         // 見回す：その場で目だけを左右に動かす。
@@ -6538,7 +6547,7 @@
         // 屈伸しながら横移動（しゃがみ↔立ちを繰り返しつつ進む）
         squatWalkT--; yOff = 0;
         if(walkDir === 0) walkDir = 1;   // 念のため方向を確保
-        if(Math.floor((54 - squatWalkT)/6) % 2 === 1) grid = squatPose(sp, grid);
+        if(!resting && Math.floor((54 - squatWalkT)/6) % 2 === 1) grid = squatPose(sp, grid);
         walkX += walkDir * prof.speed * 0.9 * wSpd;
       } else if(floatT > 0){
         // 浮遊：ふわりと上がって画面中央あたりで漂い、ゆっくり降りてくる
@@ -6878,7 +6887,7 @@
   // 項目はキーで管理（表示ラベルは言語辞書、値は各キーで分岐）
   //  版の番号は sw.js の VERSION と同じもの。tools/bump-sw.sh が両方いっしょに
   //  書き換える（ずれると、テスターの端末に出ている版が分からなくなる）
-  const APP_VERSION = '2026-09-13-06';
+  const APP_VERSION = '2026-09-13-07';
   //  (C) は Press Start 2P に © が無く、別の字体に落ちて1文字だけ形が浮くため
   const APP_COPY = '(C) 2026 Studio M.D.Q.';
   // 天気は Open-Meteo から貰っている。CC BY 4.0 なので、無料で使う場合でも
