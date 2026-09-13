@@ -22,6 +22,8 @@ const EXPORTS = `
   SNACK_DECAY, BOND_NEGLECT, C_SMOOTH,
   FINAL_DAYS, FINAL_CAP, END_GRACE_MS, STUCK_DAYS, RET_GRACE_DAYS, RET_ESTR_DAYS, RET_PRAISE_RATE, RET_PLAY_RATE, RET_SCOLD_RATE, RET_NOTOUCH_DAYS, RET_LOWB_DAYS, DEPART_B, INV_M_MIN, INV_B_MAX, INV_P_MIN, INV_DAYS, WRATH_HOLD, finalDue, settleEnding, closeOneDay, checkReturn, checkInvade, returnSigns, invadeSigns, wrathful, isWild, redeemed, REDEEM_DAYS,
   gainB, bondCapToday, markTouch, bondDrop, dailyCareScore,
+  rollSick, SICK_STARVE_MIN, SICK_SNACK_MIN, SICK_INCUB_MIN, SICK_INCUB_JIT, SNACK_MIN_SAMPLE, OVER_FULL,
+  OWL_MAX, NIGHT_CARE_FROM, NIGHT_CARE_TO, openDiary, closeDiary,
   doCare, careDisabled, onDisabledCare, advancePet, maybeEvolve, rollTantrum, tantrumStageMul, processGameResult, PLAY_HUNGER_MIN, PLAY_STREAK_MS, PLAY_STREAK_MAX,
   bestText, playText,
   get reactType(){ return reactType; },
