@@ -5392,11 +5392,19 @@
   function flipH(g){ return g.map(r=>[...r].reverse()); }
   // しゃがみフレーム：下から2番目の行（脚）を1段抜いて縮める。足元は据え置きで屈伸に見える
   function squatFrame(g){ return (g.length >= 5) ? [...g.slice(0, g.length-2), g[g.length-1]] : g; }
-  //  屈伸するときの姿。**うまれたては、傾いた姿（b）からは縮めない。**
-  //   b は左右に傾いた形で、縮めると左の目が輪郭に張り付いて見える。
-  //   立った姿（a）に戻してから縮める。ほかの段階は今までどおり、
-  //   歩いている姿のまま縮む（傾きが浅く、目も内側にある）
-  function squatPose(sp, g){ return squatFrame(pet.stage === 'egg' ? sp.a : g); }
+  //  屈伸するときの姿。**段階によって、どのコマから縮めるかが違う。**
+  //
+  //   うまれたて：傾いた姿（b）からは縮めない。b は左右に傾いた形で、
+  //    縮めると左の目が輪郭に張り付いて見える。立った姿（a）に戻してから縮める。
+  //   成体グレイ：**2コマ目（b）の形で足を縮める。** 1コマ目は手を胴の左右へ
+  //    垂らした形で、脚と同じ高さに4つ並ぶので、縮めると4本脚に見える。
+  //    2コマ目は手を横へ広げた形なので、足だけが縮んで見える。
+  //   ほかは今までどおり、歩いている姿のまま縮む
+  function squatPose(sp, g){
+    if(pet.stage === 'egg') return squatFrame(sp.a);
+    if(pet.stage === 'adult' && pet.lineage === 'grey') return squatFrame(sp.b);
+    return squatFrame(g);
+  }
   // 浮遊（マーシャン）：画面中央あたりまでふわりと上がり、左右に漂ってから降りてくる。
   //  tickMain は100msなので、70フレーム＝7秒ほどの動作になる
   const FLOAT_T = 70;                    // 浮遊の総フレーム
@@ -6859,7 +6867,7 @@
   // 項目はキーで管理（表示ラベルは言語辞書、値は各キーで分岐）
   //  版の番号は sw.js の VERSION と同じもの。tools/bump-sw.sh が両方いっしょに
   //  書き換える（ずれると、テスターの端末に出ている版が分からなくなる）
-  const APP_VERSION = '2026-09-13-04';
+  const APP_VERSION = '2026-09-13-05';
   //  (C) は Press Start 2P に © が無く、別の字体に落ちて1文字だけ形が浮くため
   const APP_COPY = '(C) 2026 Studio M.D.Q.';
   // 天気は Open-Meteo から貰っている。CC BY 4.0 なので、無料で使う場合でも

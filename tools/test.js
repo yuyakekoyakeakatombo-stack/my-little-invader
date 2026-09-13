@@ -2424,8 +2424,9 @@ describe('世話の音', () => {
   //  ほかの段階は今までどおり、歩いている姿のまま縮む
   it('うまれたて以外は、いまの姿のまま屈伸する', () => {
     const { api, clock } = load();
+    //  成体グレイは別扱い（2コマ目の形で縮める）なので、ここには入れない
     for(const st of [{stage:'mid'}, {stage:'larva'},
-                     {stage:'adult', lineage:'grey'},
+                     {stage:'adult', lineage:'tako'},
                      {stage:'final', lineage:'inv', form:'i2'}]){
       pet(api, clock, Object.assign({ name:'T' }, st));
       const sp = api.charSprites();
@@ -2439,15 +2440,44 @@ describe('世話の音', () => {
     }
   });
 
+  //  成体グレイは、1コマ目だと手が脚と同じ高さに4つ並ぶ（4本脚に見える）。
+  //  2コマ目は手を横へ広げた形なので、そちらの形で足だけを縮める
+  it('成体グレイは、2コマ目の形で足を縮める', () => {
+    const { api, clock } = load();
+    pet(api, clock, { name:'T', stage:'adult', lineage:'grey' });
+    const sp = api.charSprites();
+    //  どちらのコマから呼んでも、2コマ目の形になる
+    for(const [name, from] of [['1コマ目', sp.a], ['2コマ目', sp.b]])
+      eq(JSON.stringify(api.squatPose(sp, from)),
+         JSON.stringify(api.squatFrame(sp.b)), `${name}から:`);
+    //  足もとは2本（4本脚に見えない）
+    const g = api.squatPose(sp, sp.a);
+    const runs = (row) => row.join('').split(/0+/).filter(Boolean).length;
+    eq(runs(g[g.length-1]), 2, '足もとのまとまり:');
+    //  1コマ目のまま縮めると4つ並ぶこと（直した理由そのもの）
+    eq(runs(sp.a[sp.a.length-2]), 4, '1コマ目の脚まわりのまとまり:');
+  });
+
+  //  ほかの成体（マーシャン・インベーダー）は今までどおり
+  it('ほかの成体は、いまの姿のまま屈伸する', () => {
+    const { api, clock } = load();
+    for(const L of ['tako', 'inv']){
+      pet(api, clock, { name:'T', stage:'adult', lineage:L });
+      const sp = api.charSprites();
+      eq(JSON.stringify(api.squatPose(sp, sp.b)),
+         JSON.stringify(api.squatFrame(sp.b)), `${L}:`);
+    }
+  });
+
   //  縮める所が squatFrame を直に呼んでいないこと（うまれたてが素通りする）
   it('屈伸は、すべて同じ入口を通る', () => {
     const src = require('fs').readFileSync(
       require('path').join(__dirname, '..', 'invader_game.html'), 'utf8');
     //  歩き・跳ね・その場屈伸・屈伸歩きの4か所は squatPose を通す
     eq([...src.matchAll(/squatPose\(sp, grid\)/g)].length, 4, '屈伸の入口を通る所:');
-    //  squatFrame を直に呼ぶのは3か所だけ——定義・squatPose の中・
-    //  食事の屈伸（食べる姿から縮めるので、立った姿には戻さない）
-    eq([...src.matchAll(/squatFrame\(/g)].length, 3, 'squatFrame を直に呼ぶ所:');
+    //  squatFrame を直に呼ぶのは5か所だけ——定義・squatPose の中の3通り・
+    //  食事の屈伸（食べる姿から縮めるので、別のコマには差し替えない）
+    eq([...src.matchAll(/squatFrame\(/g)].length, 5, 'squatFrame を直に呼ぶ所:');
   });
 
   //  口をやめても、食べていることは伝わり続けること
