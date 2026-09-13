@@ -91,7 +91,7 @@ const EXPORTS = `
   MENU_BASE, FEED_ITEMS, HUNGER_BASE, FEED_GAIN, CITIES, BODY_COLORS, BODY_SHELLS,
   MID_SLEEP, LARVA_SLEEP,
   EAT_FACE, eatKey, eatSprite, squatFrame, EAT_BOB,
-  pickForm, pickLineage, pickVoice, voice, voiceIdx, pTrait,
+  pickForm, pickLineage, pickVoice, revoice, voiceValue, VOICE_LINE, VOICE_MARGIN, voice, voiceIdx, pTrait,
   evolveTo, rollEggTarget, EGG_H_BASE, EGG_H_JITTER, EP_LARVA, EP_ADULT, EP_FINAL,
   schedulePoop, POOP_MIN, POOP_JIT,
   get evoT(){ return evoT; }, set evoT(v){ evoT = v; },

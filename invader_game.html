@@ -809,6 +809,10 @@
   //  画面に出せるうんちの数。**放置すると、ここまで溜まる**。
   //  セーブの読み込み（migratePet）で古い値を丸めるので、ここで先に決めておく
   const POOP_MAX = 3;
+  //  日記の口調が分かれる線と、見直すときの余白。
+  //  **線をまたいだ程度では変えない**（境目で行き来すると、口調が揺れて読みづらい）。
+  //  こちらも読み込み（古いセーブへの口調の付与）で使うので、先に決めておく
+  const VOICE_LINE = 0.35, VOICE_MARGIN = 0.15;
   function defaultPet(){ return {
     v: SAVE_V,
     name:'', birth:0, lastTick:0,
@@ -1496,10 +1500,29 @@
   //  性格（P）は毎日ゆれるので、そのつど参照すると日記の口調が日替わりになってしまう。
   //  姿が変わる瞬間に決まるなら「大人になった」と読めるので、そこを区切りにしてある。
   //  成体になる前は全員 'plain'（共通の子どもの口調）。
-  function pickVoice(q){
+  //  口調の元になる値。性格に系統の癖を足したもの
+  //   （マーシャン＝のんびり／グレイ＝活発）
+  function voiceValue(q){
     const s = q || pet, L = s.lineage;
-    const v = pTrait(s) + (L==='tako' ? -0.4 : L==='grey' ? +0.4 : 0);   // マーシャン＝のんびり／グレイ＝活発
-    return (v <= -0.35) ? 'calm' : (v >= 0.35 ? 'rough' : 'plain');
+    return pTrait(s) + (L==='tako' ? -0.4 : L==='grey' ? +0.4 : 0);
+  }
+  function pickVoice(q){
+    const v = voiceValue(q);
+    return (v <= -VOICE_LINE) ? 'calm' : (v >= VOICE_LINE ? 'rough' : 'plain');
+  }
+  //  口調を見直す。**成体で決めたあと、最終形態でもう一度だけ見る。**
+  //   成体からの1週間で育て方が大きく変わった子に、書きぶりを追いつかせる。
+  //   すでに書いた日記は当時の口調のまま残る（e.vo）ので、
+  //   読み返すと「途中から書きぶりが変わった」と分かる
+  function revoice(q){
+    const s = q || pet;
+    const next = pickVoice(s);
+    if(!s.voice || next === s.voice) return next;
+    const v = voiceValue(s);
+    if(next === 'rough' && v <  VOICE_LINE + VOICE_MARGIN) return s.voice;
+    if(next === 'calm'  && v > -VOICE_LINE - VOICE_MARGIN) return s.voice;
+    if(next === 'plain' && Math.abs(v) > VOICE_LINE - VOICE_MARGIN) return s.voice;
+    return next;
   }
   // 古い決まりで進化した子むけ。以前は隠しルート3種が「とげとげ」の枠（"3"）に入っていたので、
   //  その姿がケアの雑さで来たのか、隠しルートで来たのかを当時の条件から推し量る。
@@ -1547,7 +1570,7 @@
     }
     if(pet.stage==='larva' && pet.EP >= EP_ADULT){
       pet.lineage = pickLineage();                // 系統決定：ミニゲーム傾向が主、世話の傾向が従
-      pet.voice   = pickVoice();                  // 日記の口調もここで確定（以後は動かさない）
+      pet.voice   = pickVoice();                  // 日記の口調はここで決まる（最終形態でもう一度だけ見直す）
       // 成体到達＝形態判定の起点。ここからの行動だけで最終形態が決まる
       pet.lineageAt = Date.now();
       const p = pet.plays || {sw:0,ss:0,ab:0};
@@ -1558,6 +1581,8 @@
       const f = pickForm();                       // 成体以降の育て方で形態決定
       if(!f) return;                              // どの条件にも当たらないうちは成体のまま待つ
       pet.form = f;
+      //  口調の見直し。**成体からの育て方が大きく変わっていたら、ここで変わる**
+      pet.voice = revoice();
       pet.finalAt = Date.now();
       return evolveTo('final');
     }
@@ -6889,7 +6914,7 @@
   // 項目はキーで管理（表示ラベルは言語辞書、値は各キーで分岐）
   //  版の番号は sw.js の VERSION と同じもの。tools/bump-sw.sh が両方いっしょに
   //  書き換える（ずれると、テスターの端末に出ている版が分からなくなる）
-  const APP_VERSION = '2026-09-13-10';
+  const APP_VERSION = '2026-09-13-11';
   //  (C) は Press Start 2P に © が無く、別の字体に落ちて1文字だけ形が浮くため
   const APP_COPY = '(C) 2026 Studio M.D.Q.';
   // 天気は Open-Meteo から貰っている。CC BY 4.0 なので、無料で使う場合でも

@@ -3151,7 +3151,7 @@ describe('日記', () => {
     const { api, clock } = load();
     for(const t of api.DIARY_PRIORITY) ok(api.DIARY_LINES[t], `${t} の文面が無い`);
   });
-  it('口調は成体で確定し、それまでは共通', () => {
+  it('口調は成体で決まり、それまでは共通', () => {
     const { api, clock } = load();
     pet(api, clock, { stage:'larva', voice:'' });
     eq(api.voice(), 'plain');
@@ -3159,6 +3159,60 @@ describe('日記', () => {
     eq(api.pickVoice(), 'rough');
     api.pet.lineage = 'tako'; api.pet.P = -60;
     eq(api.pickVoice(), 'calm');
+  });
+
+  //  **成体で決めたあと、最終形態でもう一度だけ見直す。**
+  //  成体からの1週間で育て方が大きく変わった子に、書きぶりを追いつかせる
+  it('口調を見直すのは、成体と最終形態の2か所だけ', () => {
+    const src = require('fs').readFileSync(
+      require('path').join(__dirname, '..', 'invader_game.html'), 'utf8');
+    eq([...src.matchAll(/pet\.voice\s*=\s*pickVoice\(\)/g)].length, 1, '成体で決める所:');
+    eq([...src.matchAll(/pet\.voice\s*=\s*revoice\(\)/g)].length, 1, '最終形態で見直す所:');
+  });
+
+  it('線をまたいだ程度では、口調は変わらない', () => {
+    const { api, clock } = load();
+    //  余白のぶんまでは、そのまま。境目で行き来すると日記が読みづらくなる
+    for(const [L, from, P] of [['inv', 'plain', 21],   // 値 0.35（線ちょうど）
+                               ['inv', 'plain', -21],
+                               ['inv', 'rough', 12],   // 値 0.20（線の内側）
+                               ['inv', 'calm', -12]]){
+      pet(api, clock, { stage:'adult', lineage:L, voice:from, P });
+      eq(api.revoice(), from, `${L} P${P}（${from}）:`);
+    }
+  });
+
+  it('大きく変わっていれば、口調も変わる', () => {
+    const { api, clock } = load();
+    for(const [L, from, P, want] of [['inv', 'plain', 30, 'rough'],   // 値 0.50
+                                     ['inv', 'plain', -30, 'calm'],
+                                     ['inv', 'rough', 0, 'plain'],    // 値 0.00
+                                     ['inv', 'calm', 0, 'plain'],
+                                     ['grey', 'calm', 12, 'rough'],   // 系統の癖も乗る
+                                     ['tako', 'rough', -12, 'calm']]){
+      pet(api, clock, { stage:'adult', lineage:L, voice:from, P });
+      eq(api.revoice(), want, `${L} P${P}（${from}）:`);
+    }
+  });
+
+  //  見直しても、すでに書いた日記の文面は変わらない（当時の口調が e.vo に残る）
+  it('見直しても、前に書いた日記の口調は動かない', () => {
+    const { api, clock } = load();
+    pet(api, clock, { stage:'adult', lineage:'inv', voice:'calm', P:-30 });
+    api.clearDiary();
+    api.addDiary({ d:1, n:'T', t:['fed'], v:[0], c:'', vo:'calm', ts:clock.now(), cd:'' });
+    const before = JSON.stringify(api.diaryBody(api.diaryLog[0]));
+    api.pet.P = 60;                       // 育て方が大きく変わった
+    api.pet.voice = api.revoice();
+    eq(api.pet.voice, 'rough', '見直したあとの口調:');
+    eq(JSON.stringify(api.diaryBody(api.diaryLog[0])), before, '前に書いた日記:');
+  });
+
+  //  まだ口調が無い子（成体前）は、見直しではなく そのまま決める
+  it('口調がまだ無ければ、見直しでもそのまま決まる', () => {
+    const { api, clock } = load();
+    pet(api, clock, { stage:'larva', lineage:'', voice:'', P: 60 });
+    eq(api.revoice(), 'rough');
   });
   it('古い日記（口調を持たない形）でも文面が欠けない', () => {
     const { api, clock } = load();
