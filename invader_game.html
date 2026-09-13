@@ -4114,9 +4114,28 @@
   // 雪は見た目だけ雨と別で、キャラの振る舞い・移動速度・EP補正は雨と同じ扱いにする
   function isBadWeather(){ const b = weatherBase(); return b === 'rain' || b === 'snow'; }
 
-  function getTimeOfDay() {
-    const h = new Date().getHours();
-    return (h >= 7 && h < 19) ? 'day' : 'night';
+  //  日の出・日の入り（時。小数）。**季節で変わる。**
+  //   夏は早く明けて遅く暮れ、冬はその逆。緯度は日本のまんなかあたり（35°）で固定し、
+  //   南中はお昼の12時とする。精密な天文計算ではなく、季節の移り変わりを
+  //   画面の明るさに出すための近似（東京の実際とは前後20分ほど違う）。
+  //   **起きる・寝る時刻はこれとは別で、時計の時刻のまま**（isAsleep）
+  const SUN_LAT = 35;
+  function sunTimes(d){
+    const date = d || new Date();
+    const doy = Math.floor((date - new Date(date.getFullYear(), 0, 1)) / 86400000) + 1;
+    const rad = Math.PI / 180;
+    const decl = 23.44 * Math.sin(2 * Math.PI * (doy - 81) / 365);   // 太陽の傾き（度）
+    //  地平線の 0.833° 下で出入りとする（大気の屈折と、太陽の半径のぶん）
+    const cosH = (Math.sin(-0.833 * rad) - Math.sin(SUN_LAT * rad) * Math.sin(decl * rad))
+               / (Math.cos(SUN_LAT * rad) * Math.cos(decl * rad));
+    const H = Math.acos(Math.max(-1, Math.min(1, cosH))) / rad / 15;  // 南中からの時間
+    return { rise: 12 - H, set: 12 + H };
+  }
+  function getTimeOfDay(d) {
+    const date = d || new Date();
+    const h = date.getHours() + date.getMinutes() / 60;
+    const s = sunTimes(date);
+    return (h >= s.rise && h < s.set) ? 'day' : 'night';
   }
 
   // Open-Meteo WMO天気コード → weather種別
@@ -6914,7 +6933,7 @@
   // 項目はキーで管理（表示ラベルは言語辞書、値は各キーで分岐）
   //  版の番号は sw.js の VERSION と同じもの。tools/bump-sw.sh が両方いっしょに
   //  書き換える（ずれると、テスターの端末に出ている版が分からなくなる）
-  const APP_VERSION = '2026-09-13-11';
+  const APP_VERSION = '2026-09-13-12';
   //  (C) は Press Start 2P に © が無く、別の字体に落ちて1文字だけ形が浮くため
   const APP_COPY = '(C) 2026 Studio M.D.Q.';
   // 天気は Open-Meteo から貰っている。CC BY 4.0 なので、無料で使う場合でも

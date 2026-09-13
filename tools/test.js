@@ -1863,6 +1863,68 @@ describe('エンディング', () => {
 });
 
 // ══ 天気 ══════════════════════════════════════════════════
+describe('昼と夜', () => {
+  //  **日の出・日の入りは季節で変わる。** 夏は早く明けて遅く暮れ、冬はその逆。
+  //  起きる・寝る時刻はこれとは別で、時計の時刻のまま
+  const at = (mo, d, h = 12, m = 0) => new Date(2026, mo - 1, d, h, m);
+  const len = (api, date) => { const s = api.sunTimes(date); return s.set - s.rise; };
+
+  it('夏は昼が長く、冬は短い', () => {
+    const { api } = load();
+    const summer = len(api, at(6, 21)), winter = len(api, at(12, 22));
+    ok(summer > 14 && summer < 15, `夏至の昼の長さ ${summer.toFixed(2)}時間`);
+    ok(winter > 9.5 && winter < 10.5, `冬至の昼の長さ ${winter.toFixed(2)}時間`);
+    //  春分・秋分はほぼ12時間
+    for(const [mo, d] of [[3, 20], [9, 23]]){
+      const l = len(api, at(mo, d));
+      ok(Math.abs(l - 12) < 0.25, `${mo}/${d} の昼の長さ ${l.toFixed(2)}時間`);
+    }
+  });
+
+  it('日の出と日の入りは、お昼をはさんで向かい合う', () => {
+    const { api } = load();
+    for(const mo of [1, 4, 7, 10]){
+      const s = api.sunTimes(at(mo, 15));
+      ok(Math.abs((s.rise + s.set) / 2 - 12) < 1e-9, `${mo}月: 南中が12時からずれている`);
+    }
+  });
+
+  //  以前は一年中 7時〜19時 が昼だった。季節で入れ替わる時間帯を見る
+  it('夏の朝5時は昼、冬の夕方5時半は夜', () => {
+    const { api } = load();
+    eq(api.getTimeOfDay(at(6, 21, 5, 0)), 'day', '夏至の5:00:');
+    eq(api.getTimeOfDay(at(6, 21, 19, 0)), 'day', '夏至の19:00:');
+    eq(api.getTimeOfDay(at(12, 22, 17, 30)), 'night', '冬至の17:30:');
+    eq(api.getTimeOfDay(at(12, 22, 6, 30)), 'night', '冬至の6:30:');
+    //  真昼と真夜中はいつでも同じ
+    for(const mo of [1, 4, 7, 10]){
+      eq(api.getTimeOfDay(at(mo, 15, 12)), 'day', `${mo}月の正午:`);
+      eq(api.getTimeOfDay(at(mo, 15, 0)), 'night', `${mo}月の0時:`);
+    }
+  });
+
+  //  **起きる・寝る時刻は、季節で動かさない。** 昼夜の見た目だけが変わる。
+  //   睡眠は日ごとのゆらぎ（±40分）があるので、寝起きの前後を避けた時刻で見比べ、
+  //   そのうえで睡眠の判定が昼夜の計算を読んでいないことを確かめる
+  it('寝る時刻は季節で変わらない', () => {
+    const { api, clock } = load();
+    pet(api, clock, { stage:'final', lineage:'tako', form:'t3', P:0 });   // 昼寝なしの子
+    //  夏至なら日の入り前、冬至なら日の入り後、という時刻を含めて見る
+    for(const h of [2, 4, 12, 15, 17, 18]){
+      eq(api.isAsleep(at(12, 22, h)), api.isAsleep(at(6, 21, h)),
+         `${h}時の寝ているか（夏至と冬至で違う）:`);
+    }
+    const src = require('fs').readFileSync(
+      require('path').join(__dirname, '..', 'invader_game.html'), 'utf8');
+    for(const fn of ['isAsleep', 'sleepKind', 'sleepConfig', 'inNightSleep', 'napWindows']){
+      const i = src.indexOf(`function ${fn}(`);
+      ok(i >= 0, `${fn} が見つからない`);
+      const body = src.slice(i, src.indexOf('\n  }', i));
+      ok(!/sunTimes|getTimeOfDay|timeOfDay/.test(body), `${fn} が昼夜の計算を読んでいる`);
+    }
+  });
+});
+
 describe('天気', () => {
   //  見た目は8通りだが、ゲームへの効きかたは4通りのまま。
   //  薄曇りは「雲は出るが、キャラへの影響は晴れと同じ」

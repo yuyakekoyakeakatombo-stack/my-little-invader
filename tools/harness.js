@@ -142,6 +142,7 @@ const EXPORTS = `
   flowerCount, FLOWER_DAY, FLOWER_SPAN, drawFlowers, drawHeadIcons, headIconX, HEAD_ICON_W, HEAD_ICON_GAP, HEAD_IY,
   get weather(){ return weather; }, set weather(v){ weather = v; },
   get timeOfDay(){ return timeOfDay; }, set timeOfDay(v){ timeOfDay = v; },
+  sunTimes, getTimeOfDay, SUN_LAT,
   get headSel(){ return headSel; }, set headSel(v){ headSel = v; },
   get diaryUnread(){ return diaryUnread; }, set diaryUnread(v){ diaryUnread = v; },
   healthState, statusAlert, isWeakStarve, isWeakSick, poopHasFlies, needsMed,
