@@ -177,7 +177,7 @@ const EXPORTS = `
   get fS(){ return fS; }, set fS(v){ fS = v; }, tickStory, storyNext, storyPrev,
   buildStory, get lang(){ return lang; }, set lang(v){ lang = v; storyPages = null; },
   get diaryLog(){ return diaryLog; },
-  buildDiary, diaryBody, addDiary, clearDiary, trimToShown, DIARY_MAX,
+  buildDiary, diaryBody, addDiary, addFarewell, shownDiary, clearDiary, trimToShown, DIARY_MAX,
   diaryWriting, diaryLevel, diaryStyle, writeRatio,
   LV_NEW, LV_BABY, LV_CHILD, LV_ADULT,
   bodyRows, DBODY_TOP, DBODY_BOT,

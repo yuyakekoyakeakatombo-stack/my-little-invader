@@ -1564,11 +1564,11 @@ describe('エンディング', () => {
     //  そして最終形態まで来たのに なかよしが旅立ちの線に届かなかった子
     const home = [...src.matchAll(/pet\.homeFlag = true;/g)].length;
     eq(home, 3, '帰還の入口の数:');
-    //  それぞれの日記が対応していること
+    //  それぞれの手紙が対応していること（別れの手紙は addFarewell から書く）
     for(const [flag, tags] of [['ufoFlag', ['farewell','farewellWild']],
                                ['homeFlag', ['broughtHome','redeemed']]])
       for(const t of tags)
-        ok(src.includes(`t: ['${t}']`), `${flag} 側の日記 ${t} が無い`);
+        ok(src.includes(`addFarewell('${t}')`), `${flag} 側の日記 ${t} が無い`);
   });
   //  とげとげの行き先は3つ。立て直せば帰還、そのままなら家出、
   //  恨みを溜めたまま放置すれば侵攻。姿は変えられないが行き先は変えられる
@@ -2540,6 +2540,66 @@ describe('音の表', () => {
     const { api } = load();
     for(const [react, snd] of Object.entries(api.REACT_SND))
       ok(api.SND[snd], `${react} が指す音 ${snd} が無い`);
+  });
+});
+
+describe('別れの手紙', () => {
+  //  **手紙は、演出が終わってから読める。**
+  //   手紙が書かれるのは結末が決まった日（日付が変わるとき）だが、
+  //   演出が流れるのは次に育成画面を開いたとき。そのあいだに読めてしまうと、
+  //   まだ庭にいる子の置き手紙を先に読むことになる
+  const setup = (over = {}) => {
+    const { api, clock } = load();
+    pet(api, clock, Object.assign({ name:'T' }, over));
+    api.clearDiary();
+    api.addDiary({ d: 1, n: 'T', t: ['fed'], v: [0], c: '', ts: clock.now(), cd: '' });
+    api.addFarewell('departed');
+    return { api, clock };
+  };
+
+  it('演出が終わるまでは読めない', () => {
+    const { api } = setup();
+    eq(api.diaryLog.length, 2, '書かれてはいること:');
+    eq(api.shownDiary().length, 1, '読めるぶん:');
+    ok(!api.shownDiary().some(e => (e.t || []).includes('departed')),
+       '手紙が先に読めてしまう');
+  });
+
+  it('おもいでが開くのと同時に読める', () => {
+    const { api } = setup();
+    api.pet.memShown = false;
+    api.endedShowMemory();                 // 演出が終わった＝おもいでを開く
+    ok(api.pet.memShown, 'おもいでが開いたこと');
+    eq(api.shownDiary().length, 2, '読めるぶん:');
+    ok(api.shownDiary().some(e => (e.t || []).includes('departed')),
+       '演出のあとも手紙が読めない');
+  });
+
+  //  日記のマークは「読めるものがあるか」で出す。手紙しか無いのに
+  //  マークだけ点くと、開いても空のページになる
+  it('手紙しか無いうちは、日記のマークも出さない', () => {
+    const { api, clock } = load();
+    pet(api, clock, { name:'T' });
+    api.clearDiary();
+    api.addFarewell('departed');
+    ok(!api.diaryUnlocked(), 'マークが出てしまう');
+    api.pet.memShown = true;
+    ok(api.diaryUnlocked(), '演出のあとに出ない');
+  });
+
+  //  別れの手紙は7通り。**どれも同じ入口（addFarewell）から書く**ので、
+  //  伏せ忘れが起きない
+  it('別れの手紙は、すべて同じ入口から書かれる', () => {
+    const src = require('fs').readFileSync(
+      require('path').join(__dirname, '..', 'invader_game.html'), 'utf8');
+    for(const t of ['broughtHome','redeemed','farewellWild','departed','wrath','farewell'])
+      ok(src.includes(`addFarewell('${t}')`), `${t} が addFarewell を通っていない`);
+    //  直に書いている所が残っていないこと（伏せ忘れる）。
+    //  1つだけ残るのは addFarewell 自身
+    eq([...src.matchAll(/addDiary\(\{ d: petDay\(\)/g)].length, 1,
+       '手紙をその場で書いている所:');
+    //  伏せる印は addFarewell の中だけ
+    eq([...src.matchAll(/hold: 1/g)].length, 1, '伏せる印を置いている所:');
   });
 });
 

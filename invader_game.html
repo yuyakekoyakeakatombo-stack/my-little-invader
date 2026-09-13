@@ -1260,7 +1260,7 @@
     if(pet.stage==='adult' && pet.lineageAt && !pet.ufoFlag && !pet.homeFlag && !pet.invadeFlag &&
        now - pet.lineageAt >= STUCK_DAYS*86400000){
       pet.homeFlag = true; pet.homeRedeem = false;
-      addDiary({ d: petDay(), n: pet.name, t: ['broughtHome'], v: [voiceIdx()], c: '', ts: Date.now(), cd: todayKey() });
+      addFarewell('broughtHome');
     }
     // 最終形態の幕引き。最終形態から14日、ただし成体到達から30日を超えない。
     //  上限を後から入れたので、すでに育っている子には猶予（endGrace）を与える
@@ -1271,22 +1271,22 @@
         if(invadeSigns()){ /* 侵攻の条件がそろっている間は、そちらに譲る */ }
         else if(redeemed()){
           pet.homeFlag = true; pet.homeRedeem = true;
-          addDiary({ d: petDay(), n: pet.name, t: ['redeemed'], v: [voiceIdx()], c: '', ts: Date.now(), cd: todayKey() });
+          addFarewell('redeemed');
         } else {
           pet.ufoFlag = true;
-          addDiary({ d: petDay(), n: pet.name, t: ['farewellWild'], v: [voiceIdx()], c: '', ts: Date.now(), cd: todayKey() });
+          addFarewell('farewellWild');
         }
       } else if(pet.B >= DEPART_B && pet.health === 'GOOD'){
         pet.departFlag = true;
         // 帰還エンドと同じく、最後の一言を日記に書き残してから旅立つ。
         //  演出のあとは主のいない画面で止まるので、読み返せるものが無いと画面が空のまま残ってしまう
-        addDiary({ d: petDay(), n: pet.name, t: ['departed'], v: [voiceIdx()], c: '', ts: Date.now(), cd: todayKey() });
+        addFarewell('departed');
       } else {
         // 最終形態にはなったが、なかよしが旅立ちの線に届かなかった／病気のまま。
         //  ここが無いと、なかよし20〜59で固まった子がどの結末にも辿り着けない
         //  （20未満は家出の lowB で拾われる）。成体の時間切れと同じ「迎えが来る」で区切る
         pet.homeFlag = true; pet.homeRedeem = false;
-        addDiary({ d: petDay(), n: pet.name, t: ['broughtHome'], v: [voiceIdx()], c: '', ts: Date.now(), cd: todayKey() });
+        addFarewell('broughtHome');
       }
     }
   }
@@ -1333,7 +1333,7 @@
       pet.wrathDays = (pet.wrathDays||0) + 1;
       if(pet.wrathDays >= INV_DAYS){
         pet.invadeFlag = true;
-        addDiary({ d: petDay(), n: pet.name, t: ['wrath'], v: [voiceIdx()], c: '', ts: Date.now(), cd: todayKey() });
+        addFarewell('wrath');
       }
     } else pet.wrathDays = 0;                          // 持ち直したら解除（E3と同じ作法）
   }
@@ -1359,7 +1359,7 @@
       if(pet.estrangedDays >= RET_ESTR_DAYS){
         pet.ufoFlag = true;
         // 迎えが来る日。最後の一言を日記に書き残してから連れて行かれる
-        addDiary({ d: petDay(), n: pet.name, t: ['farewell'], v: [voiceIdx()], c: '', ts: Date.now(), cd: todayKey() });
+        addFarewell('farewell');
       }
     } else {
       pet.estrangedDays = 0;                                 // 持ち直したら解除
@@ -3120,7 +3120,12 @@
   // メニューに「にっき」が並ぶのは、最初の1件が書かれてから。
   //  来たその日から書ける状態にはなっているが、空の日記帳を先に見せると
   //  「何も書いていない」画面を開かせることになるので、中身ができてから出す
-  function diaryUnlocked(){ return diaryLog.length > 0; }
+  //  読める日記。**別れの手紙は、演出が終わるまで伏せておく。**
+  //   手紙は結末が決まった日（日付が変わるとき）に書かれるが、演出が流れるのは
+  //   次に育成画面を開いたとき。そのあいだに読めてしまうと、まだ庭にいる子の
+  //   置き手紙を先に読むことになる。おもいでが開く（memShown）と同時に読めるようにする
+  function shownDiary(){ return pet.memShown ? diaryLog : diaryLog.filter(e => !e.hold); }
+  function diaryUnlocked(){ return shownDiary().length > 0; }
 
   // ════════════════════════════════════════
   // にっきの段階──どの日記も文字で読めるが、育ち具合で書きぶりが変わる。
@@ -3316,6 +3321,11 @@
     e.t = keep.map(i => e.t[i]);
     e.v = keep.map(i => e.v[i]);
     return e;
+  }
+  //  別れの手紙。**伏せた状態で書き置く**（演出が終わるまで読めない）
+  function addFarewell(tag){
+    addDiary({ d: petDay(), n: pet.name, t: [tag], v: [voiceIdx()], c: '',
+               ts: Date.now(), cd: todayKey(), hold: 1 });
   }
   function addDiary(e){
     if(!e) return;
@@ -6844,7 +6854,7 @@
   // 項目はキーで管理（表示ラベルは言語辞書、値は各キーで分岐）
   //  版の番号は sw.js の VERSION と同じもの。tools/bump-sw.sh が両方いっしょに
   //  書き換える（ずれると、テスターの端末に出ている版が分からなくなる）
-  const APP_VERSION = '2026-09-13-02';
+  const APP_VERSION = '2026-09-13-03';
   //  (C) は Press Start 2P に © が無く、別の字体に落ちて1文字だけ形が浮くため
   const APP_COPY = '(C) 2026 Studio M.D.Q.';
   // 天気は Open-Meteo から貰っている。CC BY 4.0 なので、無料で使う場合でも
@@ -7643,7 +7653,7 @@
   let diaryFrom = 'menu';        // どこから開いたか（閉じたらそこへ戻る）
   function openDiary(from){
     diaryFrom = from || 'menu';
-    diaryPage = Math.max(0, diaryLog.length - 1);   // いちばん新しい日を開く
+    diaryPage = Math.max(0, shownDiary().length - 1);   // いちばん新しい日を開く
     if(diaryUnread > 0){ diaryUnread = 0; saveDiary(); }   // 開いたら既読
     showView('diary');
   }
@@ -7675,7 +7685,7 @@
     if(scene !== 'diary') return;
     ctxT.fillStyle=OFF; ctxT.fillRect(0,0,W*S,H*S);
     ctxT.textAlign='center'; ctxT.textBaseline='top';
-    const e = diaryLog[diaryPage];
+    const e = shownDiary()[diaryPage];
     // 見出し1段目：「<なまえ>のにっき」。名前は英数字ならピクセル字体になるので、
     //  2つの書体の幅を測ってから並べて中央に置く
     const who = (e && e.n) || pet.name || '????';
@@ -7696,7 +7706,7 @@
       //  ＜ ＞ は言語で字の大きさが変わり、高さがそろわなかった。
       //   選択中の ▶ と同じ三角にして、どちらの言語でも同じ位置に置く
       if(diaryPage > 0)                 pageMark(ctxT, 'left',  4*S, 7*S + 4, ON);
-      if(diaryPage < diaryLog.length-1) pageMark(ctxT, 'right', (W-4)*S, 7*S + 4, ON);
+      if(diaryPage < shownDiary().length-1) pageMark(ctxT, 'right', (W-4)*S, 7*S + 4, ON);
     }
     for(let x=6;x<W-6;x++) dot(ctxT, x, 17, DIM);
     // 本文（材料から組み立てた行）。ページ数(y57)に掛からないよう上下中央に置く
@@ -7708,7 +7718,7 @@
     // ページ数（本文の下）。書いた本人の名前は見出しに出るので、ここでは繰り返さない
     if(e){
       ctxT.font = uiFont(6); ctxT.fillStyle = ON;
-      ctxT.fillText((diaryPage + 1) + ' / ' + diaryLog.length, (W*S)/2, 57*S);
+      ctxT.fillText((diaryPage + 1) + ' / ' + shownDiary().length, (W*S)/2, 57*S);
     }
   }
   setInterval(tickDiary, 100);
@@ -7721,7 +7731,7 @@
     onPress(el,()=>{
       playClick(900); dpadAnim(el);
       if(el.classList.contains('up')||el.classList.contains('left'))    diaryPage = Math.max(0, diaryPage-1);
-      if(el.classList.contains('down')||el.classList.contains('right')) diaryPage = Math.min(diaryLog.length-1, diaryPage+1);
+      if(el.classList.contains('down')||el.classList.contains('right')) diaryPage = Math.min(shownDiary().length-1, diaryPage+1);
     });
   });
 
