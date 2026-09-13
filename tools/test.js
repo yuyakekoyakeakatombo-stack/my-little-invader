@@ -2475,9 +2475,10 @@ describe('世話の音', () => {
       require('path').join(__dirname, '..', 'invader_game.html'), 'utf8');
     //  歩き・跳ね・その場屈伸・屈伸歩きの4か所は squatPose を通す
     eq([...src.matchAll(/squatPose\(sp, grid\)/g)].length, 4, '屈伸の入口を通る所:');
-    //  squatFrame を直に呼ぶのは5か所だけ——定義・squatPose の中の3通り・
-    //  食事の屈伸（食べる姿から縮めるので、別のコマには差し替えない）
-    eq([...src.matchAll(/squatFrame\(/g)].length, 5, 'squatFrame を直に呼ぶ所:');
+    //  squatFrame を直に呼ぶのは6か所だけ——定義・squatPose の中の3通り・
+    //  食事の屈伸（食べる姿から縮めるので、別のコマには差し替えない）・
+    //  成体グレイの休み姿（G_REST。じっとしている場面はこの姿で止まる）
+    eq([...src.matchAll(/squatFrame\(/g)].length, 6, 'squatFrame を直に呼ぶ所:');
   });
 
   //  口をやめても、食べていることは伝わり続けること
@@ -3494,6 +3495,55 @@ describe('系統わけ', () => {
 // ══ 進化 ══════════════════════════════════════════════════
 //  プランプ＝大食い または 甘やかし ／ スリーク＝丁寧なケア かつ ミニゲーム制覇 ／
 //  プリックリー＝ケアが雑。どれにも当たらなければ最終形態にならず、成体のままとどまる
+describe('成体グレイの休み姿', () => {
+  //  じっとしている場面（雨・雪／瀕死／病気／迎えを待つあいだ）は休み姿で止まる。
+  //  1コマ目のままだと、手が脚と同じ高さに4つ並んで4本脚に見える
+  const greySp = (api, clock) => {
+    pet(api, clock, { name:'T', stage:'adult', lineage:'grey' });
+    return api.charSprites();
+  };
+  const runs = (row) => row.join('').split(/0+/).filter(Boolean).length;
+
+  it('休み姿は、2コマ目の形で足を縮めたもの', () => {
+    const { api, clock } = load();
+    const sp = greySp(api, clock);
+    eq(JSON.stringify(sp.rest), JSON.stringify(api.squatFrame(sp.b)), '休み姿:');
+    eq(sp.rest.length, sp.b.length - 1, '足を1段縮めていない:');
+    eq(runs(sp.rest[sp.rest.length-1]), 2, '足もとのまとまり:');
+  });
+
+  it('瀕死・病気・雨も、その姿で止まる', () => {
+    const { api, clock } = load();
+    const sp = greySp(api, clock);
+    //  瀕死と雨は rest そのもの。病気は rest の目を閉じたもの
+    const sick = api.sickSprite(sp);
+    eq(sick.length, sp.rest.length, '病気の姿の段数:');
+    //  目の段だけが違う
+    let diff = 0;
+    sick.forEach((r, y) => { if(JSON.stringify(r) !== JSON.stringify(sp.rest[y])) diff++; });
+    eq(diff, 1, '休み姿と違う段の数:');
+  });
+
+  //  目の段を見比べる処理（見回し・病気の閉眼）は、休み姿と閉眼を突き合わせる。
+  //  形が食い違うと、目でない段まで「目」と見なしてしまう
+  it('閉眼も同じ形から作ってある', () => {
+    const { api, clock } = load();
+    const sp = greySp(api, clock);
+    eq(sp.shut.length, sp.rest.length, '閉眼の段数:');
+    eq(api.eyeRows(sp).length, 1, '目の段の数:');
+  });
+
+  //  ほかの成体は今までどおり、立ち姿のまま
+  it('ほかの成体の休み姿は、いままでどおり立ち姿', () => {
+    const { api, clock } = load();
+    for(const L of ['tako', 'inv']){
+      pet(api, clock, { name:'T', stage:'adult', lineage:L });
+      const sp = api.charSprites();
+      eq(JSON.stringify(sp.rest), JSON.stringify(sp.a), `${L}:`);
+    }
+  });
+});
+
 describe('寝姿', () => {
   //  タコ・インベーダーは人型ではないので、横たわらせると何の形か読めない。
   //  足を体の下に畳むだけにする。2段では足先が残って立って見えたので、もう1段落とす

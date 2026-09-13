@@ -4582,6 +4582,14 @@
   //  グレイの寝姿は横向きの別絵なので、そちらからは割り出せない
   const S3_SHUT = {};
   for(const k in S3_EYES) S3_SHUT[k] = withRows(S3_SPR[k], S3_EYES[k]);
+  //  成体グレイの休み姿。**2コマ目の形で足を縮めたもの。**
+  //   1コマ目は手を胴の左右へ垂らした形で、脚と同じ高さに4つ並ぶ。
+  //   じっとしている場面（雨・雪／瀕死／病気／迎えを待つあいだ）はこの姿で
+  //   止まるので、そのままだと4本脚に見える。手を横へ広げた2コマ目から
+  //   足を縮めて、うずくまった姿にする。閉眼もそこから作る
+  //   （目の段を見比べる処理が、休み姿と同じ形を見る必要があるため）
+  const G_REST = squatFrame(S3_SPR_B.grey);
+  const G_REST_SHUT = withRows(G_REST, S3_EYES.grey);
   const S3_SLEEP = {
     grey: G_LIE.grey,                       // 成体グレイは仰向け
     tako: lie(S3_SHUT.tako, 2),
@@ -4703,8 +4711,11 @@
       case 'mid':   return {a:MID_A, b:MID_B, rest:MID_A, sleep:MID_SLEEP, shut:MID_SLEEP};
       case 'larva': return {a:LARVA_A, b:LARVA_B, rest:LARVA_RAIN, sleep:LARVA_SLEEP, shut:LARVA_SLEEP};
       case 'adult': { const L = pet.lineage, s = S3_SPR[L] || S3_SPR.grey;
-                      return {a:s, b:(S3_SPR_B[L] || s), rest:s, sleep:S3_SLEEP[L] || S3_SLEEP.grey,
-                              shut:S3_SHUT[L] || S3_SHUT.grey}; }
+                      const grey = (L === 'grey');
+                      return {a:s, b:(S3_SPR_B[L] || s),
+                              rest: grey ? G_REST : s,
+                              sleep:S3_SLEEP[L] || S3_SLEEP.grey,
+                              shut: grey ? G_REST_SHUT : (S3_SHUT[L] || S3_SHUT.grey)}; }
       default:      { const f = S4_SPR[pet.form];
                       return f ? {a:f, b:(S4_SPR_B[pet.form] || f), rest:f, sleep:S4_SLEEP[pet.form],
                                   shut:S4_SHUT[pet.form]}
@@ -6867,7 +6878,7 @@
   // 項目はキーで管理（表示ラベルは言語辞書、値は各キーで分岐）
   //  版の番号は sw.js の VERSION と同じもの。tools/bump-sw.sh が両方いっしょに
   //  書き換える（ずれると、テスターの端末に出ている版が分からなくなる）
-  const APP_VERSION = '2026-09-13-05';
+  const APP_VERSION = '2026-09-13-06';
   //  (C) は Press Start 2P に © が無く、別の字体に落ちて1文字だけ形が浮くため
   const APP_COPY = '(C) 2026 Studio M.D.Q.';
   // 天気は Open-Meteo から貰っている。CC BY 4.0 なので、無料で使う場合でも
