@@ -5928,11 +5928,14 @@
     //  この子が暮らした庭のまま見送る（天気と花はそのまま）。
     //  空は出さない——UFOやビームの場なので、太陽や鳥と取り合いになる
     drawGarden(BG, DM, NK, { sky:false });
-    const sp = charSprites(), cw = sp.a[0].length, ch = sp.a.length;
-    const x0 = centerX(cw), y = MAIN_GY - ch;
+    const sp = charSprites(), cw = sp.a[0].length;
+    const x0 = centerX(cw), y = MAIN_GY - sp.a.length;
     if(ufoT < RUN_STILL){                                 // 立ちつくして「・・・」
-      stamp(ctxM, sp.rest, x0, y, NK);
-      if(ufoT % (RUN_ON + RUN_OFF) < RUN_ON) stampEmo(ctxM, ICO_DOTS, x0, y, cw, NK);
+      //  **足元は、描く姿そのものの高さで地面に着ける。**
+      //  歩く姿の高さで置いていたので、背の低い休みの姿（幼体）が1ドット浮いていた
+      const ry = MAIN_GY - sp.rest.length;
+      stamp(ctxM, sp.rest, x0, ry, NK);
+      if(ufoT % (RUN_ON + RUN_OFF) < RUN_ON) stampEmo(ctxM, ICO_DOTS, x0, ry, cw, NK);
     } else {                                              // 左へ歩いて出ていく
       const t = ufoT - RUN_STILL;
       const x = Math.round(x0 - t * RUN_SPEED);
@@ -6841,7 +6844,7 @@
   // 項目はキーで管理（表示ラベルは言語辞書、値は各キーで分岐）
   //  版の番号は sw.js の VERSION と同じもの。tools/bump-sw.sh が両方いっしょに
   //  書き換える（ずれると、テスターの端末に出ている版が分からなくなる）
-  const APP_VERSION = '2026-09-13-01';
+  const APP_VERSION = '2026-09-13-02';
   //  (C) は Press Start 2P に © が無く、別の字体に落ちて1文字だけ形が浮くため
   const APP_COPY = '(C) 2026 Studio M.D.Q.';
   // 天気は Open-Meteo から貰っている。CC BY 4.0 なので、無料で使う場合でも

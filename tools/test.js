@@ -4357,8 +4357,8 @@ describe('ファイル', () => {
     // 育成画面の emo() は、その関数に委ねているだけ
     ok(/function emo\(spr\)\{ stampEmo\(ctxM, spr, charX, charY \+ yOff - airOff, gw, NK\); \}/.test(src),
        '育成画面が独自に位置を決めている');
-    // 家出も同じ関数を通す
-    ok(/stampEmo\(ctxM, ICO_DOTS, x0, y, cw, NK\);/.test(src),
+    // 家出も同じ関数を通す（休みの姿の足元にそろえるので ry を渡す）
+    ok(/stampEmo\(ctxM, ICO_DOTS, x0, ry, cw, NK\);/.test(src),
        '家出が独自に位置を決めている');
     // キャラの左に置く決まりが1か所だけであること
     const lines = src.split('\n').filter(l => l.includes('charX - EMO_GAP - w'));
