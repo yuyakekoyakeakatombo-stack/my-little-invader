@@ -4698,8 +4698,13 @@
     }
     return out;
   }
+  //  病気の姿。**寝姿で丸まる。**
+  //   具合が悪いことを、目を閉じて縮こまった形で見せる。
+  //   グレイ系だけは寝姿が仰向け（横向き）で、起きているのに寝ているように
+  //   見えてしまうので、休み姿の目を閉じたものを使う
   function sickSprite(sp){
-    const shut = sp.shut || sp.sleep;                  // 同上。グレイの寝姿は横向きなので使えない
+    if(pet.lineage !== 'grey' && sp.sleep && sp.sleep.length) return sp.sleep;
+    const shut = sp.shut || sp.sleep;
     const repl = eyeRows(sp).map(y => [y, shut[y]]);
     return repl.length ? withRows(sp.rest, repl) : sp.rest;
   }
@@ -6424,10 +6429,12 @@
       grid = sp.sleep;
       yOff = 0;
     } else if (pet.health === 'SICK') {
-      // 病気：丸まってゆっくり上下。目は就寝時と同じ閉じ線。
-      //  **うずくまり姿のときは沈ませない**（足が地面に埋まって形が消える）
+      // 病気：丸まって動かない。**上下動はしない。**
+      //  縮こまった姿は足が1段しかないものが多く、1ドット沈めると
+      //  足が地面の線に埋まって形が分からなくなる。
+      //  具合の悪さは、姿と汗のマークと きげんの下がりで伝わる
       grid = sickSprite(sp);
-      yOff = restCrouched(sp) ? 0 : ((fM%40<20) ? 0 : 1);
+      yOff = 0;
     } else if (isBadWeather()) {
       // 雨・雪：動きが遅く、足縮め。
       //  **うずくまり姿のときは沈ませない**（足が地面に埋まって形が消える）
@@ -6887,7 +6894,7 @@
   // 項目はキーで管理（表示ラベルは言語辞書、値は各キーで分岐）
   //  版の番号は sw.js の VERSION と同じもの。tools/bump-sw.sh が両方いっしょに
   //  書き換える（ずれると、テスターの端末に出ている版が分からなくなる）
-  const APP_VERSION = '2026-09-13-07';
+  const APP_VERSION = '2026-09-13-08';
   //  (C) は Press Start 2P に © が無く、別の字体に落ちて1文字だけ形が浮くため
   const APP_COPY = '(C) 2026 Studio M.D.Q.';
   // 天気は Open-Meteo から貰っている。CC BY 4.0 なので、無料で使う場合でも

@@ -3538,9 +3538,12 @@ describe('成体グレイの休み姿', () => {
   //  休み姿は足が1段しかない。**沈めたり縮めたりすると足が消える**
   it('休み姿は、沈ませない・縮めない', () => {
     const src = read2('invader_game.html');
-    //  雨・雪と病気の上下動は、うずくまり姿のときだけ止める
-    eq([...src.matchAll(/restCrouched\(sp\) \? 0 :/g)].length, 2,
+    //  雨・雪の上下動は、うずくまり姿のときだけ止める（病気は下で全部止める）
+    eq([...src.matchAll(/restCrouched\(sp\) \? 0 :/g)].length, 1,
        '沈む上下動を止めている所:');
+    //  病気はどのキャラも上下しない
+    ok(/病気：丸まって動かない。\*\*上下動はしない。\*\*/.test(src),
+       '病気の上下動が残っている');
     //  休み姿のときは屈伸を重ねない（3か所とも resting を見る）
     eq([...src.matchAll(/!resting/g)].length, 3, '屈伸を止めている所:');
   });
@@ -3649,22 +3652,37 @@ describe('寝姿', () => {
 
   //  グレイの寝姿は立ち姿から作れない別絵なので、
   //  病気の姿と 目を左右に動かす処理が 寝姿を見に行くと、体が入れ替わって壊れる
-  it('病気の姿は 寝姿ではなく 正面のとじ目から作る', () => {
-    const { api } = load();
-    const cases = [['final','g1'],['final','g2'],['final','g3'],['final','i2'],['final','t1'],
-                   ['adult','grey'],['adult','tako'],['adult','inv'],['larva',null]];
-    for(const [stage, key] of cases){
-      api.pet.stage = stage;
-      if(stage === 'final') api.pet.form = key; else if(key) api.pet.lineage = key;
+  //  病気は**寝姿で丸まる**。目を閉じて縮こまった形で、具合の悪さを見せる。
+  //  グレイ系だけは寝姿が仰向けなので、起きているのに寝ているように見えてしまう。
+  //  そちらは休み姿の目を閉じたものを使う
+  it('病気の姿は 寝姿。グレイ系だけ 正面のとじ目から作る', () => {
+    const { api, clock } = load();
+    const sleeps = [['うまれたて',{stage:'egg'}], ['BABY',{stage:'mid'}],
+                    ['幼体',{stage:'larva'}],
+                    ['マーシャン',{stage:'adult',lineage:'tako'}],
+                    ['インベーダー',{stage:'adult',lineage:'inv'}],
+                    ['t1',{stage:'final',lineage:'tako',form:'t1'}],
+                    ['i2',{stage:'final',lineage:'inv',form:'i2'}]];
+    for(const [name, over] of sleeps){
+      pet(api, clock, Object.assign({ name:'T', lineage:'', form:'' }, over));
       const sp = api.charSprites();
-      const rows = api.eyeRows(sp);
-      ok(rows.length >= 1, `${stage}/${key} で目の段が見つからない`);
+      eq(JSON.stringify(api.sickSprite(sp)), JSON.stringify(sp.sleep), `${name}:`);
+    }
+    const greys = [['成体グレイ',{stage:'adult',lineage:'grey'}],
+                   ['g1',{stage:'final',lineage:'grey',form:'g1'}],
+                   ['g2',{stage:'final',lineage:'grey',form:'g2'}],
+                   ['g3',{stage:'final',lineage:'grey',form:'g3'}]];
+    for(const [name, over] of greys){
+      pet(api, clock, Object.assign({ name:'T', lineage:'', form:'' }, over));
+      const sp = api.charSprites();
       const sick = api.sickSprite(sp);
+      ok(JSON.stringify(sick) !== JSON.stringify(sp.sleep),
+         `${name}: 仰向けの寝姿を病気に使っている`);
+      //  休み姿の目を閉じたもの＝段数も幅も休み姿と同じ
+      eq(sick.length, sp.rest.length, `${name} 病気の姿の段数:`);
+      for(const r of sick) eq(r.length, sp.rest[0].length, `${name} 病気の姿の幅:`);
       ok(JSON.stringify(sick) !== JSON.stringify(sp.rest),
-         `${stage}/${key} の病気の姿が 立ち姿のまま（目が閉じていない）`);
-      //  差し替えた段も 立ち姿と同じ幅であること（横向きの絵が混ざっていない）
-      eq(sick.length, sp.rest.length, `${stage}/${key} 病気の姿の段数:`);
-      for(const r of sick) eq(r.length, sp.rest[0].length, `${stage}/${key} 病気の姿の幅:`);
+         `${name} の病気の姿が 目を閉じていない`);
     }
   });
 
