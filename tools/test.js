@@ -2690,6 +2690,22 @@ describe('くすりの演出', () => {
     }
     ok(bad.length === 0, `塗り分けが規則どおりでない: ${bad.slice(0,4).join(' / ')}`);
   });
+  //  輪郭は途切れずにひと回りつながっていること。
+  //  左下の殻の底が1ドット抜けていて、線の端が宙に浮いていたことがある
+  it('薬の輪郭は途切れていない', () => {
+    const { api } = load();
+    const P = api.MED_PILL;
+    const loose = [];
+    P.forEach((r, y) => r.forEach((v, x) => {
+      if(v !== 2) return;
+      let n = 0;
+      for(let dy = -1; dy <= 1; dy++) for(let dx = -1; dx <= 1; dx++){
+        if((dy || dx) && P[y+dy] && P[y+dy][x+dx] === 2) n++;
+      }
+      if(n < 2) loose.push(`(${x},${y})`);
+    }));
+    ok(loose.length === 0, `輪郭の端が宙に浮いている: ${loose.join(' ')}`);
+  });
   //  描く側が2色を扱えること。片方だけ直しても絵は変わらない
   it('2色の絵を描けるようになっている', () => {
     const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'invader_game.html'), 'utf8');

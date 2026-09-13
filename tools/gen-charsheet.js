@@ -28,6 +28,9 @@ function png(frames, scale = SCALE, ink = 2) {
   const w = Math.max(...frames.map((f) => f[0].length));
   const W = w * frames.length * scale, H = h * scale;
   const raw = Buffer.alloc((W * 3 + 1) * H);
+  //  **2色の絵**（ごはん・おやつ・くすり・お世話アイコン）は 2＝濃色／1＝薄色。
+  //  キャラの絵は 1 だけで描くので、2 が混じっているかで見分ける
+  const tone = frames.some((f) => f.some((r) => r.some((v) => v === 2)));
   //  下ぞろえで置く（足元をそろえる）。空きは地の色
   for (let y = 0; y < H; y++) {
     raw[y * (W * 3 + 1)] = 0;                       // フィルタ種別
@@ -37,7 +40,8 @@ function png(frames, scale = SCALE, ink = 2) {
       const dx = Math.floor((x % (w * scale)) / scale);
       const off = h - f.length;                     // 下ぞろえ
       const dy = Math.floor(y / scale) - off;
-      const v = (f[dy] && f[dy][dx]) ? ink : 0;
+      const d = f[dy] && f[dy][dx];
+      const v = !d ? 0 : (tone ? (d === 2 ? 2 : 1) : ink);
       const c = PAL[v];
       const p = y * (W * 3 + 1) + 1 + x * 3;
       raw[p] = c[0]; raw[p + 1] = c[1]; raw[p + 2] = c[2];
@@ -183,13 +187,21 @@ for (const [L, base] of [['grey', 'グレイ'], ['tako', 'マーシャン'], ['i
 }
 
 // ── 小物 ──────────────────────────────────────────────────
+//  g は1枚の絵か、コマの並び（ごはん・おやつは減り具合ごとの絵の並び）。
+//  **並びをそのまま1枚として渡すと、段ごとに塗りつぶされた黒い四角になる**
+const isFrames = (g) => Array.isArray(g[0]) && Array.isArray(g[0][0]);
 function iconRow(title, note, list) {
   const rows = list.filter(([, g]) => g && g.length)
-                   .map(([n, g]) => cell([g], 0, n)).join('');
+                   .map(([n, g, ms]) => isFrames(g) ? cell(g, ms || 600, n) : cell([g], 0, n))
+                   .join('');
   return `<h2>${title}</h2><p class="note">${note}</p><div class="row">${rows}</div>`;
 }
-parts.push(iconRow('ごはん・おやつ', '皿の減りは3段階。おやつは小さい皿。',
-  [['ごはん', api.MEAL_SPR], ['おやつ', api.SNACK_SPR], ['くすり', api.MED_PILL]]));
+//  本体は 0＝空の器 … 3＝満杯 の順。食べて減っていく向きに並べ替えて見せる
+parts.push(iconRow('ごはん・おやつ・くすり',
+  '皿の減りは3段階（満杯→空の器の順に動かしている）。おやつは小さい皿。' +
+  'くすりは飛んでくるカプセルで、お世話アイコンと同じ塗り分け。',
+  [['ごはん', [...api.MEAL_SPR].reverse()], ['おやつ', [...api.SNACK_SPR].reverse()],
+   ['くすり', api.MED_PILL]]));
 parts.push(iconRow('気もちのマーク', 'キャラの横に出る。<b>押したボタンではなく、どう応えたかで決まる</b>。',
   [['ハート', api.ICO_HEART], ['おこる', api.ICO_ANGER], ['・・・', api.ICO_DOTS],
    ['音符', api.ICO_NOTE], ['あせ', api.ICO_DROP], ['！', api.ICO_EXCL],
