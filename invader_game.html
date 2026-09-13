@@ -4698,19 +4698,11 @@
     }
     return out;
   }
-  //  病気の姿。**寝姿で丸まる。**
-  //   具合が悪いことを、目を閉じて縮こまった形で見せる。
-  //   グレイ系だけは寝姿が仰向け（横向き）で、起きているのに寝ているように
-  //   見えてしまうので、休み姿の目を閉じたものを使う
-  function sickSprite(sp){
-    //  **系統を見るのは成体から。** たまご〜幼体は、内部に系統が入っていても
-    //  まだ姿に出ていないので、寝姿を使う
-    const greyLine = (pet.stage === 'adult' || pet.stage === 'final') && pet.lineage === 'grey';
-    if(!greyLine && sp.sleep && sp.sleep.length) return sp.sleep;
-    const shut = sp.shut || sp.sleep;
-    const repl = eyeRows(sp).map(y => [y, shut[y]]);
-    return repl.length ? withRows(sp.rest, repl) : sp.rest;
-  }
+  //  具合が悪いときの姿。**病気も瀕死も、どのキャラも寝姿で丸まる。**
+  //   目を閉じて縮こまった形にして、動けないことを姿で見せる。
+  //   ふたつの違いは**感情マークと体の色**で分かる——
+  //   病気＝汗のマーク／瀕死＝ドクロか！のマークと薄い色
+  function sickSprite(sp){ return (sp.sleep && sp.sleep.length) ? sp.sleep : sp.rest; }
 
   // 現在の段階のスプライトセット {a:通常, b:アニメ, rest:休息/丸まり(開眼), sleep:就寝(閉眼)}
   function charSprites(){
@@ -6424,9 +6416,9 @@
     let yOff=0, grid, bounceSpeed=30, bounceAmt=1;
     let charCol = NK;
     if (isWeak()) {
-      // 瀕死：くうふくも びょうきも、薄い色で うずくまって動かない。
-      //  この状態のあいだは眠らないので（effectiveAsleep）、寝姿は出てこない
-      grid = sp.rest; yOff = 0; charCol = DM;
+      // 瀕死：くうふくも びょうきも、**寝姿で丸まって動かない**。薄い色で描く。
+      //  眠っているのとは、薄い色と 点滅するマーク（ドクロ／！）で見分ける
+      grid = sickSprite(sp); yOff = 0; charCol = DM;
     } else if (asleep) {
       // 睡眠中：丸まって動かない（閉眼スプライト）
       grid = sp.sleep;
@@ -6897,7 +6889,7 @@
   // 項目はキーで管理（表示ラベルは言語辞書、値は各キーで分岐）
   //  版の番号は sw.js の VERSION と同じもの。tools/bump-sw.sh が両方いっしょに
   //  書き換える（ずれると、テスターの端末に出ている版が分からなくなる）
-  const APP_VERSION = '2026-09-13-09';
+  const APP_VERSION = '2026-09-13-10';
   //  (C) は Press Start 2P に © が無く、別の字体に落ちて1文字だけ形が浮くため
   const APP_COPY = '(C) 2026 Studio M.D.Q.';
   // 天気は Open-Meteo から貰っている。CC BY 4.0 なので、無料で使う場合でも
