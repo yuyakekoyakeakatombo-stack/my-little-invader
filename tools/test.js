@@ -419,6 +419,33 @@ describe('病気', () => {
 // ══ タイトルの選択肢 ══════════════════════════════════════
 //   遊びはじめる前に説明書を読めるようにする入口。
 //   まだ言語を選んでいない場所なので、ここは英語で出す
+describe('オープニングのUFO', () => {
+  //  止まる位置は画面の中央。以前は1.5ドット左に寄っていた。
+  //  UFOは11ドット（奇数）・画面は54ドット（偶数）なので、左右の余白の差は1ドットが限度
+  it('UFOは画面の中央に止まる', () => {
+    const { api } = load();
+    const w = api.UFO_SPR[0].length;
+    const left = api.UFO_END_X, right = 54 - api.UFO_END_X - w;
+    ok(Math.abs(left - right) <= 1, `左の余白${left}・右の余白${right}`);
+    //  結末で迎えに来るUFOと同じ位置
+    eq(api.UFO_END_X, api.centerX(w), '結末のUFOと同じ置き方:');
+  });
+  //  ビームとあかちゃんはUFOに付いていく（位置を別に持たない）
+  it('ビームとあかちゃんは、UFOの真ん中の列にそろう', () => {
+    const { api } = load();
+    eq(api.UFO_CX, api.UFO_END_X + Math.floor(api.UFO_SPR[0].length / 2), 'ビームの軸:');
+    eq(api.BABY_X, api.UFO_CX - 1, 'あかちゃんの位置:');
+  });
+  //  選んでいる行の点滅は、濃い色と明るい色の入れ替え。**地（中間色）と同じ色にはしない**。
+  //  同じ色にすると、点滅の半分で文字が丸ごと消える
+  it('選択肢の点滅で、文字は地の色にならない', () => {
+    const src = require('fs').readFileSync(
+      require('path').join(__dirname, '..', 'invader_game.html'), 'utf8');
+    ok(/function tickOpening\(\)\{\s*ctxO\.fillStyle=DIM;/.test(src), 'オープニングの地が中間色でない');
+    ok(/ctxO\.fillStyle = on \? ON : OFF;/.test(src), '点滅の「消」側が明るい色でない');
+  });
+});
+
 describe('タイトルの選択肢', () => {
   const src = () => require('fs').readFileSync(require('path').join(__dirname, '..', 'invader_game.html'), 'utf8');
   //  説明書が上、はじめるが下。読んでから始めてほしいので この順

@@ -643,7 +643,11 @@
   //  残りのフェーズ6（キャラが歩き去る）はタイトルの裏で続ける
   const O_UFO_GONE = O_PHASES.slice(0,6).reduce((a,b)=>a+b,0);
   const UFO_START_X = W+2;
-  const UFO_END_X   = Math.floor(W/2)-7;
+  //  止まる位置は**画面の中央**。結末の迎えのUFOと同じ置き方（centerX）にそろえる。
+  //   以前は W/2-7 で、UFO（11ドット）の中心が画面の中心より1.5ドット左に寄っていた。
+  //   11ドットは奇数・画面は54ドットの偶数なので、ぴったり真ん中には置けず、
+  //   左の余白21・右の余白22になる（これより寄せるには半ドットずらすしかない）
+  const UFO_END_X   = centerX(UFO_SPR[0].length);
   const UFO_CX      = UFO_END_X+5;
   const UFO_Y=3, BEAM_TOP=UFO_Y+7;
   const GROUND_Y=H-4, BABY_END_Y=GROUND_Y-2, BABY_X=UFO_CX-1;
@@ -6933,7 +6937,7 @@
   // 項目はキーで管理（表示ラベルは言語辞書、値は各キーで分岐）
   //  版の番号は sw.js の VERSION と同じもの。tools/bump-sw.sh が両方いっしょに
   //  書き換える（ずれると、テスターの端末に出ている版が分からなくなる）
-  const APP_VERSION = '2026-09-13-12';
+  const APP_VERSION = '2026-09-13-13';
   //  (C) は Press Start 2P に © が無く、別の字体に落ちて1文字だけ形が浮くため
   const APP_COPY = '(C) 2026 Studio M.D.Q.';
   // 天気は Open-Meteo から貰っている。CC BY 4.0 なので、無料で使う場合でも
