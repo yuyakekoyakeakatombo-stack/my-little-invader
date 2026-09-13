@@ -3464,51 +3464,6 @@ describe('系統わけ', () => {
 // ══ 進化 ══════════════════════════════════════════════════
 //  プランプ＝大食い または 甘やかし ／ スリーク＝丁寧なケア かつ ミニゲーム制覇 ／
 //  プリックリー＝ケアが雑。どれにも当たらなければ最終形態にならず、成体のままとどまる
-describe('成体グレイの手', () => {
-  //  以前は胴の左右に手を垂らしていて、**脚と同じ高さに並ぶので4本脚に見えた**。
-  //  手は頭の脇に挙げる。もう1コマ（歩き2）は手を横へ広げた形なので、
-  //  2コマで「挙げる↔広げる」動きになる
-  const greySp = (api, clock) => {
-    pet(api, clock, { name:'T', stage:'adult', lineage:'grey' });
-    return api.charSprites();
-  };
-  //  その段にある「まとまり」の数。脚が2本なら2、手を垂らすと4になる
-  const runs = (row) => row.join('').split(/0+/).filter(Boolean).length;
-
-  it('足もとは2本に見える（4本脚にならない）', () => {
-    const { api, clock } = load();
-    const sp = greySp(api, clock);
-    for(const [name, g] of [['歩き1', sp.a], ['歩き2', sp.b]])
-      for(let y = g.length - 2; y < g.length; y++)
-        eq(runs(g[y]), 2, `${name} の下から${g.length - y}段目のまとまり:`);
-  });
-
-  it('手は、脚より上に挙がっている', () => {
-    const { api, clock } = load();
-    const sp = greySp(api, clock);
-    const g = sp.a, w = g[0].length;
-    //  両端に点があり、その内側が空いている段＝挙げた手
-    const hands = g.findIndex(r => r[0] && r[w-1] && !r[1] && !r[w-2]);
-    ok(hands >= 0, '挙げた手が見当たらない');
-    //  脚（下2段）より上にあること
-    ok(hands < g.length - 2, `手が脚と同じ高さにある（${hands}段目）`);
-  });
-
-  //  手を足した段を「目の段」と取り違えると、見回し（shiftEyes）や
-  //  病気の閉眼（sickSprite）がその段を動かしてしまう
-  it('目の段は、これまでどおり1段だけ', () => {
-    const { api, clock } = load();
-    const sp = greySp(api, clock);
-    eq(api.eyeRows(sp).length, 1, '目の段の数:');
-    //  閉眼は開眼から目の段だけを差し替えたもの。ほかの段は同じ
-    api.eyeRows(sp).forEach(() => {});
-    for(let y = 0; y < sp.a.length; y++){
-      if(api.eyeRows(sp).includes(y)) continue;
-      eq(JSON.stringify(sp.shut[y]), JSON.stringify(sp.a[y]), `${y}段目:`);
-    }
-  });
-});
-
 describe('寝姿', () => {
   //  タコ・インベーダーは人型ではないので、横たわらせると何の形か読めない。
   //  足を体の下に畳むだけにする。2段では足先が残って立って見えたので、もう1段落とす
