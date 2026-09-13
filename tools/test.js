@@ -2385,6 +2385,71 @@ describe('世話の音', () => {
     const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'invader_game.html'), 'utf8');
     ok(/const charY = MAIN_GY - grid\.length;/.test(src), '足元が縮んだ高さから引き直されていない');
   });
+  //  うまれたては、傾いた姿（b）で縮めると左の目が輪郭に張り付く。
+  //  屈伸のときだけ立った姿へ戻す
+  //   目＝体の中の「1で囲まれた穴」。その左右に体が何ドット残っているかを見る。
+  //   1ドットしか無いと、目のとなりがそのまま輪郭になって「接して」見える
+  //   目の段は、開いた姿と閉じた姿の差で分かる（api.eyeRows）。触角や脚のすき間を
+  //   目と取り違えないよう、その段だけを見る
+  const eyeMargins = (api, sp, g) => {
+    const out = [];
+    for(const y of api.eyeRows(sp)){
+      const row = g[y]; if(!row) continue;
+      row.forEach((v, x) => {
+        if(v) return;
+        if(!row.slice(0, x).includes(1) || !row.slice(x + 1).includes(1)) return;
+        let ln = 0; for(let i = x - 1; i >= 0 && row[i]; i--) ln++;
+        let rn = 0; for(let i = x + 1; i < row.length && row[i]; i++) rn++;
+        out.push(Math.min(ln, rn));
+      });
+    }
+    return out;
+  };
+
+  it('うまれたては、モゾモゾの形のまま屈伸しない', () => {
+    const { api, clock } = load();
+    pet(api, clock, { stage:'egg', name:'T' });
+    const sp = api.charSprites();
+    //  傾いた姿を渡しても、立った姿から縮む
+    eq(JSON.stringify(api.squatPose(sp, sp.b)),
+       JSON.stringify(api.squatFrame(sp.a)), 'うまれたての屈伸:');
+    //  **立った姿で縮めたほうが、目と輪郭のあいだが広い。**
+    //   これが直した理由そのもの（傾いた姿だと左の目が輪郭に張り付く）
+    const wide = Math.min(...eyeMargins(api, sp, api.squatFrame(sp.a)));
+    const tight = Math.min(...eyeMargins(api, sp, api.squatFrame(sp.b)));
+    ok(tight < wide, `傾いた姿でも目が離れている（${tight} / ${wide}）`);
+    ok(wide >= 2, `立った姿でも目が輪郭に接している（余白${wide}ドット）`);
+  });
+
+  //  ほかの段階は今までどおり、歩いている姿のまま縮む
+  it('うまれたて以外は、いまの姿のまま屈伸する', () => {
+    const { api, clock } = load();
+    for(const st of [{stage:'mid'}, {stage:'larva'},
+                     {stage:'adult', lineage:'grey'},
+                     {stage:'final', lineage:'inv', form:'i2'}]){
+      pet(api, clock, Object.assign({ name:'T' }, st));
+      const sp = api.charSprites();
+      eq(JSON.stringify(api.squatPose(sp, sp.b)),
+         JSON.stringify(api.squatFrame(sp.b)), `${st.stage}:`);
+      //  縮めても、目と輪郭のあいだは立った姿と変わらない
+      //  （うまれたてだけが、傾くと狭くなる形をしている）
+      eq(Math.min(...eyeMargins(api, sp, api.squatFrame(sp.b))),
+         Math.min(...eyeMargins(api, sp, api.squatFrame(sp.a))),
+         `${st.stage}: 傾きで目の余白が変わる:`);
+    }
+  });
+
+  //  縮める所が squatFrame を直に呼んでいないこと（うまれたてが素通りする）
+  it('屈伸は、すべて同じ入口を通る', () => {
+    const src = require('fs').readFileSync(
+      require('path').join(__dirname, '..', 'invader_game.html'), 'utf8');
+    //  歩き・跳ね・その場屈伸・屈伸歩きの4か所は squatPose を通す
+    eq([...src.matchAll(/squatPose\(sp, grid\)/g)].length, 4, '屈伸の入口を通る所:');
+    //  squatFrame を直に呼ぶのは3か所だけ——定義・squatPose の中・
+    //  食事の屈伸（食べる姿から縮めるので、立った姿には戻さない）
+    eq([...src.matchAll(/squatFrame\(/g)].length, 3, 'squatFrame を直に呼ぶ所:');
+  });
+
   //  口をやめても、食べていることは伝わり続けること
   it('食べていることは、目線・皿の減り・噛む音で伝わる', () => {
     const { api } = load();

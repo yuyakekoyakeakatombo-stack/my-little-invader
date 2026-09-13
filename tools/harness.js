@@ -111,7 +111,7 @@ const EXPORTS = `
   get fN(){ return fN; }, set fN(v){ fN = v; },
   get fG(){ return fG; }, set fG(v){ fG = v; },
   get fR(){ return fR; }, set fR(v){ fR = v; },
-  moveProfile, bondLow, BOND_FULL, BOND_EMPTY, squatFrame, flipH, shiftEyes, eyeRows,
+  moveProfile, bondLow, BOND_FULL, BOND_EMPTY, squatFrame, squatPose, flipH, shiftEyes, eyeRows,
   startJump, hopHeight, HOP_H_MAX, FLOAT_T, FLOAT_RISE, FLOAT_FALL, FLOAT_H, FLOAT_TOP,
   LOOK_T, LOOK_TURN, LOOK_SCAN, DASH_T, DASH_MUL, DASH_STOP, CLAMP_SLIDE,
   freeSegments, pushOutOfObjects, isBadWeather, weatherBase,
