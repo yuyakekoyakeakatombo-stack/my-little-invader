@@ -2100,6 +2100,80 @@ describe('地面の花', () => {
 });
 
 // ══ 立ち位置 ══════════════════════════════════════════════
+describe('結末の庭', () => {
+  //  **この子が暮らした庭は、いなくなっても同じ天気で、同じ花が咲いている。**
+  //  以前は結末の演出も、そのあとの庭も、星と地面だけを描いていた
+  const S = 4;
+  //  drawLog に溜まった矩形のうち、指定した「ドット座標の枠」に入るものを数える
+  const dotsIn = (log, x0, y0, x1, y1) => log.filter(o =>
+    o.op === 'rect' && o.w <= S && o.h <= S &&
+    o.x >= x0 * S && o.x < x1 * S && o.y >= y0 * S && o.y < y1 * S).length;
+
+  //  庭を1コマ描かせる。**コマ番号は10で揃える。**
+  //   迎えのUFOやビームの暗転（dimField）は画面いっぱいに点を置くので、
+  //   そこへ当たると「天体が出ている」と見分けが付かなくなる
+  function draw(flag, weather, frames = 10){
+    const at = new Date(2026, 5, 15, 12, 0, 0).getTime();
+    const { api, clock, drawLog } = load({ recordDraw: true, at });
+    pet(api, clock, { name:'T', birth: clock.now() - 25 * 86400000 });   // 花が咲きそろう頃
+    if(flag === 'dead') api.pet.dead = 'starve';
+    else if(flag === 'gone'){ api.pet.gone = true; api.pet.goneBy = 'depart'; }
+    else if(flag) api.pet[flag] = true;
+    api.scene = 'main';
+    api.weather = weather || 'clear';
+    for(let i = 1; i < frames; i++) api.tickMain();
+    drawLog.length = 0;
+    api.tickMain();
+    return { api, log: drawLog };
+  }
+  //  花は地面のすぐ上に立つ（いちばん背の高いもので5ドット）
+  const flowerDots = (api, log) =>
+    api.FLOWERS.reduce((n, [x]) => n + dotsIn(log, x, api.MAIN_GY - 5, x + 3, api.MAIN_GY), 0);
+  //  太陽の玉。**ここが埋まっていれば天体が出ている**（11×11の中心5×5＝21点）。
+  //   雨や雪の粒がこの枠を通ることはあるので、数で見分ける
+  const sunDots = (log) => dotsIn(log, 44, 13, 49, 18);
+  const SUN_ON = 15, SUN_OFF = 10;
+  //  雨粒。空じゅうに散るので、地面より上の帯で数える
+  const rainDots = (log, api) => dotsIn(log, 0, 12, 54, api.MAIN_GY - 6);
+
+  //  演出の空はUFOとビームの場。太陽や鳥を重ねると取り合いになるので出さない。
+  //  おばけと誰もいない庭は、もう何も来ないので空も出す
+  const UFO_ENDS = [['旅立ち','departFlag'], ['帰還','homeFlag'],
+                    ['侵攻','invadeFlag'], ['家出','ufoFlag']];
+  const QUIET    = [['おばけ','dead'], ['誰もいない庭','gone']];
+
+  for(const [name, flag] of [...UFO_ENDS, ...QUIET]){
+    it(`${name}でも、花は咲いたまま`, () => {
+      const { api, log } = draw(flag);
+      ok(flowerDots(api, log) > 0, '花が1つも描かれていない');
+    });
+    it(`${name}にも、雨は降る`, () => {
+      const { api, log } = draw(flag, 'rain');
+      ok(rainDots(log, api) > 10, '雨が降っていない');
+    });
+  }
+  for(const [name, flag] of UFO_ENDS){
+    it(`結末（${name}）の演出では、天体を出さない`, () => {
+      ok(sunDots(draw(flag).log) < SUN_OFF, '太陽が出ている');
+    });
+  }
+  for(const [name, flag] of QUIET){
+    it(`${name}には、天体も出る`, () => {
+      ok(sunDots(draw(flag).log) > SUN_ON, '晴れた昼なのに太陽が出ていない');
+    });
+    //  空が覆われている日は天体を出さない（育成画面と同じ決まり）
+    it(`${name}でも、雨の日は天体を出さない`, () => {
+      ok(sunDots(draw(flag, 'rain').log) < SUN_OFF, '雨の日に太陽が出ている');
+    });
+  }
+
+  //  家出だけ、旗から演出が始まっていなかった（起動し直すまで始まらない）
+  it('家出も、旗が立ったその場で演出が始まる', () => {
+    //  育成画面のままなら太陽が出る。演出に入っていれば出ない
+    ok(sunDots(draw('ufoFlag').log) < SUN_OFF, '育成画面のまま（太陽が出ている）');
+  });
+});
+
 describe('立ち位置', () => {
   //  うんち・皿の上に重ならないよう、重なっていたら最寄りの空きへ寄っていく。
   //  この押し出しは歩行の中に置いてはいけない。睡眠中・病気・瀕死・演出中は

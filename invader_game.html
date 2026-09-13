@@ -5762,9 +5762,8 @@
     ctxM.font=HEAD_FONT+'px "Press Start 2P"';   // DAYカウントは常にピクセル字体
     ctxM.textAlign='right'; ctxM.fillText(dayLabel(), (W-2)*S, HEAD_TEXT_Y);
     for(let x=0;x<W;x++) dot(ctxM,x,HEADER_Y,DM);
-    for(let x=0;x<W;x++) dot(ctxM,x,MAIN_GY,NK);
-    for(let x=0;x<W;x+=3) dot(ctxM,x,MAIN_GY-1,DM);
-    STARS_M.forEach(([x,y],i)=>dot(ctxM,x,y+10,(fM+i*9)%28<20?DM:BG));
+    //  庭はそのまま。**この子がいなくなっても、天気は変わらず、花は咲いている**
+    drawGarden(BG, DM, NK, null);
     const bob = [0,-1,-2,-1][Math.floor(fM/8)%4];
     const gx  = Math.round((W - GHOST_SPR[0].length) / 2);
     if(pet.memShown){
@@ -5859,8 +5858,9 @@
   //  t=0..91 で完結する。侵攻のほうは、この続きに大群を降らせる
   function drawPickup(t, BG, DM, NK){
     ctxM.fillStyle = BG; ctxM.fillRect(0,0,W*S,H*S);
-    for(let x=0;x<W;x++) dot(ctxM,x,MAIN_GY,NK);
-    for(let x=0;x<W;x+=3) dot(ctxM,x,MAIN_GY-1,DM);
+    //  この子が暮らした庭のまま見送る（天気と花はそのまま）。
+    //  空は出さない——UFOやビームの場なので、太陽や鳥と取り合いになる
+    drawGarden(BG, DM, NK, { sky:false });
     const uy = 6;
     const cr = charSprites().rest;
     const ux1 = centerX(UFO_SPR[0].length);               // UFOも画面中央に置く
@@ -5897,9 +5897,9 @@
   function drawHomeEnding(BG, DM, NK){
     if(homeT < 92){ drawPickup(homeT, BG, DM, NK); homeT++; fM++; return; }
     ctxM.fillStyle = BG; ctxM.fillRect(0,0,W*S,H*S);
-    for(let x=0;x<W;x++) dot(ctxM,x,MAIN_GY,NK);
-    for(let x=0;x<W;x+=3) dot(ctxM,x,MAIN_GY-1,DM);
-    STARS_M.forEach(([x,y],i)=>dot(ctxM,x,y+10,(fM+i*9)%28<20?DM:BG));
+    //  この子が暮らした庭のまま見送る（天気と花はそのまま）。
+    //  空は出さない——UFOやビームの場なので、太陽や鳥と取り合いになる
+    drawGarden(BG, DM, NK, { sky:false });
     fM++; homeT++;
     if(homeT >= 92 + HOME_AFTER){
       // 他のエンドと同じく、演出のあとは「いなくなったあと」で止める
@@ -5925,9 +5925,9 @@
   function runawayLen(cw){ return RUN_STILL + Math.ceil((centerX(cw) + cw) / RUN_SPEED) + RUN_AFTER; }
   function drawUfoEnding(BG, DM, NK){
     ctxM.fillStyle = BG; ctxM.fillRect(0,0,W*S,H*S);
-    STARS_M.forEach(([x,y],i)=>dot(ctxM,x,y+10,(fM+i*9)%28<20?DM:BG));
-    for(let x=0;x<W;x++) dot(ctxM,x,MAIN_GY,NK);
-    for(let x=0;x<W;x+=3) dot(ctxM,x,MAIN_GY-1,DM);
+    //  この子が暮らした庭のまま見送る（天気と花はそのまま）。
+    //  空は出さない——UFOやビームの場なので、太陽や鳥と取り合いになる
+    drawGarden(BG, DM, NK, { sky:false });
     const sp = charSprites(), cw = sp.a[0].length, ch = sp.a.length;
     const x0 = centerX(cw), y = MAIN_GY - ch;
     if(ufoT < RUN_STILL){                                 // 立ちつくして「・・・」
@@ -5975,9 +5975,9 @@
     const t = invadeT;
     if(t < 92){ drawPickup(t, BG, DM, NK); invadeT++; return; }   // まずは帰還と同じ、迎えが来て去る
     ctxM.fillStyle = BG; ctxM.fillRect(0,0,W*S,H*S);
-    STARS_M.forEach(([x,y],i)=>dot(ctxM,x,y+10,(fM+i*9)%28<20?DM:BG));
-    for(let x=0;x<W;x++) dot(ctxM,x,MAIN_GY,NK);
-    for(let x=0;x<W;x+=3) dot(ctxM,x,MAIN_GY-1,DM);
+    //  この子が暮らした庭のまま見送る（天気と花はそのまま）。
+    //  空は出さない——UFOやビームの場なので、太陽や鳥と取り合いになる
+    drawGarden(BG, DM, NK, { sky:false });
     const m = t - 92;                                   // 大群パートの経過
     const blockW = (INV_COLS-1)*INV_GAP_X + INV_SPR[0].length;
     const x0 = Math.floor((W - blockW)/2);
@@ -6022,7 +6022,9 @@
     // 日記のマークは残るので、ここから最後のことばを読み返せる
     drawHeadIcons(DM, NK);
     for(let x=0;x<W;x++) dot(ctxM,x,HEADER_Y,DM);
-    STARS_M.forEach(([x,y],i)=>dot(ctxM,x,y+10,(fM+i*9)%28<20?DM:BG));
+    //  **誰もいない庭。** 天気も花も、この子がいた頃と同じように続く。
+    //  空も出す（もうUFOもビームも来ないので、取り合いにならない）
+    drawGarden(BG, DM, NK, null);
     // 演出で出した言葉を、リセットするまで残す。位置は演出の最終画面と同じ。
     //  点滅はさせない。もう変化しない画面だと分かるように、静かに置いておく
     //  （旅立ちのハートも、消えてしまわないよう点滅を止めて残す）
@@ -6030,17 +6032,15 @@
     //  演出でも最後に何も出していない。ここで出すと演出と食い違う
     const msg = pet.goneBy==='depart' ? 'THANK YOU!' : (pet.goneBy==='invade' ? 'GAME OVER...' : '');
     if(msg) drawEndMessage(msg, NK, pet.goneBy==='depart');
-    for(let x=0;x<W;x++) dot(ctxM,x,MAIN_GY,NK);
-    for(let x=0;x<W;x+=3) dot(ctxM,x,MAIN_GY-1,DM);
     fM++;
   }
 
   // ── 旅立ちエンディング（E4・ハッピー）：仲間の艦隊が迎えに来る大団円 ──
   function drawDepartEnding(BG, DM, NK){
     ctxM.fillStyle = BG; ctxM.fillRect(0,0,W*S,H*S);
-    for(let x=0;x<W;x++) dot(ctxM,x,MAIN_GY,NK);
-    for(let x=0;x<W;x+=3) dot(ctxM,x,MAIN_GY-1,DM);
-    STARS_M.forEach(([x,y],i)=>dot(ctxM,x,y+10,(fM+i*9)%28<20?DM:BG));
+    //  この子が暮らした庭のまま見送る（天気と花はそのまま）。
+    //  空は出さない——UFOやビームの場なので、太陽や鳥と取り合いになる
+    drawGarden(BG, DM, NK, { sky:false });
     const t = departT, uy = 5;
     const cr = charSprites().a;
     const uxC = centerX(UFO_SPR[0].length);               // 中央の1機を画面中央に置く
@@ -6220,11 +6220,24 @@
     drawHeadIcons(DM, NK);
     for(let x=0;x<W;x++) dot(ctxM,x,HEADER_Y,DM);
 
+    drawGarden(BG, DM, NK, hideSky ? { sky:false, weather:false, flowers:false } : null);
+  }
+
+  // ── 庭（空・天気・地面・花）──
+  //  育成画面と、結末の演出と、そのあとの誰もいない庭で、同じものを敷く。
+  //  **この子が暮らした庭は、いなくなっても同じ天気で、同じ花が咲いている。**
+  //  sky:false … 天体・星・鳥・流れ星・夜のUFOを出さない。結末の演出で使う。
+  //   空はUFOやビームの場なので、そこへ太陽や鳥を重ねると
+  //   どちらが物語の主役なのか分からなくなる
+  function drawGarden(BG, DM, NK, opts){
+    const o = opts || {};
+    const sky = o.sky !== false, wx = o.weather !== false, fl = o.flowers !== false;
+
     // ── 天体（右上） ──
     //  天体を出すのは 晴れ と 薄曇り だけ。曇り・雨・雪は空が覆われている扱い
     const skyOpen = (weather === 'clear' || weather === 'thin');
-    if (hideSky) {
-      /* 到着演出中は天体も天気も出さない */
+    if (!sky) {
+      /* 到着・結末の演出では天体も星も出さない */
     } else if (!skyOpen) {
       //  曇りの夜だけ、雲の切れ間をUFOがよぎることがある（雲はこのあと上から描かれる）
       if (weather === 'cloudy' && timeOfDay === 'night') updateNightUfo(DM);
@@ -6241,7 +6254,7 @@
 
     // ── 天気エフェクト ──
     //  薄曇りは天体を出したうえに薄く雲をかける。曇りはもっと多い雲だけ
-    if (hideSky) {
+    if (!wx) {
       /* 到着演出中は出さない */
     } else if (weather === 'rain' || weather === 'rainHeavy' || weather === 'storm') {
       updateRain(BG, DM, weather);      // 雨の日は雲を出さず、雨粒だけで空を表す
@@ -6258,7 +6271,7 @@
     for(let x=0;x<W;x+=3) dot(ctxM,x,MAIN_GY-1,DM);
 
     // 地面の花（20日目から少しずつ増える）。背景の一部なので、キャラはこの前を歩く
-    if (!hideSky) drawFlowers(DM);
+    if (fl) drawFlowers(DM);
   }
 
   // 暗転で潰れた地面の点線を描き直す
@@ -6340,6 +6353,9 @@
     if(pet.homeFlag && !homeEnding && !pet.dead){ homeEnding = true; homeT = 0; }          // 帰還の日
     if(pet.departFlag && !departEnding && !pet.dead){ departEnding = true; departT = 0; }  // 旅立ちの日
     if(pet.invadeFlag && !invadeEnding && !pet.dead){ invadeEnding = true; invadeT = 0; invadeGoneAt = 0; }  // 侵攻の日
+    //  家出の日。**ここだけ旗から始めていなかった**ので、日付が変わって家出が
+    //  決まっても、いったんアプリを閉じるまで演出が始まらなかった
+    if(pet.ufoFlag && !ufoEnding && !pet.dead){ ufoEnding = true; ufoT = 0; }
     if(departEnding){ drawDepartEnding(BG, DM, NK); return; }  // 旅立ちエンディング再生中
     if(invadeEnding){ drawInvadeEnding(BG, DM, NK); return; }  // 侵攻エンディング再生中
     if(homeEnding){ drawHomeEnding(BG, DM, NK); return; } // 帰還エンディング再生中
@@ -6825,7 +6841,7 @@
   // 項目はキーで管理（表示ラベルは言語辞書、値は各キーで分岐）
   //  版の番号は sw.js の VERSION と同じもの。tools/bump-sw.sh が両方いっしょに
   //  書き換える（ずれると、テスターの端末に出ている版が分からなくなる）
-  const APP_VERSION = '2026-09-12-02';
+  const APP_VERSION = '2026-09-13-01';
   //  (C) は Press Start 2P に © が無く、別の字体に落ちて1文字だけ形が浮くため
   const APP_COPY = '(C) 2026 Studio M.D.Q.';
   // 天気は Open-Meteo から貰っている。CC BY 4.0 なので、無料で使う場合でも
