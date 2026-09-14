@@ -891,15 +891,16 @@ describe('お世話', () => {
 
 // ══ おなかの段階差 ════════════════════════════════════════
 describe('うんち', () => {
-  //  **放置すると溜まる**のが要点。以前は「ごはん1回＝うんち1個」で、
-  //  予約が単一の数値だったため、何時間空けても2個目が出なかった。
-  //  うんちが出ているのにごはんをあげる人はまずいないので、
-  //  汚れが溜まる仕掛けとして働いていなかった
+  //  **食べたことがきっかけで出る。** ごはんかおやつで予約が入り、掃除しなければ
+  //  上限（3個）まで時間なりに溜まる。**うんちを掃除したら予約も消え、次に食べるまで出ない。**
+  //  うんちがあるうちに掃除せず食べさせても、進んでいる予約は数え直さない。
+  //  以前は掃除のたびに予約を入れ直していたので、食べていないのに出続けていた
   const HOUR = 3600000;
   //  昼の12時に置く（寝ているあいだは出ないので、夜だと何も起きない）
   const noon = () => new Date(2026, 5, 15, 12, 0, 0).getTime();
   const setup = (over = {}) => {
-    const { api, clock } = load({ at: noon() });
+    const { api, clock, sandbox } = load({ at: noon() });
+    sandbox.Math.random = () => 0.99;              // わがままの抽選は外す
     pet(api, clock, Object.assign({ W:0, poopAt:0, poopSince:0, hunger:4,
                                     wokeUntil:0, dirtAcc:0 }, over));
     return { api, clock };
@@ -928,14 +929,64 @@ describe('うんち', () => {
     eq(api.pet.poopAt, 0, '予約が空であること:');
   });
 
-  it('掃除すると、そこから数え直して次が予約される', () => {
+  //  **食べていなければ出ない。** きっかけは食事だけ
+  it('食べていない子は、時間がたっても出ない', () => {
+    const { api, clock } = setup();
+    clock.advance(24 * HOUR);
+    api.advancePet();
+    eq(api.pet.W, 0, 'うんち:');
+    eq(api.pet.poopAt, 0, '予約:');
+  });
+
+  it('ごはんでも おやつでも、食べれば予約が入る', () => {
+    for(const act of ['FEED', 'SNACK']){
+      const { api, clock } = setup({ hunger:2 });
+      api.doCare(act);
+      ok(api.pet.poopAt > clock.now(), `${act}: 予約が入っていない`);
+    }
+  });
+
+  it('うんちを掃除すると予約も消え、次に食べるまで出ない', () => {
     const { api, clock } = setup();
     api.schedulePoop();
-    clock.advance(6 * HOUR);
+    clock.advance(1.5 * HOUR);
     api.advancePet();
+    ok(api.pet.W >= 1 && api.pet.poopAt > 0, '前提：出ていて、次の予約もある');
     api.doCare('CLEAN');
     eq(api.pet.W, 0, '片づいたこと:');
-    ok(api.pet.poopAt > clock.now(), '次の予約が入っていること');
+    eq(api.pet.poopAt, 0, '予約が残っている:');
+    clock.advance(24 * HOUR);
+    api.pet.hunger = 4;                            // 空腹で止まったのではないことを確かめる
+    api.advancePet();
+    eq(api.pet.W, 0, '食べていないのに出た:');
+    //  食べれば、また出るようになる
+    api.pet.hunger = 2;
+    api.doCare('FEED');
+    ok(api.pet.poopAt > clock.now(), '食べたのに予約が入らない');
+  });
+
+  //  **うんちがあるうちに食べさせても、数え直さない**（進んでいる予約はそのまま）
+  it('うんちがある状態で食べても、予約と数は そのまま', () => {
+    const { api, clock } = setup({ hunger:2 });
+    api.schedulePoop();
+    clock.advance(1.5 * HOUR);
+    api.advancePet();
+    const w = api.pet.W, at = api.pet.poopAt;
+    ok(w >= 1 && at > 0, '前提：出ていて、次の予約もある');
+    api.pet.hunger = 2;
+    api.doCare('FEED');
+    eq(api.pet.W, w, 'うんちの数:');
+    eq(api.pet.poopAt, at, '予約の時刻:');
+  });
+
+  //  皿だけを片づけたときは、食べたぶんの予約を消さない（うんちを片づけたわけではない）
+  it('皿だけ片づけても、予約は消えない', () => {
+    const { api, clock } = setup({ plateSpoiled:true, plateKind:'meal' });
+    api.schedulePoop();
+    const at = api.pet.poopAt;
+    api.doCare('CLEAN');
+    eq(api.pet.plateSpoiled, false, '皿が片づいていない:');
+    eq(api.pet.poopAt, at, '予約が消えた:');
   });
 
   //  お腹に何も無ければ出ない。食べれば再開する
