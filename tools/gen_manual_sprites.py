@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
-"""説明書（manual.html）のミニゲーム章に、ゲーム本体のドット絵を差し込む。
+"""説明書（manual.html）に、ゲーム本体のドット絵を差し込む。
 
 ドット絵はゲームのソースから読むので、絵を直したらこれを流し直せば説明書も追いつく。
-差し込み先は manual.html の <!-- SPRITES:キー --> … <!-- /SPRITES:キー --> のあいだ。
+  ・ミニゲーム章：<!-- SPRITES:キー --> … <!-- /SPRITES:キー --> のあいだ
+  ・お世話アイコン：<div class="icons"> の中の6枚の絵（CARE_ORDER の順）。
+    **名前と説明の文はさわらず、絵だけを入れ替える**
 
-  python3 tools/gen_manual_sprites.py
+  python3 tools/gen_manual_sprites.py [説明書のパス ...]   （省略時は manual.html）
 """
 import re, sys, pathlib
 
@@ -52,6 +54,10 @@ def svg(grid, label):
     return ('<figure><svg viewBox="0 0 %d %d" width="%d" height="%d" shape-rendering="crispEdges" '
             'xmlns="http://www.w3.org/2000/svg">%s</svg><figcaption>%s</figcaption></figure>'
             % (w, h, w*SCALE, h*SCALE, ''.join(rects), label))
+
+def svg_only(grid):
+    """svg() から figure と見出しを外したもの"""
+    return re.search(r'<svg [\s\S]*?</svg>', svg(grid, '')).group(0)
 
 def solid(g):
     """0/1の2値スプライトを 0/2 に直す。薄い色(1)と混ぜて描くための下ごしらえ"""
@@ -105,14 +111,65 @@ BLOCKS = {
  ],
 }
 
-man = ROOT/'manual.html'
-s = man.read_text(encoding='utf-8')
-for key, items in BLOCKS.items():
+# ── お世話アイコン（invader_game.html の CARE_ICONS）──────────
+game = (ROOT/'invader_game.html').read_text(encoding='utf-8')
+ICON_SCALE = 4                             # MENU のアイコンは 1ドット 4px で並べる
+
+def care_icons():
+    m = re.search(r'const CARE_ICONS = \{([\s\S]*?)\n  \};', game)
+    if not m:
+        sys.exit('お世話アイコンが見つからない: CARE_ICONS')
+    icons = {k: [[2 if c == '#' else 1 if c == '+' else 0 for c in r.strip()]
+                 for r in body.strip().split('\n')]
+             for k, body in re.findall(r'(\w+): careIcon\(`([\s\S]*?)`\)', m.group(1))}
+    order = re.search(r"const CARE_ORDER\s*=\s*\[([^\]]*)\]", game)
+    keys = re.findall(r"'(\w+)'", order.group(1))
+    return [icons[k] for k in keys]
+
+def icon_svg(grid):
+    h = len(grid); w = len(grid[0])
+    rects = ''.join('<rect x="%d" y="%d" width="1" height="1" fill="%s"/>'
+                    % (x, y, ON if v == 2 else DIM)
+                    for y, row in enumerate(grid) for x, v in enumerate(row) if v)
+    return ('<svg viewBox="0 0 %d %d" width="%d" height="%d" shape-rendering="crispEdges" '
+            'xmlns="http://www.w3.org/2000/svg">%s</svg>' % (w, h, w*ICON_SCALE, h*ICON_SCALE, rects))
+
+def put_icons(s):
+    a = '<div class="icons">'
+    if a not in s:
+        sys.exit('お世話アイコンの一覧が無い: ' + a)
+    i = s.index(a); j = s.index('\n</div>', i)
+    block = s[i:j]
+    grids = care_icons()
+    svgs = list(re.finditer(r'<svg [\s\S]*?</svg>', block))
+    if len(svgs) != len(grids):
+        sys.exit('アイコンの数が合わない: 説明書 %d / ゲーム %d' % (len(svgs), len(grids)))
+    for m, g in reversed(list(zip(svgs, grids))):
+        block = block[:m.start()] + icon_svg(g) + block[m.end():]
+    print('%-14s %d点' % ('care icons', len(grids)))
+    return s[:i] + block + s[j:]
+
+paths = [pathlib.Path(p) for p in sys.argv[1:]] or [ROOT/'manual.html']
+for man in paths:
+  s = man.read_text(encoding='utf-8')
+  s = put_icons(s)
+  for key, items in BLOCKS.items():
     a, b = '<!-- SPRITES:%s -->' % key, '<!-- /SPRITES:%s -->' % key
     if a not in s:
         sys.exit('差し込み先の目印が無い: ' + a)
     i, j = s.index(a) + len(a), s.index(b)
-    s = s[:i] + '\n<div class="chars gitems">' + ''.join(svg(g, l) for g, l in items) + '</div>\n' + s[j:]
+    #  **絵だけを入れ替える。** 見出し（figcaption）は説明書の側で2言語に書いてあるので残す。
+    #  まだ何も無いときだけ、ここの名前で一式を作る
+    block = s[i:j]
+    figs = list(re.finditer(r'<svg [\s\S]*?</svg>', block))
+    if not figs:
+        block = '\n<div class="chars gitems">' + ''.join(svg(g, l) for g, l in items) + '</div>\n'
+    elif len(figs) != len(items):
+        sys.exit('%s の絵の数が合わない: 説明書 %d / ゲーム %d' % (key, len(figs), len(items)))
+    else:
+        for m, (g, _) in reversed(list(zip(figs, items))):
+            block = block[:m.start()] + svg_only(g) + block[m.end():]
+    s = s[:i] + block + s[j:]
     print('%-14s %d点' % (key, len(items)))
-man.write_text(s, encoding='utf-8')
-print('manual.html を更新しました')
+  man.write_text(s, encoding='utf-8')
+  print('%s を更新しました' % man)
