@@ -360,6 +360,7 @@
   const ON='#1a2410', OFF='#b8c890', DIM='#8aaa6a';
   // 育成画面の地面（お世話アイコンはMENU内に移動したため元の高さ。ミニゲーム側と同じ）
   const MAIN_GY = 61;
+  const HEADER_Y = 8;            // ヘッダーの区切り線。これより上には天体も流れ星も描かない
 
   // ════════════════════════════════════════
   // 多言語（EN/JP。デフォルトJA。※日本語はPress Start 2P非対応のためフォールバック表示）
@@ -577,6 +578,8 @@
   //  下がるだけでは足りない。完全5度や長3度で落とすと「解決」して明るく聞こえるので、
   //  良くないほうは 音域そのものを低く取り、協和しない落ち方にしてある
   const SND = {
+    //  ポンッ。くすりが飛び出した瞬間。低いところから一気に跳ね上げて、短く切る
+    medPop:  [[330,0.018,0.12],[660,0.018,0.12],[1320,0.05,0.10]],
     med:     [[523,0.07],[659,0.07],[784,0.07],[1047,0.16]],   // 効いていく（ド・ミ・ソ・ド）
     //  キラキラキランッ。掃除の頭で1回だけ鳴らす（汚れの数では変えない）。
     //  キラキラの見た目は3秒ほど続くので、単発の点ではなく1秒のフレーズにしてある
@@ -809,7 +812,7 @@
   const SAVE_BAD = 'myvader_pet_bad';   // 読めなかった原文の退避先。上書きせずに残しておく
   // セーブデータの形式。項目を足したり意味を変えたら1つ上げて、MIGRATIONS に手当てを書く。
   //  既定値まかせにすると、育っている途中の子に合わない値が入る（後述の v1 参照）
-  const SAVE_V = 3;
+  const SAVE_V = 4;
   //  画面に出せるうんちの数。**放置すると、ここまで溜まる**。
   //  セーブの読み込み（migratePet）で古い値を丸めるので、ここで先に決めておく
   const POOP_MAX = 3;
@@ -838,7 +841,8 @@
     plateKind:'meal',                     // 残した皿の中身（'meal'=ごはん / 'snack'=おやつ）
     mealCount:0, snackCount:0,            // ごはん／おやつを与えた回数（日次で減衰。おやつ過多の判定用）
     total:{feed:0, snack:0, clean:0, med:0},  // 一生ぶんの通算。おもいで画面でだけ使う（減衰させない）
-    poopAt:0, poopSince:0,                // 次のうんち発生時刻／最初のうんちが出た時刻（放置でハエ）
+    poopAt:0,                             // 次のうんち発生時刻
+    poopBorn:[],                          // うんちが出た時刻（出た順・W個）。**ハエは1個ずつ、自分が出てから数える**
     wokeUntil:0,                          // 一時的に起きている期限（しかられて／来たばかりで）
     rhythmUntil:0,                        // しかって正した生活リズムが続く期限（この間は夜型シフトを外す）
     nightCareAt:0,                        // 最後に夜ふけの世話をした時刻（Pの加算を1時間に1回に絞る）
@@ -912,7 +916,18 @@
     //  すでにその日数を越えている子は、更新した瞬間に終わってしまう。
     //  最後の数日を取り上げないよう、読み込んだ時点から猶予を与える
     3(p){ if(p.stage === 'final' && p.finalAt && Date.now() >= finalDue(p)) p.endGrace = Date.now() + END_GRACE_MS; },
+    // v3 → v4：ハエの起点を「1個目が出た時刻」から「1個ずつ出た時刻」へ。
+    //  個別の時刻は残っていないので、いまあるうんちは すべて1個目の時刻にそろえる
+    //  （更新前と同じ見え方のまま引き継ぐ）
+    4(p, sv){ p.poopBorn = new Array(p.W).fill(sv.poopSince || Date.now()); delete p.poopSince; },
   };
+  // うんちの出た時刻を、数（W）とそろえる。壊れた値は捨て、足りないぶんは いま出たことにする
+  //  （0 のままだと、そのうんちには いつまでもハエがたからない）
+  function fitPoopBorn(p){
+    const t = Array.isArray(p.poopBorn) ? p.poopBorn.filter(v => Number.isFinite(v) && v > 0) : [];
+    while(t.length < p.W) t.push(Date.now());
+    p.poopBorn = t.slice(0, p.W);
+  }
   function migratePet(sv){
     const p = Object.assign(defaultPet(), sv);
     // 入れ子は Object.assign で丸ごと差し替わる。あとから増えたキーが欠けるので埋め直す
@@ -930,8 +945,10 @@
     //  上限を4個から3個へ下げたので、古いセーブを合わせる。
     //  置き場所が3か所しかないので、4個目は見えないまま汚れとして残ってしまう
     p.W = Math.max(0, Math.min(POOP_MAX, p.W));
+    fitPoopBorn(p);
     const from = Number.isFinite(sv.v) ? sv.v : 0;
     for(let v = from + 1; v <= SAVE_V; v++) if(MIGRATIONS[v]) MIGRATIONS[v](p, sv);
+    fitPoopBorn(p);
     p.v = SAVE_V;
     return p;
   }
@@ -3637,7 +3654,7 @@
 
   // この子の記録のうち、実時刻をそのまま持っているもの。
   //  端末の時計が戻されたとき、まとめて同じ幅だけずらして辻褄を合わせる
-  const PET_TIMES = ['birth','lastTick','larvaAt','lineageAt','finalAt','plateAt','poopAt','poopSince',
+  const PET_TIMES = ['birth','lastTick','larvaAt','lineageAt','finalAt','plateAt','poopAt',
                      'tantrumAt','wokeUntil','rhythmUntil','nightCareAt','incubAt','lastPlayAt'];
   // 端末の時計が巻き戻ったときの立て直し。
   //  時刻の修正やずれの補正で now が過去へ動くと、未来の lastTick を抱えたまま
@@ -3646,6 +3663,7 @@
   //  記録している時刻をすべて同じ幅だけ戻し、間隔を保ったまま現在に合わせ直す
   function rewindClock(back){
     PET_TIMES.forEach(k => { if(pet[k]) pet[k] = Math.max(0, pet[k] - back); });
+    pet.poopBorn = pet.poopBorn.map(t => Math.max(1, t - back));   // 0 にすると「時刻なし」になるので1で止める
     savePet();
   }
   // 経過時間ぶんのステータス進行。睡眠中は1/3減速。DEBUG中は60倍加速（検証用）
@@ -3671,8 +3689,10 @@
       //  ループの外で1回だけ見ていたので、何時間空けても1個しか出なかった
       if(pet.poopAt && vt >= pet.poopAt && !effectiveAsleep(vt)){
         pet.poopAt = 0;
-        pet.W = Math.min(POOP_MAX, (pet.W||0) + 1);
-        if(!pet.poopSince) pet.poopSince = vt;   // ハエの起点は1個目が出た時刻
+        if((pet.W||0) < POOP_MAX){
+          pet.W = (pet.W||0) + 1;
+          pet.poopBorn.push(vt);                 // ハエは このうんちが出た時刻から数える
+        }
         schedulePoop(vt);                        // 次のぶん。上限に達していれば入らない
       }
       const rate = sleeping ? 1/3 : 1;
@@ -4270,9 +4290,13 @@
     rainHeavy: { n:18, spd:1.7, len:4, slant:0 },
     storm:     { n:24, spd:2.2, len:4, slant:2 },   // 横なぐり：1段下がるごとに slant ドット横へ
   };
+  //  空の範囲（ヘッダーの線より下、地面の線より上）。**雨も雪もこの中だけに描く**。
+  //  はじめの位置を画面の縦いっぱいに散らしていたので、地面の下やヘッダーに粒が出ていた
+  const SKY_TOP = HEADER_Y + 2;
+  const inSky = y => y >= SKY_TOP && y < MAIN_GY;
   const rainDrops = Array.from({length:RAIN_MAX},()=>({
     x: Math.random()*54|0,
-    y: (Math.random()*65)|0,
+    y: SKY_TOP + (Math.random()*(MAIN_GY - 1 - SKY_TOP))|0,
     speed: 1 + Math.random()*1.5,
   }));
   function updateRain(BG, DM, kind) {
@@ -4280,11 +4304,12 @@
     for(let i=0;i<st.n && i<rainDrops.length;i++){
       const d = rainDrops[i];
       const y0 = Math.round(d.y);
-      for(let k=0;k<st.len;k++) dot(ctxM, d.x + k*st.slant, y0 + k, DM);
+      //  線の下のほうは、地面の線に届いたところで切る（地面の下へ出さない）
+      for(let k=0;k<st.len;k++) if(inSky(y0 + k)) dot(ctxM, d.x + k*st.slant, y0 + k, DM);
       d.y += d.speed * st.spd;
       //  嵐は横へも流れる。左へ抜けたら右から入れ直す
       if(st.slant) d.x -= st.slant * 0.5;
-      if(d.y >= MAIN_GY-1 || d.x < -4){ d.y = 10; d.x = Math.random()*(W + (st.slant ? 10 : 0))|0; }
+      if(d.y >= MAIN_GY-1 || d.x < -4){ d.y = SKY_TOP; d.x = Math.random()*(W + (st.slant ? 10 : 0))|0; }
     }
   }
 
@@ -4293,7 +4318,7 @@
   const SNOW_STYLE = { snow: { n:16, spd:1.0 }, snowHeavy: { n:30, spd:1.6 } };
   const snowFlakes = Array.from({length:SNOW_MAX},()=>({
     x: Math.random()*54,
-    y: (Math.random()*65)|0,
+    y: SKY_TOP + (Math.random()*(MAIN_GY - 1 - SKY_TOP))|0,
     speed: 0.18 + Math.random()*0.22,
     sway: 0.6 + Math.random()*0.8,          // 横揺れの幅
     phase: Math.random()*Math.PI*2,         // 揺れの位相（粒ごとにバラす）
@@ -4303,9 +4328,9 @@
     for(let i=0;i<st.n && i<snowFlakes.length;i++){
       const f = snowFlakes[i];
       const sx = f.x + Math.sin(f.phase + f.y*0.25) * f.sway;
-      dot(ctxM, Math.round(sx), Math.round(f.y), DM);   // 淡い色で統一（濃淡はつけない）
+      if(inSky(Math.round(f.y))) dot(ctxM, Math.round(sx), Math.round(f.y), DM);   // 淡い色で統一（濃淡はつけない）
       f.y += f.speed * st.spd;
-      if(f.y >= MAIN_GY-1){ f.y = 10; f.x = Math.random()*W; }
+      if(f.y >= MAIN_GY-1){ f.y = SKY_TOP; f.x = Math.random()*W; }
     }
   }
 
@@ -4989,11 +5014,15 @@
     drawFly(Math.max(3,  cx - 1), MAIN_GY-6, i*2,     NK, DM);
     drawFly(Math.min(50, cx + 2), MAIN_GY-8, i*2 + 1, NK, DM);
   }
-  // うんちを放置するとハエがたかる（傷んだ皿と同じ2時間。DEBUG中は2分）
-  function poopHasFlies(){
-    if(!pet.W || !pet.poopSince) return false;
-    return Date.now() - pet.poopSince >= (debugMode ? 120000 : 7200000);
+  // うんちを放置するとハエがたかる（傷んだ皿と同じ2時間。DEBUG中は2分）。
+  //  **1個ずつ、そのうんちが出てから数える。** 1個目にハエがいるところへ2個目が出ても、
+  //  2個目は出たばかりなのでまだたからない
+  function poopFlyAt(i){
+    const t = pet.poopBorn[i];
+    return i < pet.W && !!t && Date.now() - t >= (debugMode ? 120000 : 7200000);
   }
+  // どれか1個にでもハエがたかっているか（いちばん古い1個目を見れば足りる）
+  function poopHasFlies(){ return poopFlyAt(0); }
   const EAT_T = 60;          // 食事アニメの長さ（EAT_STEPごとに1口＝3口で空に）
   const EAT_STEP = 15;       // ひと口ぶんの間隔（1.5秒）。皿の減りと音の両方がこれを見る
   const EAT_BOB  = 4;        // 屈伸の周期（コマ）。tickMain は100msなので0.4秒で1往復。
@@ -5088,15 +5117,20 @@
   //  t コマ目のカプセルの位置。(tx,ty) は当てる先。
   //  MED_FLY-1 で割るので、最後に描くコマがちょうど (tx,ty) に来る。
   //  MED_FLY で割ると 1 に届かないまま消えて、当たる手前で消えたように見える
+  //  当てる先＝胴の中ほど。ただし**カプセルの下端は地面の線より上に収める**
+  //  （背の低い子だと胴の中ほどが低く、カプセルが地面の下へはみ出していた）
+  function medTarget(charX, charY, gw, gh){
+    return { x: charX + (gw >> 1) - 1,
+             y: Math.min(charY + (gh >> 1) - 1, MAIN_GY - MED_PILL.length) };
+  }
   function medPos(t, tx, ty){
     const p = t / (MED_FLY - 1);                       // 0→1
     return { x: Math.round(MED_FROM + (tx - MED_FROM) * p),
              //  放物線。真ん中でいちばん高く、着地点でちょうど 0 に戻る
              y: Math.round(ty - MED_ARC * 4 * p * (1 - p)) };
   }
-  let cleanSnapW = 0, cleanSnapPlate = false, cleanSnapSpoiled = false, cleanSnapPoopFly = false, cleanSnapKind = 'meal';   // 掃除開始時点の汚れの見た目スナップショット
+  let cleanSnapW = 0, cleanSnapPlate = false, cleanSnapSpoiled = false, cleanSnapPoopFly = [], cleanSnapKind = 'meal';   // 掃除開始時点の汚れの見た目スナップショット
 
-  const HEADER_Y = 8;            // ヘッダーの区切り線。これより上には天体も流れ星も描かない
   const STARS_M = [[4,3],[14,6],[28,2],[38,5],[50,4],[9,11],[44,10],[22,8]];
 
   // ── 流れ星（晴れた夜だけ、まれに右上→左下へ流れる） ──
@@ -5673,7 +5707,7 @@
       }
       case 'CLEAN':
         if(pet.W > 0 || pet.plateAt || pet.plateSpoiled){
-          cleanSnapW = pet.W; cleanSnapPlate = !!pet.plateAt; cleanSnapSpoiled = !!pet.plateSpoiled; cleanSnapPoopFly = poopHasFlies(); cleanSnapKind = pet.plateKind;  // 見た目用に退避
+          cleanSnapW = pet.W; cleanSnapPlate = !!pet.plateAt; cleanSnapSpoiled = !!pet.plateSpoiled; cleanSnapPoopFly = pet.poopBorn.map((_, i) => poopFlyAt(i)); cleanSnapKind = pet.plateKind;  // 見た目用に退避
           // わがままで食べなかったごはんを下げただけの時は喜ばない。
           //  自分が拒んだ皿を片づけられて♪を出すと、喜んでいるように見えてしまう
           const onlyFresh = (pet.W === 0 && !!pet.plateAt && !pet.plateSpoiled);
@@ -5681,7 +5715,7 @@
           //   以前はここで予約を入れ直していたので、食べていないのに出続けていた。
           //   皿だけを片づけたときは、食べたぶんの予約を残す
           if(pet.W > 0) pet.poopAt = 0;
-          pet.W = 0; pet.plateAt = 0; pet.plateSpoiled = false; pet.poopSince = 0;
+          pet.W = 0; pet.plateAt = 0; pet.plateSpoiled = false; pet.poopBorn = [];
           raiseMood();                                              // 汚れを消してから上げるので、病気でなければMAXまで戻せる
           note('cleaned');
           pet.total.clean++;                        // 通算（おもいで用）
@@ -6674,9 +6708,10 @@
     // ── くすり：右の画面外から放物線で飛んできて、キャラに当たる ──
     if(reactT > 0 && reactType === 'med'){
       const t = MED_T - reactT;
+      if(t === 0) playSnd('medPop');     // 飛び出した瞬間
       if(t < MED_FLY){
-        const pos = medPos(t, charX + (gw >> 1) - 1,     // 当てる先＝胴の中ほど
-                              charY + (gh >> 1) - 1);
+        const tg = medTarget(charX, charY, gw, gh);
+        const pos = medPos(t, tg.x, tg.y);
         stamp(ctxM, MED_PILL, pos.x, pos.y, NK, DM);   // 輪郭は濃色、中身は薄色
       }
       if(t === MED_FLY) playSnd('med');   // 当たった瞬間。押した時に鳴らすと届く前に鳴り終わる
@@ -6687,10 +6722,9 @@
     if(pet.plateSpoiled) drawSpoiledPlate(plateX, MAIN_GY-1, NK, DM, pet.plateKind);     // 食べ残し（崩れた盛り＋ハエ）
     else if(pet.plateAt) drawFoodPlate(plateX, MAIN_GY-1, 3, NK, DM, pet.plateKind);     // 残った皿（満杯のまま）
     else if(eatLvl >= 0) drawFoodPlate(plateX, MAIN_GY-1, eatLvl, NK, DM, reactFood);    // 食事中：3口で減って空皿に
-    const poopFly = poopHasFlies();
     for(let i=0;i<pet.W && i<POOP_X.length;i++){
       stamp(ctxM, POOP_SPR, POOP_X[i], MAIN_GY-4, NK);          // 足元を地面に接地させる
-      if(poopFly) drawPoopFlies(POOP_X[i]+2, i, NK, DM);        // 放置中はハエがたかる
+      if(poopFlyAt(i)) drawPoopFlies(POOP_X[i]+2, i, NK, DM);   // 放置中はハエがたかる（1個ずつ）
     }
 
     // ── CLEAN：汚れが左から順に消えて、消えた場所にキラキラが弾ける ──
@@ -6708,7 +6742,7 @@
         if(prog < gone){
           if(it.kind==='poop'){
             stamp(ctxM, POOP_SPR, it.x, MAIN_GY-4, NK);
-            if(cleanSnapPoopFly) drawPoopFlies(it.cx, it.i, NK, DM);
+            if(cleanSnapPoopFly[it.i]) drawPoopFlies(it.cx, it.i, NK, DM);
           } else if(cleanSnapSpoiled){
             drawSpoiledPlate(plateX, MAIN_GY-1, NK, DM, cleanSnapKind);
           } else {
@@ -6941,7 +6975,7 @@
   // 項目はキーで管理（表示ラベルは言語辞書、値は各キーで分岐）
   //  版の番号は sw.js の VERSION と同じもの。tools/bump-sw.sh が両方いっしょに
   //  書き換える（ずれると、テスターの端末に出ている版が分からなくなる）
-  const APP_VERSION = '2026-09-15-01';
+  const APP_VERSION = '2026-09-16-01';
   //  (C) は Press Start 2P に © が無く、別の字体に落ちて1文字だけ形が浮くため
   const APP_COPY = '(C) 2026 Studio M.D.Q.';
   // 天気は Open-Meteo から貰っている。CC BY 4.0 なので、無料で使う場合でも

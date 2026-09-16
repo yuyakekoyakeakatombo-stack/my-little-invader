@@ -42,7 +42,7 @@ function pet(api, clock, over = {}){
     name:'TEST', stage:'larva', lineage:'', form:'', formWild:false, voice:'',
     hunger:4, mood:4, health:'GOOD', dead:'', gone:false, goneBy:'',
     ufoFlag:false, departFlag:false, invadeFlag:false, homeFlag:false, homeRedeem:false, endGrace:0,
-    B:50, C:50, D:50, Dm:50, P:0, M:0, A:0, EP:2, W:0, incubAt:0, poopSince:0,
+    B:50, C:50, D:50, Dm:50, P:0, M:0, A:0, EP:2, W:0, incubAt:0, poopBorn:[],
     best:{sw:0,ss:0,ab:0}, plays:{sw:0,ss:0,ab:0}, diary:{},
     diaryDay:tk, diaryDue:null, diaryMark:null, calDay:tk,
     careStreak:0, dayKey:'', bGainToday:0, bGainKinds:{},
@@ -901,7 +901,7 @@ describe('うんち', () => {
   const setup = (over = {}) => {
     const { api, clock, sandbox } = load({ at: noon() });
     sandbox.Math.random = () => 0.99;              // わがままの抽選は外す
-    pet(api, clock, Object.assign({ W:0, poopAt:0, poopSince:0, hunger:4,
+    pet(api, clock, Object.assign({ W:0, poopAt:0, poopBorn:[], hunger:4,
                                     wokeUntil:0, dirtAcc:0 }, over));
     return { api, clock };
   };
@@ -1013,7 +1013,7 @@ describe('うんち', () => {
   it('寝ているあいだは出ない。起きてから出る', () => {
     const at = new Date(2026, 5, 15, 22, 0, 0).getTime();
     const { api, clock } = load({ at });
-    pet(api, clock, { W:0, poopAt:0, poopSince:0, hunger:4, wokeUntil:0, dirtAcc:0 });
+    pet(api, clock, { W:0, poopAt:0, poopBorn:[], hunger:4, wokeUntil:0, dirtAcc:0 });
     api.schedulePoop();
     clock.advance(8 * HOUR);        // 22時 → 翌6時（まだ寝ている）
     api.advancePet();
@@ -1024,20 +1024,78 @@ describe('うんち', () => {
     ok(api.pet.W > 0, '起きてから出ること');
   });
 
-  //  ハエの起点は1個目。2個目3個目で更新すると、放置しているのに
-  //  いつまでもハエが出ない
-  it('ハエの起点は1個目が出た時刻のまま', () => {
+  //  ハエは1個ずつ、そのうんちが出てから数える。
+  //  以前は1個目の時刻だけを持っていたので、1個目にハエがいるところへ
+  //  2個目が出ると、2個目も出た瞬間からハエがたかっていた
+  it('ハエは1個ずつ、自分が出てから2時間でたかる', () => {
     const { api, clock } = setup();
-    api.schedulePoop();
-    clock.advance(1.5 * HOUR);
+    const t0 = clock.now();
+    api.pet.W = 1; api.pet.poopBorn = [t0 - 3 * HOUR];   // 1個目は3時間前に出ている
+    api.pet.poopAt = t0 + 60000;                          // 2個目がもうすぐ出る
+    clock.advance(2 * 60000);
     api.advancePet();
-    eq(api.pet.W, 1, '1個目:');
-    const since = api.pet.poopSince;
-    ok(since > 0, '起点が入っていること');
+    eq(api.pet.W, 2, '2個目:');
+    eq(api.pet.poopBorn.length, 2, '時刻の数:');
+    ok(api.poopFlyAt(0), '1個目にハエがいない');
+    ok(!api.poopFlyAt(1), '2個目が出た瞬間からハエがいる');
+    ok(api.poopHasFlies(), 'どれかにハエがいる、が偽');
     clock.advance(2 * HOUR);
+    ok(api.poopFlyAt(1), '2時間たっても2個目にハエが来ない');
+  });
+
+  it('上限に達したあとは、出た時刻も増えない', () => {
+    const { api, clock } = setup();
+    const t0 = clock.now();
+    api.pet.W = api.POOP_MAX; api.pet.poopBorn = new Array(api.POOP_MAX).fill(t0);
+    api.pet.poopAt = t0 + 60000;
+    clock.advance(2 * 60000);
     api.advancePet();
-    ok(api.pet.W >= 2, '2個目が出ていること');
-    eq(api.pet.poopSince, since, '起点:');
+    eq(api.pet.W, api.POOP_MAX);
+    eq(api.pet.poopBorn.length, api.POOP_MAX, '時刻の数:');
+    eq(api.pet.poopBorn[0], t0, '古い時刻が書きかわった:');
+  });
+
+  it('掃除で出た時刻も消える', () => {
+    const { api, clock } = setup();
+    api.pet.W = 2; api.pet.poopBorn = [clock.now() - 3 * HOUR, clock.now()];
+    api.doCare('CLEAN');
+    eq(api.pet.poopBorn.length, 0, '残った時刻:');
+    ok(!api.poopHasFlies(), 'ハエが残った');
+  });
+
+  it('掃除の見た目は、ハエのいたうんちだけにハエを描く', () => {
+    const { api, clock } = setup();
+    api.pet.W = 2; api.pet.poopBorn = [clock.now() - 3 * HOUR, clock.now()];
+    api.doCare('CLEAN');
+    eq(JSON.stringify(api.cleanSnapPoopFly), '[true,false]', '控えたハエ:');
+  });
+
+  it('時計が戻ったら、出た時刻も同じ幅だけ戻す', () => {
+    const { api, clock } = setup();
+    const t = clock.now();
+    api.pet.W = 2; api.pet.poopBorn = [t - HOUR, t];
+    api.rewindClock(30 * 60000);
+    eq(JSON.stringify(api.pet.poopBorn), JSON.stringify([t - HOUR - 30 * 60000, t - 30 * 60000]));
+  });
+
+  it('出た時刻は数とそろえる（壊れた値は捨て、足りなければ いま出たことにする）', () => {
+    const { api, clock } = setup();
+    const p = { W:2, poopBorn:[123, 'x', NaN, 456, 789] };
+    api.fitPoopBorn(p);
+    eq(JSON.stringify(p.poopBorn), '[123,456]');
+    const q = { W:2, poopBorn:null };
+    api.fitPoopBorn(q);
+    eq(q.poopBorn.length, 2);
+    ok(q.poopBorn.every(v => v === clock.now()), '足りないぶんが いまの時刻でない');
+  });
+
+  it('古いセーブ（v3）は、いまあるうんちを すべて1個目の時刻として引き継ぐ', () => {
+    const { api } = setup();
+    const p = api.migratePet({ v:3, name:'T', stage:'larva', W:2, poopSince:5000 });
+    eq(JSON.stringify(p.poopBorn), '[5000,5000]');
+    ok(!('poopSince' in p), '古い項目が残っている');
+    const none = api.migratePet({ v:3, name:'T', stage:'larva', W:0, poopSince:0 });
+    eq(none.poopBorn.length, 0);
   });
 
   it('置き場所は上限と同じ数だけある', () => {
@@ -2324,7 +2382,7 @@ describe('立ち位置', () => {
   };
   it('重なっていたら、止まっていても押し出される', () => {
     const { api, clock } = load();
-    pet(api, clock, { stage:'final', lineage:'inv', form:'i2', W:2, poopSince: clock.now() });
+    pet(api, clock, { stage:'final', lineage:'inv', form:'i2', W:2, poopBorn:[clock.now(), clock.now()] });
     const gw = api.charSprites().rest[0].length;
     api.walkX = api.POOP_X[0];                    // うんちの真上に立たせる
     ok(overlap(api, gw), '重なった状態が作れていること');
@@ -2333,7 +2391,7 @@ describe('立ち位置', () => {
   });
   it('重なっていなければ動かさない', () => {
     const { api, clock } = load();
-    pet(api, clock, { stage:'final', lineage:'inv', form:'i2', W:2, poopSince: clock.now() });
+    pet(api, clock, { stage:'final', lineage:'inv', form:'i2', W:2, poopBorn:[clock.now(), clock.now()] });
     const gw = api.charSprites().rest[0].length;
     const seg = api.freeSegments(gw)[0];
     api.walkX = seg[0] + 1;
@@ -2343,7 +2401,7 @@ describe('立ち位置', () => {
   });
   it('押し出しは一気に飛ばず、少しずつ寄る', () => {
     const { api, clock } = load();
-    pet(api, clock, { stage:'final', lineage:'inv', form:'i2', W:2, poopSince: clock.now() });
+    pet(api, clock, { stage:'final', lineage:'inv', form:'i2', W:2, poopBorn:[clock.now(), clock.now()] });
     const gw = api.charSprites().rest[0].length;
     api.walkX = api.POOP_X[0];
     const first = api.walkX;
@@ -2649,6 +2707,36 @@ describe('世話の音', () => {
   });
 });
 
+describe('雨と雪は空の中だけ', () => {
+  //  地面の線より下や、ヘッダーに粒が出ていた
+  //  （はじめの位置を画面の縦いっぱいに散らしていた／線の長さぶん地面を越えていた）
+  const S = 4;
+  const rows = log => log.filter(o => o.op === 'rect').map(o => Math.round(o.y / S));
+  for(const kind of ['rain', 'rainHeavy', 'storm']){
+    it(`${kind}：どのコマでも、地面の線より上・ヘッダーより下`, () => {
+      const { api, drawLog } = load({ recordDraw: true });
+      for(const d of api.rainDrops) ok(api.inSky(Math.round(d.y)), `はじめの粒が空の外: y=${d.y}`);
+      api.rainDrops[0].y = api.MAIN_GY - 2;          // 線の長さぶん地面を越える位置
+      for(let f = 0; f < 200; f++){
+        drawLog.length = 0;
+        api.updateRain('#000', '#111', kind);
+        for(const y of rows(drawLog))
+          ok(y >= api.SKY_TOP && y < api.MAIN_GY, `${f}コマ目: y=${y} に粒を描いた`);
+      }
+    });
+  }
+  it('雪：どのコマでも、地面の線より上・ヘッダーより下', () => {
+    const { api, drawLog } = load({ recordDraw: true });
+    for(const f of api.snowFlakes) ok(api.inSky(Math.round(f.y)), `はじめの粒が空の外: y=${f.y}`);
+    for(let f = 0; f < 400; f++){
+      drawLog.length = 0;
+      api.updateSnow('#000', '#111', 'snowHeavy');
+      for(const y of rows(drawLog))
+        ok(y >= api.SKY_TOP && y < api.MAIN_GY, `${f}コマ目: y=${y} に粒を描いた`);
+    }
+  });
+});
+
 describe('くすりの演出', () => {
   //  右の画面外から放物線で飛んできて、当たってから点滅する
   it('飛来のあとに点滅が来る', () => {
@@ -2685,6 +2773,31 @@ describe('くすりの演出', () => {
       ok(x <= prev, `途中で右へ戻っている t=${t}（${prev} → ${x}）`);
       prev = x;
     }
+  });
+  //  背の低い子だと胴の中ほどが低く、カプセルが地面の線より下へはみ出していた
+  it('カプセルは地面の線より下へはみ出さない（どの背丈でも、飛んでいる間ずっと）', () => {
+    const { api } = load();
+    const ph = api.MED_PILL.length;
+    for(let gh = 3; gh <= 24; gh++){
+      const charY = api.MAIN_GY - gh;
+      const tg = api.medTarget(20, charY, 9, gh);
+      for(let t = 0; t < api.MED_FLY; t++){
+        const y = api.medPos(t, tg.x, tg.y).y;
+        ok(y + ph <= api.MAIN_GY, `背丈${gh} t=${t}: 下端 y=${y + ph - 1} が地面の線(${api.MAIN_GY})に届く`);
+      }
+    }
+    //  背の高い子は、これまでどおり胴の中ほどに当てる
+    const tall = api.medTarget(20, api.MAIN_GY - 20, 9, 20);
+    eq(tall.y, api.MAIN_GY - 20 + 10 - 1, '背の高い子の当てる先が変わった:');
+  });
+  it('飛び出した瞬間に「ポンッ」と鳴る', () => {
+    const { api } = load();
+    ok(Array.isArray(api.SND.medPop) && api.SND.medPop.length > 0, 'ポンッの音が無い');
+    //  上がっていく音（跳ねる感じ）。下がると ため息に聞こえる
+    const f = api.SND.medPop.map(n => n[0]);
+    ok(f.every((v, i) => i === 0 || v > f[i-1]), `高さが上がっていない: ${f}`);
+    const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'invader_game.html'), 'utf8');
+    ok(/if\(t === 0\) playSnd\('medPop'\);/.test(src), '飛び出しで鳴らしていない');
   });
   //  お世話アイコンと同じ形にそろえる。ばらばらだと、何が飛んできたのか読めない
   it('薬の絵は、お世話アイコンを小さくした形', () => {
@@ -4455,7 +4568,7 @@ describe('おもいで', () => {
     // わがままの抽選は下限5%残るので、固定しないと20回に1回ほど落ちる
     sandbox.Math.random = () => 0.999;
     clock.setTime(14, 0);
-    pet(api, clock, { hunger:2, W:2, poopSince: clock.now(), health:'SICK', D:100, Dm:100 });
+    pet(api, clock, { hunger:2, W:2, poopBorn:[clock.now(), clock.now()], health:'SICK', D:100, Dm:100 });
     const before = JSON.parse(JSON.stringify(api.pet.total));
     api.doCare('FEED');  api.doCare('CLEAN');  api.doCare('MED');
     ok(api.pet.total.feed  > before.feed,  'ごはん:');
