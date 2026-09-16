@@ -499,9 +499,11 @@ const MUTATIONS = [
   ['雨粒のはじめの位置を画面の縦いっぱいに散らす',
    "    x: Math.random()*54|0,\n    y: SKY_TOP + (Math.random()*(MAIN_GY - 1 - SKY_TOP))|0,",
    "    x: Math.random()*54|0,\n    y: (Math.random()*65)|0,", 'caught'],
+  //  雪は1コマに1ドットしか進まず、はじめの位置も戻す位置も空の中なので、
+  //  描くときに切らなくても空の外へは出ない（念のための守り）
   ['雪の粒を空の範囲で切らない',
    "      if(inSky(Math.round(f.y))) dot(ctxM,",
-   "      dot(ctxM,", 'caught'],
+   "      dot(ctxM,", 'equivalent'],
   ['押し出しが歩行の中に戻る（寝ている子がうんちに重なったままになる）',
    "    pushOutOfObjects(gw);", "", 'caught'],
   ['押し出しが効かない（重なっていても動かない）',
