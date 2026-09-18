@@ -2737,6 +2737,49 @@ describe('雨と雪は空の中だけ', () => {
   });
 });
 
+describe('裏へ回ったらミニゲームを閉じる', () => {
+  //  遊んでいるあいだは子の時間を止めている。開いたまま離れると、
+  //  何時間たっても時間が進まず、結末も来なかった
+  const HOUR = 3600000;
+  it('隠れたら閉じて育成画面へ。離れていた時間は進む', () => {
+    const { api, clock, sandbox } = load();
+    pet(api, clock, { stage:'larva', hunger:5, hungerAcc:0 });
+    let removed = false;
+    api.miniFrame = { remove(){ removed = true; } };
+    api.inMiniGame = true; api.scene = 'play';
+    sandbox.document.hidden = true;
+    api.leaveWhenHidden();
+    ok(removed, 'ミニゲームを閉じていない');
+    eq(api.miniFrame, null);
+    eq(api.inMiniGame, false, '遊んでいる扱いのまま:');
+    eq(api.scene, 'main', '育成画面へ戻っていない:');
+    const hid = api.pet.lastTick;
+    ok(Math.abs(hid - clock.now()) < 1000, '閉じたときに時計を合わせていない');
+    //  離れているあいだの時間は、ふつうに進む
+    clock.advance(6 * HOUR);
+    api.advancePet();
+    ok(api.pet.hunger < 5, `離れていた時間が進まない（おなか ${api.pet.hunger}）`);
+  });
+  it('見えているとき・遊んでいないときは何もしない', () => {
+    const { api, clock, sandbox } = load();
+    pet(api, clock, {});
+    let removed = false;
+    api.miniFrame = { remove(){ removed = true; } };
+    api.inMiniGame = true; api.scene = 'play';
+    sandbox.document.hidden = false;
+    api.leaveWhenHidden();
+    ok(!removed, '見えているのに閉じた');
+    api.miniFrame = null; api.inMiniGame = false; api.scene = 'menu';
+    sandbox.document.hidden = true;
+    api.leaveWhenHidden();
+    eq(api.scene, 'menu', '遊んでいないのに画面を変えた:');
+  });
+  it('隠れたときに呼ばれる', () => {
+    const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'invader_game.html'), 'utf8');
+    ok(/document\.addEventListener\('visibilitychange', leaveWhenHidden\);/.test(src), '隠れたときに呼んでいない');
+  });
+});
+
 describe('くすりの演出', () => {
   //  右の画面外から放物線で飛んできて、当たってから点滅する
   it('飛来のあとに点滅が来る', () => {

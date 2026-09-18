@@ -107,6 +107,9 @@ const EXPORTS = `
   // ── 画面を描かせる（移植側と突き合わせるため）──
   tickMain, tickMenu, tickNaming, tickMemory, tickDiary,
   get scene(){ return scene; }, set scene(v){ scene = v; },
+  leaveWhenHidden, closeMiniGame,
+  get miniFrame(){ return miniFrame; }, set miniFrame(v){ miniFrame = v; },
+  get inMiniGame(){ return inMiniGame; }, set inMiniGame(v){ inMiniGame = v; },
   get memPage(){ return memPage; }, set memPage(v){ memPage = v; },
   get diaryPage(){ return diaryPage; }, set diaryPage(v){ diaryPage = v; },
   get fM(){ return fM; }, set fM(v){ fM = v; },
