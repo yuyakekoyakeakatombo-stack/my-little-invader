@@ -232,7 +232,7 @@
       [1,0,1,1,1,1,1,0,1],
       [0,1,1,1,1,1,1,1,0],
       [0,0,0,1,1,1,0,0,0],
-      [0,0,1,1,1,1,1,0,0],
+      [0,1,1,1,1,1,1,1,0],
       [0,0,0,1,0,1,0,0,0],
       [0,0,0,1,0,1,0,0,0],
     ],
@@ -266,6 +266,18 @@
     return [g[0].map(()=>0), ...g.slice(0, g.length-2), merged];
   }
   const CHARS_CROUCH = {}; Object.keys(CHARS).forEach(k=>CHARS_CROUCH[k]=crouch(CHARS[k]));
+  //  グレイだけは2コマ目を別に描く。沈むときに腕を縮めて（7→5ドット）脚を1段に畳む。
+  //  脚を畳むだけだと、広げた腕がそのまま下がって見え、屈伸らしく見えない
+  CHARS_CROUCH.grey = [
+    [0,0,0,0,0,0,0,0,0],
+    [0,1,1,1,1,1,1,1,0],
+    [1,1,1,1,1,1,1,1,1],
+    [1,0,1,1,1,1,1,0,1],
+    [0,1,1,1,1,1,1,1,0],
+    [0,0,0,1,1,1,0,0,0],
+    [0,0,1,1,1,1,1,0,0],
+    [0,0,0,1,0,1,0,0,0],
+  ];
   function CHAR2(){ return CHARS_CROUCH[lineage]; }
   // スコアを本体（invader_game.html）へ報告
   function reportScore(){ try{ localStorage.setItem('myvader_result', JSON.stringify({game:'spacewalk', score:Math.max(0,score), at:Date.now()})); }catch(e){} }
