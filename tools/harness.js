@@ -66,7 +66,7 @@ const EXPORTS = `
   pushOutOfObjects, freeSegments, objectSpans, POOP_X, POOP_W, POOP_MAX, PLATE_X,
   codeToWeather, weatherBase, WEATHER_BASE, isBadWeather, CLOUD_N, CLOUD_THIN, RAIN_STYLE, SNOW_STYLE, RAIN_MAX, SNOW_MAX, DEBUG_STATES,
   FLOWER_DAY, FLOWER_SPAN, FLOWERS, flowerCount, FLOWER_SPR,
-  pickTopics, warmCands, DIARY_ROUTINE, SND, REACT_SND, lastWritten, warmth, warmLevel, WARM_WINDOW, WARM_KINDS, WARM_LINE, DIARY_LINES, DIARY_MUSINGS, DIARY_CLOSE, DIARY_PRIORITY, DIARY_NOREPEAT_DAYS, DIARY_MUSING_RATE, diaryStyle, buildDiary, pickMusing,
+  pickTopics, warmCands, DIARY_ROUTINE, SND, REACT_SND, lastWritten, warmth, warmLevel, WARM_WINDOW, WARM_KINDS, WARM_LINE, DIARY_LINES, DIARY_MUSINGS, DIARY_CLOSE, DIARY_PRIORITY, DIARY_NOREPEAT_DAYS, DIARY_MUSING_RATE, diaryStyle, buildDiary, pickMusing, DIARY_LEN, diaryRange, musingLines,
   // ひとりごとの出す条件は関数なので、そのままでは移植側へ渡せない。
   //  **原文の文字列**を渡し、向こうで同じ字面を鍵にして突き合わせる
   musingWhenText: () => Object.fromEntries(

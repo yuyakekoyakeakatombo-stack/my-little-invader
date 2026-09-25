@@ -3815,18 +3815,34 @@ describe('にっきの字', () => {
     const before = src.slice(Math.max(0, at - 400), at);
     ok(!/if\s*\(.*LV_NEW/.test(before), 'うまれたてだけ別扱いする分岐が残っている');
   });
-  // 来たばかりの子がいきなり画面いっぱいに書くのは、絵として不自然
-  it('書く量は日を追って少しずつ増える', () => {
+  // 来たばかりの子がいきなり画面いっぱいに書くのは、絵として不自然。
+  //  **書ける行数は段階で決まる**（以前は日数で話題を増やしていて、2日目に画面いっぱいになっていた）
+  it('書ける行数は、段階が上がるほど増える', () => {
     const { api, clock } = load();
-    pet(api, clock, { P:0 });
-    const at = d => { api.pet.birth = clock.now() - (d-1)*86400000; return api.diaryStyle().topics; };
-    const got = [1,2,3,4,5].map(at);
-    eq(got.slice(0,3), [1,2,3], '1日目1話題／2日目2話題／3日目3話題:');
-    eq(got[3], got[4], '4日目で通常にもどり、以後は増えない:');
-    ok(got.every((v,i) => i === 0 || v >= got[i-1]), `減らないこと（${got}）`);
-    //  おっとりは4話題まで伸びる
-    pet(api, clock, { P:-100 });
-    eq(at(4), 4, 'おっとりの4日目:');
+    eq(api.DIARY_LEN, { egg:[1,2], mid:[2,3], larva:[3,4], adult:[4,6], final:[5,7] }, '段階ごとの行数:');
+    const at = (stage, P) => { pet(api, clock, { stage, P }); return api.diaryStyle().lines; };
+    const order = ['egg','mid','larva','adult','final'];
+    for(const P of [-100, 0, 100]){
+      const got = order.map(st => at(st, P));
+      ok(got.every((v,i) => i === 0 || v > got[i-1]), `性格${P}で段階ごとに増えていない（${got}）`);
+      order.forEach((st, i) => {
+        const [lo, hi] = api.DIARY_LEN[st];
+        ok(got[i] >= lo && got[i] <= hi, `${st} の行数 ${got[i]} が幅 ${lo}〜${hi} の外`);
+      });
+    }
+    //  おっとりは長いほう、やんちゃは短いほうへ寄る
+    eq(at('final', -100), 7, 'おっとりの さいしゅう:');
+    eq(at('final', 100), 5, 'やんちゃの さいしゅう:');
+  });
+  //  **よそよそしい子だけは、ひとりごとで埋めない**（口数が少ない日があってよい）
+  it('埋める下限は、よそよそしい子だけ 0', () => {
+    const { api, clock } = load();
+    pet(api, clock, { stage:'adult', B:0, touchLog:[] });
+    eq(api.warmLevel(), 0, 'よそよそしくない:');
+    eq(api.diaryStyle().floor, 0, 'よそよそしいのに埋める:');
+    pet(api, clock, { stage:'adult', B:80, touchLog:[3,3,3,3,3,3,3] });
+    ok(api.warmLevel() >= 1, 'なじんでいない');
+    eq(api.diaryStyle().floor, api.DIARY_LEN.adult[0], 'なじんだ子の下限:');
   });
   //  到着した日の夜に、その日ぶんが1件書かれる
   it('到着した日の夜に、その日ぶんが1件書かれる', () => {
@@ -3855,31 +3871,36 @@ describe('にっきの字', () => {
         for(const vo of Object.values(m[lg]||{})) all.push(...vo);
     ok(body.every(l => all.includes(l)), `本文に用意した文以外が出ている: ${JSON.stringify(body)}`);
   });
-  //  「最初は一言、だんだん長くなる」こと。話題の上限は日数で開く（diaryStyle の cap）。
-  //  話題の数は日数で決まるので単調に増えるが、本文の行数は
-  //  選ばれた言い回しが1行か2行かで日ごとに揺れる。行数は平均で見る
-  it('初日は一言ほど短く、日を追って長くなる', () => {
-    const facts = { fed:1, cleaned:1, praised:1, clear:1, slept:1 };
-    const topics = [], lines = [];
-    const TRIALS = 40;
-    for(let d=1; d<=4; d++){
-      let t = 0, l = 0;
-      for(let i=0;i<TRIALS;i++){
-        const { api, clock } = load({ storage:{ myvader_lang:'ja' } });
-        pet(api, clock, { stage:'mid', name:'T' });
-        api.pet.birth = clock.now() - (d-1)*86400000;
-        const e = api.buildDiary(facts, d, '2026-06-' + (14+d));
-        if(e){ t += e.t.length; l += api.diaryBody(e).filter(Boolean).length; }
+  //  「最初は一言、だんだん長くなる」こと。**段階ごとの行数の幅に、実際の本文が収まる**。
+  //  出来事が少ない日も、なじんだ子は ひとりごとで下限まで埋める
+  it('本文の行数は段階の幅に収まり、育つほど長くなる', () => {
+    const many = { fed:1, cleaned:1, praised:1, playSw:1, snack:1, clear:1, slept:1 };
+    const few  = { fed:1 };
+    const avg = {};
+    for(const stage of ['egg','mid','larva','adult','final']){
+      const [lo, hi] = [ [1,2],[2,3],[3,4],[4,6],[5,7] ][['egg','mid','larva','adult','final'].indexOf(stage)];
+      let sum = 0, n = 0;
+      for(let i=0;i<40;i++){
+        for(const facts of [many, few]){
+          const { api, clock } = load({ storage:{ myvader_lang:'ja' } });
+          pet(api, clock, { stage, name:'T', B:80, touchLog:[3,3,3,3,3,3,3],
+                            lineage: stage==='adult'||stage==='final' ? 'grey' : '', form: stage==='final' ? 'g2' : '' });
+          const d = Object.assign({}, facts, { solo: api.pickMusing() });
+          const e = api.buildDiary(d, 5, '2026-06-20');
+          if(!e) continue;
+          const lines = api.diaryBody(e).filter(Boolean).length;
+          ok(lines <= hi, `${stage}：${lines}行（上限 ${hi}）${JSON.stringify(api.diaryBody(e))}`);
+          //  下限は ひとりごとが選べるときだけ届く。届かないのは1行短いくらいまで
+          ok(lines >= lo - 1, `${stage}：${lines}行しかない（下限 ${lo}）`);
+          sum += lines; n++;
+        }
       }
-      topics.push(t / TRIALS); lines.push(l / TRIALS);
+      avg[stage] = sum / n;
     }
-    eq(topics[0], 1, '初日の話題数:');
-    for(let i=1;i<topics.length;i++)
-      ok(topics[i] >= topics[i-1], `${i+1}日目で話題が減っている: ${topics}`);
-    ok(topics[3] > topics[0], `4日目になっても話題が増えていない: ${topics}`);
-    ok(lines[0] <= 3, `初日が平均${lines[0].toFixed(1)}行あって、一言に見えない`);
-    ok(lines[3] > lines[0] + 1,
-       `4日目の本文が伸びていない（初日 ${lines[0].toFixed(1)}行 → 4日目 ${lines[3].toFixed(1)}行）`);
+    const order = ['egg','mid','larva','adult','final'];
+    for(let i=1;i<order.length;i++)
+      ok(avg[order[i]] > avg[order[i-1]], `育っても長くならない：${JSON.stringify(avg)}`);
+    ok(avg.egg <= 2, `うまれたてが平均${avg.egg.toFixed(1)}行あって、一言に見えない`);
   });
   it('幼いうちは結びの言葉を書かない', () => {
     const { api, clock } = load();

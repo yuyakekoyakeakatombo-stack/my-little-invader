@@ -3255,17 +3255,25 @@
   function writeRatio(){ return Math.max(0, Math.min(1, ((pet.EP||0) - 1) / 3)); }
 
 
+  // ── 日記の長さは、育つにつれて長くなる ──
+  //  段階ごとに書ける行数 [いちばん短い, いちばん長い]（話題・ひとりごと・結びを合わせた行数）。
+  //  以前は日数（1〜3日目）で話題の数を増やしていたが、行数を見ていなかったので
+  //  2日目にはもう画面いっぱいになり、どの段階でも同じ長さになっていた（2026-09-25）
+  const DIARY_LEN = { egg:[1,2], mid:[2,3], larva:[3,4], adult:[4,6], final:[5,7] };
+  function diaryRange(){ return DIARY_LEN[pet.stage] || DIARY_LEN.egg; }
   // 性格で書き方が変わる。おっとりはまめに長く、やんちゃは書き忘れる日があって短い
   function diaryStyle(){
     const t = pTrait();                       // -1=おっとり … +1=やんちゃ
-    // 書ける量は日を追って増える。1日目は1話題、4日目で通常にもどる。
-    //  段階ではなく日数で見るのは、来たばかりの子がいきなり画面いっぱいに
-    //  書くのを防ぎつつ、増え方を滑らかにするため
-    const cap = Math.min(4, Math.max(1, petDay()));
+    const [lo, hi] = diaryRange();
     return {
       skip:   Math.max(0, t) * 0.35,          // その日は書かずに終わる確率
       putOff: Math.max(0, t) * 0.50,          // 寝る前に書かず、翌日に回す確率
-      topics: Math.min((t <= -0.4) ? 4 : (t >= 0.4 ? 2 : 3), cap),
+      topics: (t <= -0.4) ? 4 : (t >= 0.4 ? 2 : 3),
+      //  書ける行数の上限。段階の幅の中で、おっとりは長いほう・やんちゃは短いほうへ寄る
+      lines:  lo + Math.round((hi - lo) * (1 - t) / 2),
+      //  これより短ければ ひとりごとで埋める。**よそよそしい子は埋めない**
+      //  （まだ打ちとけていないので、口数が少ない日があってよい）
+      floor:  warmLevel() >= 1 ? lo : 0,
       close:  diaryLevel() <= LV_BABY ? '' : voice(),   // 口調は成体で確定。それまでは共通の 'plain'
     };
   }
@@ -3373,10 +3381,17 @@
     return fit.length ? fit : idx;
   }
 
-  // 条件に合うひとりごとから1つ選ぶ（毎日は書かない）
+  // ひとりごとの行数（いまの口調で）
+  function musingLines(k, vo){
+    const m = DIARY_MUSINGS[k]; if(!m) return 0;
+    const src = m.ja;
+    return (Array.isArray(src) ? src : (src[vo || 'plain'] || src.plain)).length;
+  }
+  // 条件に合うひとりごとから1つ選ぶ（毎日は書かない）。
+  //  maxLines を渡すと、その行数に収まるものだけから選ぶ。force なら必ず選ぶ（日記を埋めるとき）
   const DIARY_MUSING_RATE = 0.6;
-  function pickMusing(){
-    if(Math.random() >= DIARY_MUSING_RATE) return '';
+  function pickMusing(maxLines, force){
+    if(!force && Math.random() >= DIARY_MUSING_RATE) return '';
     const st = pet.stage;
     const s = {
       clear:  weatherFetched && weatherBase()==='clear',
@@ -3389,7 +3404,8 @@
       trait: pTrait(),
       warm:  warmLevel(),                 // 0=よそよそしい 1=なじんだ 2=うちとけた
     };
-    const keys = Object.keys(DIARY_MUSINGS).filter(k => DIARY_MUSINGS[k].when(s));
+    const keys = Object.keys(DIARY_MUSINGS).filter(k => DIARY_MUSINGS[k].when(s)
+      && (maxLines == null || musingLines(k, voice()) <= maxLines));
     if(!keys.length) return '';
     return pickFresh(keys, k => 's:' + k, recentPhrases());
   }
@@ -3400,16 +3416,46 @@
   //   ts から日付を出すと「きのうのこと」なのに今日の日付が出てしまう
   function buildDiary(d, dayNo, cd){
     const st = diaryStyle();
-    const solo = d.solo || '';
+    const used = recentPhrases();
+    const vo = voice();
+    // ひとりごと。**段階の行数に収まらなければ書かない**
+    let solo = d.solo || '';
+    if(solo && musingLines(solo, vo) > st.lines) solo = '';
+    // 結び（ひとりごとを書く日は書かない）。行数に数えるので先に選ぶ
+    let c = solo ? '' : st.close;
+    let cv = c ? pickFresh(warmCands(DIARY_CLOSE[c]), i => 'c:' + c + ':' + i, used) : 0;
+    const closeLen = c ? DIARY_CLOSE[c][cv].ja.length : 0;
     // ひとりごとを書く日は出来事を絞る。毎日おなじ密度の報告にならないようにするため
     const room = solo ? Math.min(2, st.topics) : st.topics;
-    const picked = pickTopics(d, room);
+    // 話題を、残りの行数に収まる言い回しで並べる。収まる言い回しが無い話題は書かない
+    let left = st.lines - (solo ? musingLines(solo, vo) : closeLen);
+    //  結びだけで埋まってしまう短い段階では、結びをやめて話題を書く
+    if(c && left < 1){ c = ''; cv = 0; left = st.lines; }
+    const picked = [], v = [];
+    let topicLines = 0;
+    for(const t of pickTopics(d, room)){
+      const set = DIARY_LINES[t];
+      // 言い回しは、いまの親密度に合うもののうち、残りに収まって 直近で使っていないものから選ぶ
+      const fit = warmCands(set).filter(i => set[i].ja.length <= left);
+      if(!fit.length) continue;
+      const i = pickFresh(fit, i => 't:' + t + ':' + i, used);
+      picked.push(t); v.push(i); left -= set[i].ja.length; topicLines += set[i].ja.length;
+      if(left <= 0) break;
+    }
+    // 短すぎる日は埋める（よそよそしい子は埋めない＝floor が 0）。
+    //  ふだん ひとりごとを書く日は結びを書かないが、**埋めるときは両方使う**。
+    //  片方だけだと、出来事が1つの日に さいしゅうの下限（5行）へ届かない
+    let total = topicLines + (solo ? musingLines(solo, vo) : 0) + (c ? DIARY_CLOSE[c][cv].ja.length : 0);
+    if(total < st.floor && !solo){
+      const k = pickMusing(st.lines - total, true);
+      if(k){ solo = k; total += musingLines(k, vo); }
+    }
+    if(total < st.floor && !c && st.close){
+      const set = DIARY_CLOSE[st.close];
+      const fit = warmCands(set).filter(i => set[i].ja.length <= st.lines - total);
+      if(fit.length){ c = st.close; cv = pickFresh(fit, i => 'c:' + c + ':' + i, used); total += set[cv].ja.length; }
+    }
     if(!picked.length && !solo) return null;
-    const used = recentPhrases();
-    // 言い回しは、いまの親密度に合うもののうち、直近で使っていないものから選ぶ
-    const v = picked.map(t => pickFresh(warmCands(DIARY_LINES[t]), i => 't:' + t + ':' + i, used));
-    const c = solo ? '' : st.close;
-    const cv = c ? pickFresh(warmCands(DIARY_CLOSE[c]), i => 'c:' + c + ':' + i, used) : 0;
     // lv＝書いた時点の字の段階／wr＝そのとき書けた単語の割合。焼き付けておかないと、
     //  育ったあとに読み返したとき、幼いころの日記まで達筆になってしまう
     return { d: dayNo || petDay(), n: pet.name, t: picked, v: v,
@@ -7040,7 +7086,7 @@
   // 項目はキーで管理（表示ラベルは言語辞書、値は各キーで分岐）
   //  版の番号は sw.js の VERSION と同じもの。tools/bump-sw.sh が両方いっしょに
   //  書き換える（ずれると、テスターの端末に出ている版が分からなくなる）
-  const APP_VERSION = '2026-09-25-02';
+  const APP_VERSION = '2026-09-25-03';
   //  (C) は Press Start 2P に © が無く、別の字体に落ちて1文字だけ形が浮くため
   const APP_COPY = '(C) 2026 Studio M.D.Q.';
   // 天気は Open-Meteo から貰っている。CC BY 4.0 なので、無料で使う場合でも
