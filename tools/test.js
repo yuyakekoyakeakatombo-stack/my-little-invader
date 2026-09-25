@@ -3231,6 +3231,29 @@ describe('日記の重複', () => {
       for(const vo of ['plain','calm','rough'])
         chk(`MUSING.${k}.${vo}`, { ja: m.ja[vo], en: m.en[vo] });
   });
+  //  ゲームの中身と食い違う書き方をしない（2026-09-25 に見直した）
+  it('日記の文：ゲームの中身と食い違わない', () => {
+    const { api } = load();
+    const all = [];
+    for(const arr of Object.values(api.DIARY_LINES)) arr.forEach(v => all.push(v.ja.join(' ')));
+    for(const m of Object.values(api.DIARY_MUSINGS))
+      for(const vo of ['plain','calm','rough']) all.push((m.ja[vo] || []).join(' '));
+    for(const arr of Object.values(api.DIARY_CLOSE)) arr.forEach(v => all.push(v.ja.join(' ')));
+    //  この子は外で暮らしている。屋根の下の言葉は使わない
+    for(const t of all) ok(!t.includes('てんじょう'), `「てんじょう」を使っている：${t}`);
+    //  SHOOTING STAR は撃つゲーム。追いかけたり つかんだりはしない
+    for(const v of api.DIARY_LINES.playSs){
+      const t = v.ja.join(' ');
+      ok(!/おいかけ|つかむ|てが とど/.test(t), `SHOOTING STAR が撃つゲームでない書き方：${t}`);
+    }
+    //  ABDUCTION は UFO から逃げる遊び。キャラは地面にいて、捕まえる側でも
+    //  UFOを操る側でもない（「捕まえるほうもやってみたい」のような願いは よい）
+    for(const v of api.DIARY_LINES.playAb){
+      const t = v.ja.join(' ');
+      ok(!/ねらい|ねらっ|わっか|さらう がわ|したから ひっぱ|うえから みる|おろす|つかまえた|とれた|とれそう|にげられ/.test(t),
+         `ABDUCTION でキャラが捕まえる側・操る側になっている：${t}`);
+    }
+  });
   //  持ち回りにするのは ふだんの話題だけ。進化・病気・別れのような報せるべき
   //  出来事まで混ぜると、書ける数が少ない日に押し出されて消える
   it('報せるべき出来事は、ふだんの話題より先に書く', () => {
