@@ -3208,6 +3208,19 @@ describe('日記の重複', () => {
     ok(Object.keys(count).length >= 5, `採られたタグが ${Object.keys(count).length}種しかない`);
     ok(Math.max(...n) <= 24, `1つのタグが30日で ${Math.max(...n)}回 採られている`);
   });
+  //  来たばかりで日記が空のとき、ふだんの話題はどれも「書いたことがない」で同着になる。
+  //  **同着は散らす。** 優先度順で解くと、どの子の最初の日記も同じ話題から始まる
+  it('日記が空のとき、最初の話題は子によって違う', () => {
+    const first = new Set();
+    for(let i=0;i<40;i++){
+      const { api, clock } = load();
+      pet(api, clock, { stage:'adult', lineage:'grey', P:0, B:80, touchLog:[3,3,3,3,3,3,3] });
+      api.diaryLog.length = 0;
+      const e = api.buildDiary({ fed:1, cleaned:1, dirty:1, noPlay:1, clear:1, slept:1, solo:'' }, 1, 'd1');
+      if(e && e.t.length) first.add(e.t[0]);
+    }
+    ok(first.size >= 3, `最初の話題がいつも同じ顔ぶれ：${[...first]}`);
+  });
   //  実物の字幅は Node では測れないので、すでに出荷ずみの最長行を予算にする。
   //  画面のフォントは大文字しか持たないので、英文に小文字が混じると字が欠ける
   it('増やした文面が、幅の予算と字種を守っている', () => {
