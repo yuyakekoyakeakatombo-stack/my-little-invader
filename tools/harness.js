@@ -107,6 +107,10 @@ const EXPORTS = `
   // ── 画面を描かせる（移植側と突き合わせるため）──
   tickMain, tickMenu, tickNaming, tickMemory, tickDiary,
   get scene(){ return scene; }, set scene(v){ scene = v; },
+  showView, startOpeningBgm, stopOpeningBgm, BGM_SRC, BGM_VOL, BGM_FADE,
+  get bgmBuf(){ return bgmBuf; }, set bgmBuf(v){ bgmBuf = v; },
+  get bgmData(){ return bgmData; }, set bgmData(v){ bgmData = v; },
+  get bgmNode(){ return bgmNode; },
   leaveWhenHidden, closeMiniGame,
   get miniFrame(){ return miniFrame; }, set miniFrame(v){ miniFrame = v; },
   get inMiniGame(){ return inMiniGame; }, set inMiniGame(v){ inMiniGame = v; },
@@ -277,7 +281,14 @@ function makeSandbox(opts){
       const c = { state:'running', currentTime:0, destination:{}, resumed:0, closed:0,
         createOscillator: () => { c.played++; return { connect(){}, start(){}, stop(){},
           frequency:{ setValueAtTime(){}, exponentialRampToValueAtTime(){} }, type:'' }; },
-        createGain: () => ({ connect(){}, gain:{ setValueAtTime(){}, exponentialRampToValueAtTime(){} } }),
+        createGain: () => { const g = { connected:[], connect(d){ g.connected.push(d); }, gain:{ value:1, ramps:[],
+          setValueAtTime(v){ g.gain.value = v; }, exponentialRampToValueAtTime(){},
+          linearRampToValueAtTime(v, t){ g.gain.ramps.push([v, t]); } } }; return g; },
+        //  繰り返し流す口（BGM）。鳴らした・止めた を控えておく
+        createBufferSource: () => { const b = { buffer:null, loop:false, loopStart:0, loopEnd:0,
+          started:null, stopped:null, connect(){}, start(t){ b.started = t === undefined ? 0 : t; },
+          stop(t){ b.stopped = t === undefined ? 0 : t; } }; (c.sources = c.sources || []).push(b); return b; },
+        decodeAudioData: (data, ok) => { c.decoded = (c.decoded || 0) + 1; if(ok) ok({ duration: 16.0016 }); },
         resume(){ c.resumed++; if(c.state === 'suspended') c.state = 'running'; return Promise.resolve(); },
         close(){ c.closed++; c.state = 'closed'; return Promise.resolve(); } };
       c.played = 0;

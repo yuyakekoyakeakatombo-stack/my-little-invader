@@ -15,3 +15,6 @@ MY LITTLE INVADER_text.rtf
 
 # 突然変異チェックの二重起動よけ（実行中だけ在る）
 tools/.mutate.lock
+
+# 曲の元データ（大きいので入れない。オープニングのBGMは tools/make-opening-bgm.py でここから作る）
+Tiny_Planet_Joyride.mp3

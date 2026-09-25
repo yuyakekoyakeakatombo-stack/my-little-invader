@@ -9,7 +9,7 @@
 //    上げ忘れると、更新をpushしてもテスターの端末に古い版が出続ける。
 //    tools/bump-sw.sh が自動で書き換える（pre-commitフックから呼ばれる）。
 // ════════════════════════════════════════════════════════════
-const VERSION = '2026-09-19-07';
+const VERSION = '2026-09-25-01';
 const CACHE = 'mli-' + VERSION;
 
 // 初回訪問時にまとめて取りに行くファイル
@@ -26,6 +26,7 @@ const ASSETS = [
   'pressstart2p-latin.woff2',
   'apple-touch-icon.png',
   'manifest.json',
+  'opening_bgm.wav',
 ];
 
 // ── install：一式を保管する ──

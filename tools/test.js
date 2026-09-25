@@ -2737,6 +2737,96 @@ describe('雨と雪は空の中だけ', () => {
   });
 });
 
+describe('オープニングのBGM', () => {
+  //  曲のイントロ8小節を、拍どおりに頭へ戻る形で繰り返す。STARTで始めたら絞って止める
+  const fs = require('fs'), path = require('path');
+  const ROOT = path.join(__dirname, '..');
+  const opening = () => {
+    const { api, clock, sandbox, audioLog } = load();
+    api.bgmBuf = { duration: 16.0016 };          // 解いた波（ファイルの読み込みは別で見る）
+    api.showView('opening');
+    return { api, clock, sandbox, audioLog };
+  };
+  it('オープニングを開くと、繰り返しで鳴りはじめる', () => {
+    const { api } = opening();
+    const n = api.bgmNode;
+    ok(n, '鳴っていない');
+    eq(n.loop, true, '繰り返さない:');
+    eq(n.loopStart, 0);
+    eq(n.loopEnd, 16.0016, '1周の終わりが曲の長さと違う:');
+    eq(n.started, 0, '始まっていない:');
+  });
+  it('何度触っても、重ねて鳴らさない', () => {
+    const { api } = opening();
+    const first = api.bgmNode;
+    api.startOpeningBgm(); api.startOpeningBgm();
+    ok(api.bgmNode === first, '2本目を鳴らした');
+    eq(api.ac.sources.length, 1, '口の数:');
+  });
+  it('音を切っていると鳴らさない', () => {
+    const { api } = load();
+    api.setSound(false);
+    api.bgmBuf = { duration: 16.0016 };
+    api.showView('opening');
+    eq(api.bgmNode, null, '音を切っているのに鳴った:');
+  });
+  it('STARTで始める（ほかの画面へ移る）と、絞ってから止まる', () => {
+    const { api } = opening();
+    const n = api.bgmNode;
+    const g = api.ac.sources[0];
+    api.showView('main');
+    eq(api.bgmNode, null, '止まっていない:');
+    ok(n.stopped !== null && n.stopped >= api.BGM_FADE, `絞りきる前に止めた（stop ${n.stopped}）`);
+  });
+  it('オープニング以外の画面では鳴らさない', () => {
+    const { api } = load();
+    api.bgmBuf = { duration: 16.0016 };
+    api.showView('main');
+    api.startOpeningBgm();
+    eq(api.bgmNode, null, '育成画面で鳴った:');
+  });
+  it('割り込みで口が作り直されたら、新しい口で鳴らし直す', () => {
+    const { api, clock, audioLog } = opening();
+    const old = api.bgmNode;
+    api.ac.state = 'interrupted';                 // iOS の割り込み。resume が効かない
+    clock.advance(api.AC_RETRY + 1);              // 作り直してよい間が空いた
+    api.startOpeningBgm();
+    ok(api.bgmNode && api.bgmNode !== old, '古い口のまま');
+    ok(old.stopped !== null, '古い口で鳴っていたぶんを止めていない');
+    eq(audioLog.length, 2, '口の数:');
+  });
+  it('まだ解いていなければ、届いたファイルを1回だけ解いてから鳴らす', () => {
+    const { api } = load();
+    api.bgmData = new ArrayBuffer(8);
+    api.showView('opening');
+    eq(api.ac.decoded, 1, '解いた回数:');
+    ok(api.bgmNode, '解いたあとに鳴らしていない');
+    eq(api.bgmData, null, '解いたファイルを持ったまま:');
+  });
+  it('ファイル：44.1kHz・ステレオ・16bit で、ちょうどイントロ8小節ぶん', () => {
+    const b = fs.readFileSync(path.join(ROOT, 'opening_bgm.wav'));
+    eq(b.toString('ascii', 0, 4), 'RIFF');
+    eq(b.readUInt16LE(22), 2, 'チャンネル:');
+    eq(b.readUInt32LE(24), 44100, '標本率:');
+    eq(b.readUInt16LE(34), 16, 'ビット:');
+    //  data チャンクを探す
+    let i = 12, frames = 0, off = 0;
+    while(i < b.length - 8){
+      const id = b.toString('ascii', i, i + 4), sz = b.readUInt32LE(i + 4);
+      if(id === 'data'){ frames = sz / 4; off = i + 8; break; }
+      i += 8 + sz;
+    }
+    eq(frames, 705670, 'フレーム数（16.0016秒）:');
+    //  つなぎ目：終わりと頭が 0 に落ちている（戻るときにプツッと鳴らない）
+    eq([b.readInt16LE(off), b.readInt16LE(off + 2)], [0, 0], '頭:');
+    eq([b.readInt16LE(off + frames*4 - 4), b.readInt16LE(off + frames*4 - 2)], [0, 0], '終わり:');
+  });
+  it('オフラインでも鳴るよう、先に保管しておく', () => {
+    const sw = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
+    ok(sw.includes("'opening_bgm.wav'"), 'sw.js の ASSETS に無い');
+  });
+});
+
 describe('裏へ回ったらミニゲームを閉じる', () => {
   //  遊んでいるあいだは子の時間を止めている。開いたまま離れると、
   //  何時間たっても時間が進まず、結末も来なかった

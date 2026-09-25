@@ -494,6 +494,8 @@
     document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
     document.getElementById('view-'+id).classList.add('active');
     scene = id;
+    //  オープニングのBGMは、この画面のあいだだけ（STARTで始めたら消える）
+    if(id === 'opening') startOpeningBgm(); else stopOpeningBgm();
     if(id==='story'){ storyPage=0; fS=0; }
     if(window.__placeLed) window.__placeLed();   // 表示中LCDの上に電源LEDを合わせ直す
   }
@@ -538,6 +540,63 @@
   });
   document.addEventListener('visibilitychange', function(){ if(!document.hidden) reviveAudio(); });
   window.addEventListener('pageshow', reviveAudio);
+
+  // ── オープニングのBGM ──
+  //  opening_bgm.wav は、曲のイントロ8小節（16.0016秒）を、拍どおりに頭へ戻れるよう
+  //  切り出したもの（作り方は tools/make-opening-bgm.py）。
+  //  <audio loop> は頭へ戻るときに隙間が空くので、Web Audio のバッファを loop で回す。
+  //  こちらはサンプル単位でつながる。
+  //  **iOS は操作の中でしか音を出せない**ので、最初に触れたときに鳴りはじめる
+  const BGM_SRC  = 'opening_bgm.wav';
+  const BGM_VOL  = 0.8;
+  const BGM_FADE = 0.6;          // 止めるときに絞る時間（秒）
+  let bgmData = null;            // 取ってきたファイル（まだ解いていない）
+  let bgmBuf = null;             // 解いた波
+  let bgmNode = null, bgmGain = null, bgmCtx = null;
+  //  ファイルは先に取っておく。解く（decodeAudioData）には口が要るので、鳴らすときに行う
+  try{ fetch(BGM_SRC).then(r => r.ok ? r.arrayBuffer() : null).then(b => { bgmData = b; }).catch(()=>{}); }catch(e){}
+  function startOpeningBgm(){
+    if(scene !== 'opening' || !soundOn) return;
+    //  先に口を立て直す（割り込みのあとは、ここで新しい口に替わることがある）
+    ensureAudio();
+    if(!ac) return;
+    //  鳴っている口が いまの口と同じなら何もしない。
+    //  作り直されていたら、古い口で鳴っていたぶんは捨てて、新しい口で鳴らし直す
+    if(bgmNode && bgmCtx === ac) return;
+    if(bgmNode){ try{ bgmNode.stop(); }catch(e){} bgmNode = null; }
+    if(!bgmBuf){
+      if(!bgmData) return;                       // まだ届いていない。次に触れたときにもう一度
+      const data = bgmData; bgmData = null;      // 解くと中身が使えなくなるので、1回だけ
+      try{
+        ac.decodeAudioData(data, b => { bgmBuf = b; startOpeningBgm(); }, () => {});
+      }catch(e){}
+      return;
+    }
+    const src = ac.createBufferSource();
+    src.buffer = bgmBuf;
+    src.loop = true; src.loopStart = 0; src.loopEnd = bgmBuf.duration;
+    const g = ac.createGain();
+    g.gain.setValueAtTime(BGM_VOL, ac.currentTime);
+    src.connect(g); g.connect(ac.destination);
+    src.start(0);
+    bgmNode = src; bgmGain = g; bgmCtx = ac;
+  }
+  //  絞ってから止める。ぶつっと切ると、STARTの音と重なって耳につく
+  function stopOpeningBgm(){
+    if(!bgmNode) return;
+    const c = bgmCtx, t = c.currentTime;
+    try{
+      bgmGain.gain.setValueAtTime(BGM_VOL, t);
+      bgmGain.gain.linearRampToValueAtTime(0, t + BGM_FADE);
+      bgmNode.stop(t + BGM_FADE + 0.05);
+    }catch(e){ try{ bgmNode.stop(); }catch(_){} }
+    bgmNode = null; bgmGain = null; bgmCtx = null;
+  }
+  //  最初に触れたとき・前面へ戻ったときに鳴らす（オープニングを見ているときだけ）
+  ['touchend','pointerdown','click'].forEach(function(ev){
+    document.addEventListener(ev, function(){ startOpeningBgm(); }, {passive:true});
+  });
+  document.addEventListener('visibilitychange', function(){ if(!document.hidden) startOpeningBgm(); });
   function playClick(freq=1200) {
     if(!soundOn) return;   // SOUND=OFFならミュート
     ensureAudio();
@@ -6981,7 +7040,7 @@
   // 項目はキーで管理（表示ラベルは言語辞書、値は各キーで分岐）
   //  版の番号は sw.js の VERSION と同じもの。tools/bump-sw.sh が両方いっしょに
   //  書き換える（ずれると、テスターの端末に出ている版が分からなくなる）
-  const APP_VERSION = '2026-09-19-07';
+  const APP_VERSION = '2026-09-25-01';
   //  (C) は Press Start 2P に © が無く、別の字体に落ちて1文字だけ形が浮くため
   const APP_COPY = '(C) 2026 Studio M.D.Q.';
   // 天気は Open-Meteo から貰っている。CC BY 4.0 なので、無料で使う場合でも
