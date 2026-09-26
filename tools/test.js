@@ -646,15 +646,22 @@ describe('ヘッダーのマーク', () => {
   it('日記のマークは、読み終わっても残る', () => {
     ok(at({}, 0).headIcons().includes('diary'), '既読で消えている');
   });
-  it('ステータスの知らせは、けんこうが「よい」以外のときだけ点く', () => {
+  //  「ふつう」（本調子ではないが差し迫っていない）は点滅させない
+  it('ステータスの知らせは、けんこうが「よい」「ふつう」以外のときだけ点く', () => {
     eq(at({}).statusAlert(), false, 'なんともない子:');
     for(const [name, st] of [
         ['びょうき',   { health:'SICK' }],
         ['はらぺこ',   { hunger:0 }],
+      ]){
+      ok(at(st).statusAlert(), `${name}: 知らせが点かない`);
+    }
+    for(const [name, st] of [
         ['きげんが底', { mood:0 }],
         ['やまいの芽', { incubAt: 1 }],
       ]){
-      ok(at(st).statusAlert(), `${name}: 知らせが点かない`);
+      const api = at(st);
+      eq(api.healthState(), 'normal', `${name}: けんこう`);
+      eq(api.statusAlert(), false, `${name}: ふつうなのに点いている:`);
     }
   });
   //  STATUS に出る文字と、ヘッダーの点滅は同じところから決める。
@@ -662,7 +669,7 @@ describe('ヘッダーのマーク', () => {
   it('知らせと STATUS の文字が、同じ状態から出ている', () => {
     for(const st of [{}, { health:'SICK' }, { hunger:0 }, { mood:0 }]){
       const api = at(st);
-      eq(api.statusAlert(), api.healthState() !== 'good', `${JSON.stringify(st)}: 知らせと文字が食い違う`);
+      eq(api.statusAlert(), !['good','normal'].includes(api.healthState()), `${JSON.stringify(st)}: 知らせと文字が食い違う`);
     }
   });
   // 上を1回押したときに どれが選ばれるか。
@@ -4087,6 +4094,72 @@ describe('成体グレイの休み姿', () => {
       pet(api, clock, { name:'T', stage:'adult', lineage:L });
       const sp = api.charSprites();
       eq(JSON.stringify(sp.rest), JSON.stringify(sp.a), `${L}:`);
+    }
+  });
+});
+
+//  見回し・ダッシュでは、目を形のまま1ドット左右へ動かす。
+//  スリークの2×2の目は、閉じ線にする差し替えが上の段だけなので、
+//  以前は上半分だけずれて眉毛のような目になっていた
+describe('グレイの見回し', () => {
+  //  穴（目）の位置の一覧。[段, 列]
+  const holesOf = (api, sp, g) => {
+    const out = [];
+    for(let y = 0; y < g.length; y++){
+      const row = g[y];
+      row.forEach((v, x) => {
+        if(v || x === 0 || x === row.length - 1) return;
+        if(row.slice(0, x).includes(1) && row.slice(x + 1).includes(1)) out.push([y, x]);
+      });
+    }
+    return out;
+  };
+  const key = (c) => c.map(([y, x]) => y + ',' + x).sort().join(' ');
+  const forms = [['grey', { stage:'adult', lineage:'grey' }],
+                 ['g1', { stage:'final', lineage:'grey', form:'g1' }],
+                 ['g2', { stage:'final', lineage:'grey', form:'g2' }],
+                 ['g3', { stage:'final', lineage:'grey', form:'g3' }]];
+  //  目の段とその上下だけを見る（触角や脚のすき間は関係ない）
+  const eyeZone = (api, sp) => { const r = api.eyeRows(sp); return [Math.min(...r) - 1, Math.max(...r) + 1]; };
+
+  it('スリークは、2段の目が そろって1ドット動く', () => {
+    const { api, clock } = load();
+    pet(api, clock, { name:'T', stage:'final', lineage:'grey', form:'g2' });
+    const sp = api.charSprites();
+    for(const f of ['a', 'b']) for(const dx of [-1, 1]){
+      const [lo, hi] = eyeZone(api, sp);
+      const inZone = (c) => c.filter(([y]) => y >= lo && y <= hi);
+      const before = inZone(holesOf(api, sp, sp[f]));
+      const after  = inZone(holesOf(api, sp, api.shiftEyes(sp, sp[f], dx)));
+      eq(key(after), key(before.map(([y, x]) => [y, x + dx])), `${f} ${dx}:`);
+    }
+  });
+
+  //  どの姿でも、目の穴の数は変わらず、形も崩れない
+  //  （各段の穴が そろって同じだけ動くか、そのまま残る）
+  it('どのグレイも、目の形が変わらない', () => {
+    const { api, clock } = load();
+    for(const [name, over] of forms){
+      pet(api, clock, Object.assign({ name:'T', form:'' }, over));
+      const sp = api.charSprites();
+      const [lo, hi] = eyeZone(api, sp);
+      for(const f of ['a', 'b']) for(const dx of [-1, 1]){
+        const g = api.shiftEyes(sp, sp[f], dx);
+        const before = holesOf(api, sp, sp[f]).filter(([y]) => y >= lo && y <= hi);
+        const after  = holesOf(api, sp, g).filter(([y]) => y >= lo && y <= hi);
+        eq(after.length, before.length, `${name} ${f} ${dx}: 穴の数`);
+        //  目ごとに（左半分・右半分で分けて）見る。動いたなら全段が同じだけ動いている
+        const mid = sp[f][0].length / 2;
+        for(const side of [(x) => x < mid, (x) => x >= mid]){
+          const b = before.filter(([, x]) => side(x));
+          const same  = key(after.filter(([, x]) => side(x))) === key(b);
+          const moved = key(after.filter(([, x]) => side(x - dx))) === key(b.map(([y, x]) => [y, x + dx]));
+          ok(same || moved, `${name} ${f} ${dx}: 目の形が崩れた ${key(b)} → ${key(after)}`);
+        }
+        //  体の外形（輪郭）は変わらない
+        eq(g.map(r => r.join('')).join('|').length, sp[f].map(r => r.join('')).join('|').length, `${name}: 大きさ`);
+        eq(g[lo].length, sp[f][lo].length, `${name}: 幅`);
+      }
     }
   });
 });

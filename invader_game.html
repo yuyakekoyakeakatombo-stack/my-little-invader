@@ -4850,36 +4850,80 @@
   }
   // 目を左右にずらす。目は顔の中の「1で囲まれた背景の穴」なので、その穴だけを動かす。
   //  顔からはみ出す場合は動かさない（輪郭が欠けないように）
+  //
+  //  **目は何段にまたがっていても、1つの形として丸ごと動かす。**
+  //   閉じた目の差し替えが1段だけでも（スリークの2×2の目は上の段だけ埋めて閉じ線にしている）、
+  //   開いた目はその上下の段にも続いている。見比べた段だけ動かすと、上半分だけずれて
+  //   斜めの眉毛のような目になった。上下に続いている穴も同じ目として拾う
+  function lineHoles(row){
+    const holes = [];
+    for(let x=1; x<row.length-1; x++){
+      if(row[x] === 0){
+        let a = x; while(a < row.length && row[a] === 0) a++;
+        if(row[x-1] === 1 && a < row.length && row[a] === 1) holes.push([x, a-1]);
+        x = a;
+      }
+    }
+    return holes;
+  }
   function shiftEyes(sp, grid, dx){
     if(!dx) return grid;
     const rows = eyeRows(sp);
     if(!rows.length) return grid;
     const out = grid.map(r=>[...r]);
+    // 目の段ごとの穴。[段, 左端, 右端]
+    const cells = [];
+    const seen = new Set();
+    const touches = (h, y)=> cells.some(([cy,a,b]) => Math.abs(cy - y) === 1 && h[0] <= b && h[1] >= a);
     for(const y of rows){
-      const row = out[y]; if(!row) continue;
-      const src = [...row];
-      const holes = [];
-      for(let x=1; x<src.length-1; x++){
-        if(src[x] === 0){
-          let a = x; while(a < src.length && src[a] === 0) a++;
-          if(src[x-1] === 1 && a < src.length && src[a] === 1) holes.push([x, a-1]);
-          x = a;
-        }
-      }
-      if(!holes.length) continue;
-      const inHole = (x)=> holes.some(([a,b]) => x>=a && x<=b);
-      // 目ごとに動かせるか判定する。輪郭に接していて動かせない目はその場に残す
-      //  （成体のように目が縁ぎりぎりの絵では、片目だけ動いて視線が寄って見える）
-      const moved = holes.map(([a,b])=>{
-        const na = a+dx, nb = b+dx;
-        if(na < 1 || nb > src.length-2) return [a,b];
-        for(let x=na; x<=nb; x++) if(src[x] !== 1 && !inHole(x)) return [a,b];
-        return [na,nb];
-      });
-      if(moved.every(([a,b],i)=> a===holes[i][0])) continue;                 // どの目も動かせない
-      holes.forEach(([a,b])=>{ for(let x=a;x<=b;x++) row[x] = 1; });         // いったん埋めて
-      moved.forEach(([a,b])=>{ for(let x=a;x<=b;x++) row[x] = 0; });         // 動かせたぶんだけ開け直す
+      if(!grid[y]) continue;
+      for(const h of lineHoles(grid[y])) cells.push([y, ...h]);
+      seen.add(y);
     }
+    // 上下に続く穴を、続くかぎり拾っていく
+    for(let grew = true; grew; ){
+      grew = false;
+      for(let y=0; y<grid.length; y++){
+        if(seen.has(y)) continue;
+        const hs = lineHoles(grid[y]).filter(h => touches(h, y));
+        if(!hs.length) continue;
+        hs.forEach(h => cells.push([y, ...h])); seen.add(y); grew = true;
+      }
+    }
+    if(!cells.length) return grid;
+    // 縦につながった穴どうしを1つの目にまとめる
+    const eye = cells.map((_, i) => i);
+    const root = (i)=> eye[i] === i ? i : (eye[i] = root(eye[i]));
+    cells.forEach(([y,a,b], i) => cells.forEach(([y2,a2,b2], j) => {
+      if(Math.abs(y - y2) === 1 && a <= b2 && b >= a2) eye[root(i)] = root(j);
+    }));
+    const ownHole = (r, y, x)=> cells.some(([cy,a,b], j) => root(j) === r && cy === y && x >= a && x <= b);
+    // 目ごとに動かせるか判定する。どこか1段でも輪郭にぶつかる目は、形ごとその場に残す
+    //  （成体のように目が縁ぎりぎりの絵では、片目だけ動いて視線が寄って見える）
+    const canMove = new Map();
+    cells.forEach(([y,a,b], i) => {
+      const r = root(i), src = grid[y];
+      let ok = (canMove.get(r) !== false) && a+dx >= 1 && b+dx <= src.length-2;
+      for(let x=a+dx; ok && x<=b+dx; x++) if(src[x] !== 1 && !ownHole(r, y, x)) ok = false;
+      canMove.set(r, ok);
+    });
+    // 動いた先で となりの目とくっつくなら動かさない（プリックリーの大きな目は、
+    //  寄せると2つが1つの穴につながってしまう）。止めた目がまた別の目を塞ぐことがあるので、落ち着くまで見直す
+    const at = (i)=> { const [y,a,b] = cells[i], d = canMove.get(root(i)) ? dx : 0; return [y, a+d, b+d]; };
+    for(let changed = true; changed; ){
+      changed = false;
+      cells.forEach((_, i) => cells.forEach((_, j) => {
+        const ri = root(i), rj = root(j);
+        if(ri === rj || !(canMove.get(ri) || canMove.get(rj))) return;
+        const [y,a,b] = at(i), [y2,a2,b2] = at(j);
+        if(y === y2 && a <= b2 + 1 && b >= a2 - 1){
+          if(canMove.get(ri)){ canMove.set(ri, false); changed = true; }
+          if(canMove.get(rj)){ canMove.set(rj, false); changed = true; }
+        }
+      }));
+    }
+    cells.forEach(([y,a,b], i) => { if(canMove.get(root(i))) for(let x=a;x<=b;x++) out[y][x] = 1; });            // いったん埋めて
+    cells.forEach(([y,a,b], i) => { if(canMove.get(root(i))) for(let x=a+dx;x<=b+dx;x++) out[y][x] = 0; });      // 動かせる目だけ開け直す
     return out;
   }
   //  具合が悪いときの姿。**病気も瀕死も、どのキャラも寝姿で丸まる。**
@@ -5561,8 +5605,9 @@
     if(pet.incubAt || poopHasFlies() || pet.plateSpoiled || pet.mood <= 1 || pet.hunger <= 1) return 'normal';
     return 'good';
   }
-  // ヘッダーのステータスマークを点滅させるか。「よい」以外はすべて見てほしい状態
-  function statusAlert(){ return healthState() !== 'good'; }
+  // ヘッダーのステータスマークを点滅させるか。「よい」「ふつう」以外は見てほしい状態。
+  //  「ふつう」（本調子ではないが差し迫っていない）は点滅させない
+  function statusAlert(){ const s = healthState(); return s !== 'good' && s !== 'normal'; }
   const CARE_LABELS = {FEED:'FEED',CLEAN:'CLEAN',MED:'MEDICINE',PET:'PRAISE',SCOLD:'SCOLD',GAME:'MINI GAME'};  // PET=褒める
   let careFlash = 0; // （旧・点滅用。現在未使用）
 
@@ -7086,7 +7131,7 @@
   // 項目はキーで管理（表示ラベルは言語辞書、値は各キーで分岐）
   //  版の番号は sw.js の VERSION と同じもの。tools/bump-sw.sh が両方いっしょに
   //  書き換える（ずれると、テスターの端末に出ている版が分からなくなる）
-  const APP_VERSION = '2026-09-25-03';
+  const APP_VERSION = '2026-09-26-01';
   //  (C) は Press Start 2P に © が無く、別の字体に落ちて1文字だけ形が浮くため
   const APP_COPY = '(C) 2026 Studio M.D.Q.';
   // 天気は Open-Meteo から貰っている。CC BY 4.0 なので、無料で使う場合でも
