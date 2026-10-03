@@ -5542,6 +5542,72 @@ describe('ファイル', () => {
     ok(/emo\(isWeakStarve\(\) \? ICO_EXCL : ICO_SKULL\)/.test(emo),
        '瀕死のマークが くうふく／びょうき で分かれていない');
   });
+  //  製品版の公開とWeb版の公開終了のおしらせ。更新バーと同じファイルで、同じ形で出す
+  describe('製品版のおしらせ', () => {
+    //  register-sw.js を、画面の部品だけ用意した箱の中で動かす
+    const run = ({ lang = 'ja', seen = null, updateBar = false, framed = false } = {}) => {
+      const store = new Map(Object.entries({ myvader_lang: lang }));
+      if(seen !== null) store.set('myvader_news', seen);
+      const made = [];
+      const el = (tag) => {
+        const e = { tag, id: '', textContent: '', attrs: {}, removed: false, _html: '',
+          setAttribute(k, v){ this.attrs[k] = v; },
+          remove(){ this.removed = true; },
+          set innerHTML(v){ this._html = v; this.btn = { onclick: null }; },
+          get innerHTML(){ return this._html; },
+          querySelector(){ return this.btn; } };
+        made.push(e); return e;
+      };
+      const byId = {};
+      const doc = {
+        readyState: 'complete',
+        createElement: el,
+        getElementById: (id) => (id === 'sw-update-bar' && updateBar) ? {} : (byId[id] || null),
+        head: { appendChild(){} },
+        body: { appendChild(e){ if(e.id) byId[e.id] = e; } },
+        addEventListener(){},
+      };
+      const win = {}; win.top = framed ? {} : win; win.self = win;
+      const ctx = { window: win, document: doc, navigator: {}, location: {},
+        localStorage: { getItem: k => store.has(k) ? store.get(k) : null, setItem: (k, v) => store.set(k, String(v)) } };
+      require('vm').runInNewContext(read('register-sw.js'), ctx);
+      return { bar: byId['mli-news-bar'] || null, store };
+    };
+
+    it('製品版の公開・お礼・ストアのリンク・公開終了の日付が、両方の言語で出る', () => {
+      const ja = run({ lang: 'ja' }).bar, en = run({ lang: 'en' }).bar;
+      ok(ja && en, 'おしらせが出ていない');
+      ok(/App Store で公開しました/.test(ja.innerHTML) && /ありがとうございました/.test(ja.innerHTML), '日本語の文面');
+      ok(/2026年12月31日で終了/.test(ja.innerHTML), '日本語に公開終了の日付が無い');
+      ok(/now on the App Store/.test(en.innerHTML) && /Thank you/.test(en.innerHTML), '英語の文面');
+      ok(/December 31, 2026/.test(en.innerHTML), '英語に公開終了の日付が無い');
+      for(const b of [ja, en]){
+        ok(/href="https:\/\/apps\.apple\.com\/app\/id6816311415"/.test(b.innerHTML), 'ストアのリンクが違う');
+        ok(/target="_blank" rel="noopener"/.test(b.innerHTML), 'ストアをゲームの画面ごと開いてしまう');
+      }
+    });
+    it('とじると、次からは出ない', () => {
+      const { bar, store } = run();
+      bar.btn.onclick();
+      ok(bar.removed, 'とじても消えない');
+      eq(store.get('myvader_news'), 'appstore-2026-10', 'とじた印:');
+      eq(run({ seen: 'appstore-2026-10' }).bar, null, 'とじたのにまた出た:');
+    });
+    it('前のおしらせをとじていても、新しいおしらせは出る', () => {
+      ok(run({ seen: 'old-news' }).bar, '新しいおしらせが出ない');
+    });
+    it('更新バーが出ているあいだと、説明書の枠の中では出さない', () => {
+      eq(run({ updateBar: true }).bar, null, '更新バーと重なった:');
+      eq(run({ framed: true }).bar, null, '枠の中で出た:');
+    });
+    it('更新バーを出すときは、おしらせを下げる（とじた印は付けない）', () => {
+      const src = read('register-sw.js');
+      const m = src.match(/function showUpdateBar\(worker\) \{[\s\S]*?var css/);
+      ok(m && /getElementById\('mli-news-bar'\)/.test(m[0]) && /news\.remove\(\)/.test(m[0]),
+         '更新バーを出すときに おしらせを下げていない');
+      ok(!/setItem/.test(m[0]), '更新バーで とじた印を付けている');
+    });
+  });
   it('サービスワーカーのVERSIONが日付の形をしている', () => {
     const m = read('sw.js').match(/const VERSION = '([^']+)'/);
     ok(m, 'VERSION が見つからない');
